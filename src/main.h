@@ -36,6 +36,7 @@ typedef enum Type {
 	FALA_BLOCK,
 	FALA_IF,
 	FALA_WHEN,
+	FALA_FOR,
 	FALA_IN,
 	FALA_OUT,
 	FALA_ASS,

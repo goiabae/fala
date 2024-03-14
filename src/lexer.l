@@ -23,6 +23,9 @@
 "in"    { return IN; }
 "out"   { return OUT; }
 "when"  { return WHEN; }
+"for"   { return FOR; }
+"from"  { return FROM; }
+"to"    { return TO; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
 

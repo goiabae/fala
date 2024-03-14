@@ -87,6 +87,7 @@ static char* node_repr(Type type, void* data) {
 		case FALA_BLOCK: return "do-end";
 		case FALA_IF: return "if";
 		case FALA_WHEN: return "when";
+		case FALA_FOR: return "for";
 		case FALA_IN: return "in";
 		case FALA_OUT: return "out";
 		case FALA_ASS: return "=";
@@ -190,6 +191,32 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 				val = ast_node_eval(node.children[1], vars);
 			else
 				val = (Value) {VALUE_NUM, .num = 0};
+			break;
+		}
+		case FALA_FOR: {
+			assert(node.children_count == 4);
+			Node var = node.children[0];
+			Value from = ast_node_eval(node.children[1], vars);
+			Value to = ast_node_eval(node.children[2], vars);
+			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
+			Node exp = node.children[3];
+			if (from.num <= to.num) {
+				for (size_t i = from.num; i <= (size_t)(to.num - 1); i++) {
+					var_table_insert(
+						vars, (char*)var.data, (Value) {VALUE_NUM, .num = i}
+					);
+					ast_node_eval(exp, vars);
+				}
+			} else {
+				for (size_t i = from.num; i >= (size_t)(to.num + 1); i--) {
+					var_table_insert(
+						vars, (char*)var.data, (Value) {VALUE_NUM, .num = i}
+					);
+					ast_node_eval(exp, vars);
+				}
+			}
+			var_table_insert(vars, (char*)var.data, to);
+			val = ast_node_eval(exp, vars);
 			break;
 		}
 		case FALA_IN: {
