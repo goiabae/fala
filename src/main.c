@@ -86,6 +86,7 @@ static char* node_repr(Type type, void* data) {
 	switch (type) {
 		case FALA_BLOCK: return "do-end";
 		case FALA_IF: return "if";
+		case FALA_WHEN: return "when";
 		case FALA_IN: return "in";
 		case FALA_OUT: return "out";
 		case FALA_ASS: return "=";
@@ -179,6 +180,16 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 				val = ast_node_eval(node.children[1], vars);
 			else
 				val = ast_node_eval(node.children[2], vars);
+			break;
+		}
+		case FALA_WHEN: {
+			assert(node.children_count == 2);
+			Value cond = ast_node_eval(node.children[0], vars);
+			assert(cond.tag == VALUE_NUM);
+			if (cond.num)
+				val = ast_node_eval(node.children[1], vars);
+			else
+				val = (Value) {VALUE_NUM, .num = 0};
 			break;
 		}
 		case FALA_IN: {

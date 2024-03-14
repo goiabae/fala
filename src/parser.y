@@ -35,6 +35,7 @@ int yylex(void);
 %token ELSE "else"
 %token IN "in"
 %token OUT "out"
+%token WHEN "when"
 
 %token EQ    '='
 
@@ -81,6 +82,7 @@ exps : %empty   { $$ = new_block_node(); }
 
 exp : DO exps END              { $$ = $2; }
     | IF exp THEN exp ELSE exp { $$ = new_node(FALA_IF, NULL, 3, (Node[3]) {$2, $4, $6}); }
+    | WHEN exp exp             { $$ = new_node(FALA_WHEN, NULL, 2, (Node[2]) {$2, $3}); }
     | IN                       { $$ = new_node(FALA_IN, NULL, 0, NULL); }
     | OUT exp                  { $$ = new_node(FALA_OUT, NULL, 1, (Node[1]){$2}); }
     | infix
