@@ -1,3 +1,5 @@
+CFLAGS += -ggdb
+
 all: prepare fala
 
 fala: build/parser.o build/main.o build/lexer.o
