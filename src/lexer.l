@@ -1,4 +1,6 @@
 %{
+  #include <string.h>
+
   #include "parser.h"
   #include "main.h"
 %}
@@ -11,7 +13,7 @@
 "and"   { return AND; }
 "not"   { return NOT; }
 
-[a-zA-Z_][a-zA-Z0-9_]* { yylval.str = yytext; return ID; }
+[a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
 
 [0-9]+  { yylval.num = atoi(yytext); return NUMBER; }
 
@@ -32,6 +34,6 @@
 \/      { return SLASH; }
 \%      { return SLASH; }
 
-[ \t\n]+ ;
+[ \t\n] ;
 
 .       { yyerror(NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
