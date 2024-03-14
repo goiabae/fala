@@ -112,7 +112,7 @@ not-exp : term
         | NOT term { $$ = new_node(FALA_NOT, NULL, 1, (Node[1]){$2}); }
         ;
 
-term : '(' exp ')' { $$ = $2; }
+term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | number
      | id
      ;
