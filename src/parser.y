@@ -41,6 +41,7 @@ int yylex(void);
 %token PAREN_CLOSE ')'
 
 %type <num> exp
+%type <num> exps
 %type <num> infix
 %type <num> ass-exp
 %type <num> logi-exp
@@ -55,7 +56,11 @@ int yylex(void);
 
 %start program ;
 
-program : exp { printf("%d\n", $1); } ;
+program : %empty | exps ;
+
+exps : exp      { printf("%d\n", $1); }
+     | exp exps { (void)$1; $$ = $2; }
+     ;
 
 exp : infix ;
 
