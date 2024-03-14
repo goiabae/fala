@@ -1,4 +1,4 @@
-CFLAGS += -ggdb
+CFLAGS += -ggdb -Wall -Wextra
 
 all: prepare fala
 

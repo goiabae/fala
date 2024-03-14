@@ -78,6 +78,7 @@ void yyerror(void* var_table, char* s) {
 }
 
 static char* node_repr(Type type, void* data) {
+	(void)data;
 	switch (type) {
 		case FALA_BLOCK: return "do-end"; break;
 		case FALA_IF: return "if"; break;
@@ -232,7 +233,11 @@ static Value ast_eval(AST ast) {
 }
 
 static Context context_init() { return (Context) {.ast = ast_init()}; }
-static void context_deinit(Context ctx) { return; }
+
+static void context_deinit(Context ctx) {
+	(void)ctx;
+	return;
+}
 
 static AST context_get_ast(Context ctx) { return ctx.ast; }
 

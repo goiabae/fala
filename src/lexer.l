@@ -5,6 +5,8 @@
   #include "main.h"
 %}
 
+/* don't generate yyunput and input functions */
+%option nounput noinput
 %option noyywrap
 
 %%
