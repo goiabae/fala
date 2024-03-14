@@ -63,7 +63,7 @@ infix : ass-exp ;
 
 /* a = b. assignment lol */
 ass-exp : logi-exp
-        | ID EQ exp { $$ = 0; /* TODO */ yyerror(var_table, "SEMANT_ERR: Not implemented yet"); }
+        | ID EQ exp { $$ = var_table_insert(var_table, $1, $3); }
         ;
 
 /* a and b or c */
@@ -101,7 +101,7 @@ not-exp : term
 
 term : '(' exp ')' { $$ = $2; }
      | number      { $$ = $1; }
-     | ID          { $$ = 0; /* TODO */ yyerror(var_table, "SEMANT_ERR: Not implemented yet"); }
+     | ID          { $$ = var_table_get(var_table, $1); }
      ;
 
 number : NUMBER ;
