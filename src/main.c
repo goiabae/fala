@@ -80,24 +80,24 @@ void yyerror(void* var_table, char* s) {
 static char* node_repr(Type type, void* data) {
 	(void)data;
 	switch (type) {
-		case FALA_BLOCK: return "do-end"; break;
-		case FALA_IF: return "if"; break;
-		case FALA_ASS: return "="; break;
-		case FALA_OR: return "or"; break;
-		case FALA_AND: return "and"; break;
-		case FALA_GREATER: return ">"; break;
-		case FALA_LESSER: return "<"; break;
-		case FALA_GREATER_EQ: return ">="; break;
-		case FALA_LESSER_EQ: return "<="; break;
-		case FALA_EQ_EQ: return "=="; break;
-		case FALA_ADD: return "+"; break;
-		case FALA_SUB: return "-"; break;
-		case FALA_MUL: return "*"; break;
-		case FALA_DIV: return "/"; break;
-		case FALA_MOD: return "%"; break;
-		case FALA_NOT: return "!"; break;
-		case FALA_NUM: return NULL; break;
-		case FALA_ID: return NULL; break;
+		case FALA_BLOCK: return "do-end";
+		case FALA_IF: return "if";
+		case FALA_ASS: return "=";
+		case FALA_OR: return "or";
+		case FALA_AND: return "and";
+		case FALA_GREATER: return ">";
+		case FALA_LESSER: return "<";
+		case FALA_GREATER_EQ: return ">=";
+		case FALA_LESSER_EQ: return "<=";
+		case FALA_EQ_EQ: return "==";
+		case FALA_ADD: return "+";
+		case FALA_SUB: return "-";
+		case FALA_MUL: return "*";
+		case FALA_DIV: return "/";
+		case FALA_MOD: return "%";
+		case FALA_NOT: return "!";
+		case FALA_NUM: return NULL;
+		case FALA_ID: return NULL;
 	}
 	assert(false);
 }
