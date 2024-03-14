@@ -3,7 +3,19 @@
 
 #include <stddef.h>
 
-typedef int Value;
+typedef int Number;
+typedef char* String;
+
+typedef struct Value {
+	enum {
+		VALUE_NUM,
+		VALUE_STR,
+	} tag;
+	union {
+		Number num;
+		String str;
+	};
+} Value;
 
 typedef struct VarTable {
 	size_t len;
@@ -23,6 +35,8 @@ typedef enum Type {
 	FALA_NUM,
 	FALA_BLOCK,
 	FALA_IF,
+	FALA_IN,
+	FALA_OUT,
 	FALA_ASS,
 	FALA_OR,
 	FALA_AND,
@@ -38,6 +52,7 @@ typedef enum Type {
 	FALA_MOD,
 	FALA_NOT,
 	FALA_ID,
+	FALA_STRING,
 } Type;
 
 typedef struct Node {

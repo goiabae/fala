@@ -20,10 +20,14 @@
 "if"    { return IF; }
 "then"  { return THEN; }
 "else"  { return ELSE; }
+"in"    { return IN; }
+"out"   { return OUT; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
 
 [0-9]+  { yylval.num = atoi(yytext); return NUMBER; }
+
+\".*\"  { yylval.str = strdup(yytext); return STRING; }
 
 \(      { return PAREN_OPEN; }
 \)      { return PAREN_CLOSE; }

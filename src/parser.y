@@ -23,6 +23,7 @@ int yylex(void);
 
 %token <num> NUMBER
 %token <str> ID
+%token <str> STRING
 
 %token OR "or"
 %token AND "and"
@@ -32,6 +33,8 @@ int yylex(void);
 %token IF "if"
 %token THEN "then"
 %token ELSE "else"
+%token IN "in"
+%token OUT "out"
 
 %token EQ    '='
 
@@ -64,6 +67,7 @@ int yylex(void);
 %type <node> term
 %type <node> number
 %type <node> id
+%type <node> string
 
 %%
 
@@ -77,6 +81,8 @@ exps : %empty   { $$ = new_block_node(); }
 
 exp : DO exps END              { $$ = $2; }
     | IF exp THEN exp ELSE exp { $$ = new_node(FALA_IF, NULL, 3, (Node[3]) {$2, $4, $6}); }
+    | IN                       { $$ = new_node(FALA_IN, NULL, 0, NULL); }
+    | OUT exp                  { $$ = new_node(FALA_OUT, NULL, 1, (Node[1]){$2}); }
     | infix
     ;
 
@@ -123,12 +129,15 @@ not-exp : term
 term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | number
      | id
+     | string
      ;
 
 number : NUMBER {
   int* tmp = malloc(sizeof(int));
-	*tmp = $1;
+  *tmp = $1;
   $$ = new_node(FALA_NUM, (void*)tmp, 0, NULL);
 };
 
 id : ID { $$ = new_node(FALA_ID, (void*)$1, 0, NULL); }
+
+string : STRING { $$ = new_node(FALA_STRING, (void*)$1, 0, NULL); }

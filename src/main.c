@@ -3,10 +3,14 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "lexer.h"
 #include "parser.h"
+
+static void print_value(Value val);
+static void value_deinit(Value val);
 
 Node new_node(Type type, void* data, size_t len, Node children[len]) {
 	Node node;
@@ -82,6 +86,8 @@ static char* node_repr(Type type, void* data) {
 	switch (type) {
 		case FALA_BLOCK: return "do-end";
 		case FALA_IF: return "if";
+		case FALA_IN: return "in";
+		case FALA_OUT: return "out";
 		case FALA_ASS: return "=";
 		case FALA_OR: return "or";
 		case FALA_AND: return "and";
@@ -98,6 +104,7 @@ static char* node_repr(Type type, void* data) {
 		case FALA_NOT: return "!";
 		case FALA_NUM: return NULL;
 		case FALA_ID: return NULL;
+		case FALA_STRING: return NULL;
 	}
 	assert(false);
 }
@@ -108,6 +115,9 @@ static void print_node(Node node, unsigned int space) {
 		return;
 	} else if (node.type == FALA_ID) {
 		printf("%s", (char*)node.data);
+		return;
+	} else if (node.type == FALA_STRING) {
+		printf("\"%s\"", (char*)node.data);
 		return;
 	}
 
@@ -140,50 +150,53 @@ static void ast_deinit(AST ast) { node_deinit(ast.root); }
 
 static Value ast_node_eval(Node node, VarTable* vars);
 
-static Value ast_node_eval_bin_op(
-	Node node, VarTable* vars, Value (*op)(Value, Value)
-) {
-	assert(node.children_count == 2);
-	Node left = node.children[0];
-	Node right = node.children[1];
-	Value val = op(ast_node_eval(left, vars), ast_node_eval(right, vars));
-	return val;
-}
-
-static Value op_add(Value left, Value right) { return left + right; }
-static Value op_sub(Value left, Value right) { return left - right; }
-static Value op_mul(Value left, Value right) { return left * right; }
-static Value op_div(Value left, Value right) { return left / right; }
-static Value op_mod(Value left, Value right) { return left % right; }
-static Value op_gt(Value left, Value right) { return left > right; }
-static Value op_lt(Value left, Value right) { return left < right; }
-static Value op_gte(Value left, Value right) { return left >= right; }
-static Value op_lte(Value left, Value right) { return left <= right; }
-static Value op_eql(Value left, Value right) { return left == right; }
-static Value op_or(Value left, Value right) { return left || right; }
-static Value op_and(Value left, Value right) { return left && right; }
-
 static Value ast_node_eval(Node node, VarTable* vars) {
 	Value val;
 
-#define BIN_OP(OP)                            \
-	val = ast_node_eval_bin_op(node, vars, OP); \
-	break
+#define BIN_OP(OP)                                           \
+	{                                                          \
+		assert(node.children_count == 2);                        \
+		Value left = ast_node_eval(node.children[0], vars);      \
+		Value right = ast_node_eval(node.children[1], vars);     \
+		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM); \
+		val = (Value) {VALUE_NUM, .num = left.num OP right.num}; \
+		break;                                                   \
+	}
 
 	switch (node.type) {
-		case FALA_NUM: return *(int*)node.data; break;
+		case FALA_NUM: return (Value) {VALUE_NUM, .num = *(int*)node.data}; break;
 		case FALA_BLOCK: {
-			for (size_t i = 0; i < node.children_count; i++)
-				val = ast_node_eval(node.children[i], vars);
+			for (size_t i = 0; i < (node.children_count - 1); i++)
+				value_deinit(ast_node_eval(node.children[i], vars));
+			val = ast_node_eval(node.children[node.children_count - 1], vars);
 			break;
 		}
 		case FALA_IF: {
 			assert(node.children_count == 3);
 			Value cond = ast_node_eval(node.children[0], vars);
-			if (cond)
+			assert(cond.tag == VALUE_NUM);
+			if (cond.num)
 				val = ast_node_eval(node.children[1], vars);
 			else
 				val = ast_node_eval(node.children[2], vars);
+			break;
+		}
+		case FALA_IN: {
+			char* buf = malloc(sizeof(char) * 100);
+			fgets(buf, 100, stdin);
+			const size_t len = strlen(buf);
+			buf[len - 1] = '\0';
+			long num = 0;
+			if (sscanf(buf, "%ld", &num) == 0)
+				val = (Value) {VALUE_STR, .str = buf};
+			else
+				val = (Value) {VALUE_NUM, .num = num};
+			break;
+		}
+		case FALA_OUT: {
+			assert(node.children_count == 1);
+			val = ast_node_eval(node.children[0], vars);
+			print_value(val);
 			break;
 		}
 		case FALA_ASS: {
@@ -194,27 +207,33 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 			val = var_table_insert(vars, (char*)id.data, ast_node_eval(expr, vars));
 			break;
 		}
-		case FALA_OR: BIN_OP(op_or);
-		case FALA_AND: BIN_OP(op_and);
-		case FALA_GREATER: BIN_OP(op_gt);
-		case FALA_LESSER: BIN_OP(op_lt);
-		case FALA_GREATER_EQ: BIN_OP(op_gte);
-		case FALA_LESSER_EQ: BIN_OP(op_lte);
-		case FALA_EQ_EQ: BIN_OP(op_eql);
-		case FALA_ADD: BIN_OP(op_add);
-		case FALA_SUB: BIN_OP(op_sub);
-		case FALA_MUL: BIN_OP(op_mul);
-		case FALA_DIV: BIN_OP(op_div);
-		case FALA_MOD: BIN_OP(op_mod);
+		case FALA_OR: BIN_OP(||);
+		case FALA_AND: BIN_OP(&&);
+		case FALA_GREATER: BIN_OP(>);
+		case FALA_LESSER: BIN_OP(<);
+		case FALA_GREATER_EQ: BIN_OP(>=);
+		case FALA_LESSER_EQ: BIN_OP(<=);
+		case FALA_EQ_EQ: BIN_OP(==);
+		case FALA_ADD: BIN_OP(+);
+		case FALA_SUB: BIN_OP(-);
+		case FALA_MUL: BIN_OP(*);
+		case FALA_DIV: BIN_OP(/);
+		case FALA_MOD: BIN_OP(%);
 		case FALA_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
-			val = !ast_node_eval(op, vars);
+			Value v = ast_node_eval(op, vars);
+			val = (Value) {VALUE_NUM, .num = !v.num};
 			break;
 		}
 		case FALA_ID: {
 			assert(node.children_count == 0);
 			val = var_table_get(vars, (char*)node.data);
+			break;
+		}
+		case FALA_STRING: {
+			assert(node.children_count == 0);
+			val = (Value) {VALUE_STR, .str = (char*)node.data};
 			break;
 		}
 	}
@@ -252,16 +271,41 @@ static AST parse(FILE* fd) {
 	return ast;
 }
 
-static void print_value(Value val) { printf("%d", val); }
+static void print_value(Value val) {
+	if (val.tag == VALUE_NUM)
+		printf("%d", val.num);
+	else
+		printf("%s", val.str);
+}
 
-int main(void) {
-	AST ast = parse(stdin);
+static void value_deinit(Value val) {
+	if (val.tag == VALUE_STR) free(val.str);
+}
+
+void usage() {
+	printf(
+		"Usage:\n"
+		"\tfala <filepath>\n"
+	);
+}
+
+int main(int argc, char* argv[]) {
+	if (argc < 2) {
+		usage();
+		return 1;
+	}
+
+	FILE* fd = (argv[1][0] == '-') ? stdin : fopen(argv[1], "r");
+	AST ast = parse(fd);
 	print_ast(ast);
 	printf("\n");
 
 	Value val = ast_eval(ast);
-	print_value(val);
-	printf("\n");
 
 	ast_deinit(ast);
+
+	if (val.tag == VALUE_NUM)
+		return val.num;
+	else
+		return 0;
 }
