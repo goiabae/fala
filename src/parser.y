@@ -27,6 +27,9 @@ int yylex(void);
 %token OR "or"
 %token AND "and"
 
+%token DO "do"
+%token END "end"
+
 %token EQ    '='
 
 %token PLUS  '+'
@@ -65,11 +68,13 @@ int yylex(void);
 
 program : exps { ctx->ast.root = $1; };
 
-exps : exp
-     | exp exps { $$ = new_node(FALA_THEN, NULL, 2, (Node[2]){$1, $2}); }
+exps : %empty   { $$ = new_block_node(); }
+     | exps exp { (void)$1; $$ = block_append_node($$, $2); }
      ;
 
-exp : infix ;
+exp : DO exps END { $$ = $2; }
+    | infix
+    ;
 
 infix : ass-exp ;
 

@@ -13,6 +13,9 @@
 "and"   { return AND; }
 "not"   { return NOT; }
 
+"do"    { return DO; }
+"end"   { return END; }
+
 [a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
 
 [0-9]+  { yylval.num = atoi(yytext); return NUMBER; }

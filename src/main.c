@@ -21,6 +21,20 @@ Node new_node(Type type, void* data, size_t len, Node children[len]) {
 	return node;
 }
 
+Node new_block_node() {
+	Node node;
+	node.type = FALA_BLOCK;
+	node.data = NULL;
+	node.children_count = 0;
+	node.children = malloc(sizeof(Node) * 100);
+	return node;
+}
+
+Node block_append_node(Node block, Node next) {
+	block.children[block.children_count++] = next;
+	return block;
+}
+
 VarTable* var_table_init(void) {
 	VarTable* tab = malloc(sizeof(VarTable));
 	tab->len = 0;
@@ -65,7 +79,7 @@ void yyerror(void* var_table, char* s) {
 
 static char* node_repr(Type type, void* data) {
 	switch (type) {
-		case FALA_THEN: return "then"; break;
+		case FALA_BLOCK: return "do-end"; break;
 		case FALA_ASS: return "="; break;
 		case FALA_OR: return "or"; break;
 		case FALA_AND: return "and"; break;
@@ -155,12 +169,9 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 
 	switch (node.type) {
 		case FALA_NUM: return *(int*)node.data; break;
-		case FALA_THEN: {
-			assert(node.children_count == 2);
-			Node first = node.children[0];
-			Node second = node.children[1];
-			ast_node_eval(first, vars);
-			val = ast_node_eval(second, vars);
+		case FALA_BLOCK: {
+			for (size_t i = 0; i < node.children_count; i++)
+				val = ast_node_eval(node.children[i], vars);
 			break;
 		}
 		case FALA_ASS: {

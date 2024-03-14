@@ -21,7 +21,7 @@ Value var_table_get(VarTable* tab, const char* name);
 
 typedef enum Type {
 	FALA_NUM,
-	FALA_THEN,
+	FALA_BLOCK,
 	FALA_ASS,
 	FALA_OR,
 	FALA_AND,
@@ -47,6 +47,8 @@ typedef struct Node {
 } Node;
 
 Node new_node(Type type, void* data, size_t len, Node children[len]);
+Node new_block_node();
+Node block_append_node(Node block, Node next);
 
 typedef struct AST {
 	Node root;
