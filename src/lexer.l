@@ -15,6 +15,9 @@
 
 "do"    { return DO; }
 "end"   { return END; }
+"if"    { return IF; }
+"then"  { return THEN; }
+"else"  { return ELSE; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
 

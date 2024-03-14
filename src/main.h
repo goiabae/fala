@@ -22,6 +22,7 @@ Value var_table_get(VarTable* tab, const char* name);
 typedef enum Type {
 	FALA_NUM,
 	FALA_BLOCK,
+	FALA_IF,
 	FALA_ASS,
 	FALA_OR,
 	FALA_AND,

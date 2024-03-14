@@ -29,6 +29,9 @@ int yylex(void);
 
 %token DO "do"
 %token END "end"
+%token IF "if"
+%token THEN "then"
+%token ELSE "else"
 
 %token EQ    '='
 
@@ -72,7 +75,8 @@ exps : %empty   { $$ = new_block_node(); }
      | exps exp { (void)$1; $$ = block_append_node($$, $2); }
      ;
 
-exp : DO exps END { $$ = $2; }
+exp : DO exps END              { $$ = $2; }
+    | IF exp THEN exp ELSE exp { $$ = new_node(FALA_IF, NULL, 3, (Node[3]) {$2, $4, $6}); }
     | infix
     ;
 

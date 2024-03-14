@@ -80,6 +80,7 @@ void yyerror(void* var_table, char* s) {
 static char* node_repr(Type type, void* data) {
 	switch (type) {
 		case FALA_BLOCK: return "do-end"; break;
+		case FALA_IF: return "if"; break;
 		case FALA_ASS: return "="; break;
 		case FALA_OR: return "or"; break;
 		case FALA_AND: return "and"; break;
@@ -94,7 +95,8 @@ static char* node_repr(Type type, void* data) {
 		case FALA_DIV: return "/"; break;
 		case FALA_MOD: return "%"; break;
 		case FALA_NOT: return "!"; break;
-		default: break;
+		case FALA_NUM: return NULL; break;
+		case FALA_ID: return NULL; break;
 	}
 	assert(false);
 }
@@ -172,6 +174,15 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		case FALA_BLOCK: {
 			for (size_t i = 0; i < node.children_count; i++)
 				val = ast_node_eval(node.children[i], vars);
+			break;
+		}
+		case FALA_IF: {
+			assert(node.children_count == 3);
+			Value cond = ast_node_eval(node.children[0], vars);
+			if (cond)
+				val = ast_node_eval(node.children[1], vars);
+			else
+				val = ast_node_eval(node.children[2], vars);
 			break;
 		}
 		case FALA_ASS: {
