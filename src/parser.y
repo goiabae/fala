@@ -1,5 +1,7 @@
 %parse-param {void* var_table}
 
+%define parse.trace
+
 %{
 #include <stdio.h>
 
