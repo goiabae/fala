@@ -88,6 +88,7 @@ static char* node_repr(Type type, void* data) {
 		case FALA_IF: return "if";
 		case FALA_WHEN: return "when";
 		case FALA_FOR: return "for";
+		case FALA_WHILE: return "while";
 		case FALA_IN: return "in";
 		case FALA_OUT: return "out";
 		case FALA_ASS: return "=";
@@ -217,6 +218,13 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 			}
 			var_table_insert(vars, (char*)var.data, to);
 			val = ast_node_eval(exp, vars);
+			break;
+		}
+		case FALA_WHILE: {
+			assert(node.children_count == 2);
+			Node cond = node.children[0];
+			Node exp = node.children[1];
+			while (ast_node_eval(cond, vars).num) val = ast_node_eval(exp, vars);
 			break;
 		}
 		case FALA_IN: {

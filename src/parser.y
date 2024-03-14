@@ -39,6 +39,7 @@ int yylex(void);
 %token FOR "for"
 %token FROM "from"
 %token TO "to"
+%token WHILE "while"
 
 %token EQ    '='
 
@@ -87,6 +88,7 @@ exp : DO exps END                { $$ = $2; }
     | IF exp THEN exp ELSE exp   { $$ = new_node(FALA_IF, NULL, 3, (Node[3]) {$2, $4, $6}); }
     | WHEN exp exp               { $$ = new_node(FALA_WHEN, NULL, 2, (Node[2]) {$2, $3}); }
     | FOR id FROM exp TO exp exp { $$ = new_node(FALA_FOR, NULL, 4, (Node[4]){$2, $4, $6, $7}); }
+    | WHILE exp exp              { $$ = new_node(FALA_WHILE, NULL, 2, (Node[2]){$2, $3}); }
     | IN                         { $$ = new_node(FALA_IN, NULL, 0, NULL); }
     | OUT exp                    { $$ = new_node(FALA_OUT, NULL, 1, (Node[1]){$2}); }
     | infix
