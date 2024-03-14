@@ -40,6 +40,7 @@ int yylex(void);
 %token FROM "from"
 %token TO "to"
 %token WHILE "while"
+%token VAR "var"
 
 %token EQ    '='
 
@@ -73,6 +74,7 @@ int yylex(void);
 %type <node> number
 %type <node> id
 %type <node> string
+%type <node> decl
 
 %%
 
@@ -91,8 +93,13 @@ exp : DO exps END                { $$ = $2; }
     | WHILE exp exp              { $$ = new_node(FALA_WHILE, NULL, 2, (Node[2]){$2, $3}); }
     | IN                         { $$ = new_node(FALA_IN, NULL, 0, NULL); }
     | OUT exp                    { $$ = new_node(FALA_OUT, NULL, 1, (Node[1]){$2}); }
+    | decl
     | infix
     ;
+
+decl : VAR id { $$ = new_node(FALA_DECL, NULL, 1, (Node[1]) {$2}); }
+     | VAR id EQ exp { $$ = new_node(FALA_DECL, NULL, 2, (Node[2]) {$2, $4}); }
+     ;
 
 infix : ass-exp ;
 

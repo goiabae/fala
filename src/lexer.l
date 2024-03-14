@@ -27,6 +27,7 @@
 "from"  { return FROM; }
 "to"    { return TO; }
 "while" { return WHILE; }
+"var"   { return VAR; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
 

@@ -56,6 +56,7 @@ typedef enum Type {
 	FALA_NOT,
 	FALA_ID,
 	FALA_STRING,
+	FALA_DECL,
 } Type;
 
 typedef struct Node {

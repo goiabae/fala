@@ -108,6 +108,7 @@ static char* node_repr(Type type, void* data) {
 		case FALA_NUM: return NULL;
 		case FALA_ID: return NULL;
 		case FALA_STRING: return NULL;
+		case FALA_DECL: return "var";
 	}
 	assert(false);
 }
@@ -280,6 +281,15 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		case FALA_STRING: {
 			assert(node.children_count == 0);
 			val = (Value) {VALUE_STR, .str = (char*)node.data};
+			break;
+		}
+		case FALA_DECL: {
+			if (node.children_count == 2) {
+				Value ass = ast_node_eval(node.children[1], vars);
+				val = var_table_insert(vars, (char*)node.children[0].data, ass);
+				break;
+			}
+			val = (Value) {VALUE_NUM, .num = 0};
 			break;
 		}
 	}
