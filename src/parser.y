@@ -63,8 +63,7 @@ int yylex(void);
 
 %start program ;
 
-program : %empty
-        | exps { ctx->ast.root = $1; };
+program : exps { ctx->ast.root = $1; };
 
 exps : exp
      | exp exps { $$ = new_node(FALA_THEN, NULL, 2, (Node[2]){$1, $2}); }
