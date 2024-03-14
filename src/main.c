@@ -227,7 +227,6 @@ static AST context_get_ast(Context ctx) { return ctx.ast; }
 
 static AST parse(FILE* fd) {
 	yyin = fd;
-	yydebug = true;
 	Context ctx = context_init();
 	if (yyparse(&ctx)) {
 		exit(1); // FIXME propagate error up
