@@ -6,6 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef _WIN32
+#	include <getopt.h>
+#endif
+
 #include "lexer.h"
 #include "parser.h"
 
@@ -384,20 +388,58 @@ static void value_deinit(Value val) {
 void usage() {
 	printf(
 		"Usage:\n"
-		"\tfala <filepath>\n"
+		"\tfala [<options> ...] <filepath>\n"
+		"Options:\n"
+		"\t-V    verbose output"
 	);
 }
 
+typedef struct Options {
+	bool is_invalid;
+	bool verbose;
+	char** argv;
+	int argc;
+} Options;
+
+Options parse_args(int argc, char* argv[]) {
+	Options opts;
+	opts.verbose = false;
+	opts.is_invalid = false;
+
+	// getopt comes from POSIX which is not available on Windows
+#ifndef _WIN32
+	for (char c = 0; (c = getopt(argc, argv, "V")) != -1;) switch (c) {
+			case 'V': opts.verbose = true; break;
+			default: break;
+		}
+
+	opts.argv = &argv[optind];
+	opts.argc = argc - optind;
+#else
+	opts.argv = &argv[1];
+	opts.argc = argc - 1;
+#endif
+
+	if (opts.argc < 1) opts.is_invalid = true;
+
+	return opts;
+}
+
 int main(int argc, char* argv[]) {
-	if (argc < 2) {
+	Options opts = parse_args(argc, argv);
+	if (opts.is_invalid) {
 		usage();
 		return 1;
 	}
 
-	FILE* fd = (argv[1][0] == '-') ? stdin : fopen(argv[1], "r");
+	FILE* fd = (!strcmp(opts.argv[0], "-")) ? stdin : fopen(opts.argv[0], "r");
+	if (!fd) return 1;
+
 	AST ast = parse(fd);
-	print_ast(ast);
-	printf("\n");
+	if (opts.verbose) {
+		print_ast(ast);
+		printf("\n");
+	}
 
 	Value val = ast_eval(ast);
 
