@@ -3,6 +3,8 @@
 
   #include "parser.h"
   #include "main.h"
+
+  static char* parse_string(char* str);
 %}
 
 /* don't generate yyunput and input functions */
@@ -35,7 +37,7 @@
 
 [0-9]+  { yylval.num = atoi(yytext); return NUMBER; }
 
-\".*\"  { yylval.str = strdup(yytext); return STRING; }
+\".*\"  { yylval.str = fix_string(yytext); return STRING; }
 
 \(      { return PAREN_OPEN; }
 \)      { return PAREN_CLOSE; }
@@ -57,3 +59,21 @@
 [ \t\n] ;
 
 .       { yyerror(NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
+
+%%
+
+static char* parse_string(char* str) {
+  const size_t len = strlen(str);
+  char* new = malloc(sizeof(char) * (len - 2 + 1));
+  str = &str[1];
+  size_t new_len = 0;
+  for (size_t i = 0; i < len; i++) {
+    if (str[i] == '\\' && str[i+1] == 'n')
+        new[i++] = '\n';
+    else
+        new[i] = str[i];
+    new_len++;
+  }
+  new[new_len] = '\0';
+  return new;
+}

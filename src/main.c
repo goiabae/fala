@@ -121,7 +121,14 @@ static void print_node(Node node, unsigned int space) {
 		printf("%s", (char*)node.data);
 		return;
 	} else if (node.type == FALA_STRING) {
-		printf("\"%s\"", (char*)node.data);
+		printf("\"");
+		for (char* it = node.data; *it != '\0'; it++) {
+			if (*it == '\n')
+				printf("\\n");
+			else
+				printf("%c", *it);
+		}
+		printf("\"");
 		return;
 	}
 
