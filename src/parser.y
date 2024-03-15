@@ -84,7 +84,7 @@
 
 %start program ;
 
-program : exps { ctx->ast.root = $1; };
+program : exp { ctx->ast.root = $1; };
 
 exps : %empty   { $$ = new_block_node(); }
      | exps exp { (void)$1; $$ = block_append_node($$, $2); }
