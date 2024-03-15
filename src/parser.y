@@ -60,6 +60,8 @@ int yylex(void);
 
 %token PAREN_OPEN '('
 %token PAREN_CLOSE ')'
+%token BRACKET_OPEN '['
+%token BRACKET_CLOSE ']'
 
 %type <node> exp
 %type <node> exps
@@ -75,6 +77,7 @@ int yylex(void);
 %type <node> id
 %type <node> string
 %type <node> decl
+%type <node> var
 
 %%
 
@@ -89,7 +92,7 @@ exps : %empty   { $$ = new_block_node(); }
 exp : DO exps END                { $$ = $2; }
     | IF exp THEN exp ELSE exp   { $$ = new_node(FALA_IF, NULL, 3, (Node[3]) {$2, $4, $6}); }
     | WHEN exp exp               { $$ = new_node(FALA_WHEN, NULL, 2, (Node[2]) {$2, $3}); }
-    | FOR id FROM exp TO exp exp { $$ = new_node(FALA_FOR, NULL, 4, (Node[4]){$2, $4, $6, $7}); }
+    | FOR VAR var FROM exp TO exp exp { $$ = new_node(FALA_FOR, NULL, 4, (Node[4]){$3, $5, $7, $8}); }
     | WHILE exp exp              { $$ = new_node(FALA_WHILE, NULL, 2, (Node[2]){$2, $3}); }
     | IN                         { $$ = new_node(FALA_IN, NULL, 0, NULL); }
     | OUT exp                    { $$ = new_node(FALA_OUT, NULL, 1, (Node[1]){$2}); }
@@ -97,15 +100,19 @@ exp : DO exps END                { $$ = $2; }
     | infix
     ;
 
-decl : VAR id { $$ = new_node(FALA_DECL, NULL, 1, (Node[1]) {$2}); }
-     | VAR id EQ exp { $$ = new_node(FALA_DECL, NULL, 2, (Node[2]) {$2, $4}); }
+decl : VAR var { $$ = new_node(FALA_DECL, NULL, 1, (Node[1]) {$2}); }
+     | VAR var EQ exp { $$ = new_node(FALA_DECL, NULL, 2, (Node[2]) {$2, $4}); }
      ;
+
+var : id                                { $$ = new_node(FALA_VAR, NULL, 1, (Node[1]){$1}); }
+    | id BRACKET_OPEN exp BRACKET_CLOSE { $$ = new_node(FALA_VAR, NULL, 2, (Node[2]){$1, $3}); }
+    ;
 
 infix : ass-exp ;
 
 /* a = b. assignment lol */
 ass-exp : logi-exp
-        | id EQ exp { $$ = new_node(FALA_ASS, NULL, 2, (Node[2]){$1, $3}); }
+        | var EQ exp { $$ = new_node(FALA_ASS, NULL, 2, (Node[2]){$1, $3}); }
         ;
 
 /* a and b or c */
@@ -143,7 +150,7 @@ not-exp : term
 
 term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | number
-     | id
+     | var
      | string
      ;
 

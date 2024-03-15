@@ -9,10 +9,15 @@ typedef char* String;
 typedef struct Value {
 	enum {
 		VALUE_NUM,
+		VALUE_ARR,
 		VALUE_STR,
 	} tag;
 	union {
 		Number num;
+		struct {
+			size_t len;
+			struct Value* data;
+		} arr;
 		String str;
 	};
 } Value;
@@ -30,6 +35,7 @@ VarTable* var_table_init(void);
 void var_table_deinit(VarTable* tab);
 Value var_table_insert(VarTable* tab, const char* name, Value value);
 Value var_table_get(VarTable* tab, const char* name);
+Value* var_table_get_where(VarTable* tab, const char* name);
 
 typedef enum Type {
 	FALA_NUM,
@@ -57,6 +63,7 @@ typedef enum Type {
 	FALA_ID,
 	FALA_STRING,
 	FALA_DECL,
+	FALA_VAR,
 } Type;
 
 typedef struct Node {

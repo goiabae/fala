@@ -76,6 +76,15 @@ Value var_table_get(VarTable* tab, const char* name) {
 	assert(false); // FIXME should propagate error
 }
 
+// retrieve pointer to location of variable. if variable doesn't exists returns
+// a new location
+Value* var_table_get_where(VarTable* tab, const char* name) {
+	for (size_t i = 0; i < tab->len; i++)
+		if (strcmp(tab->names[i], name) == 0) return &tab->values[i];
+	tab->names[tab->len] = name;
+	return &tab->values[tab->len++];
+}
+
 void yyerror(void* var_table, char* s) {
 	(void)var_table;
 	fprintf(stderr, "%s\n", s);
@@ -108,7 +117,8 @@ static char* node_repr(Type type, void* data) {
 		case FALA_NUM: return NULL;
 		case FALA_ID: return NULL;
 		case FALA_STRING: return NULL;
-		case FALA_DECL: return "var";
+		case FALA_DECL: return "decl";
+		case FALA_VAR: return "var";
 	}
 	assert(false);
 }
@@ -205,26 +215,24 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		case FALA_FOR: {
 			assert(node.children_count == 4);
 			Node var = node.children[0];
+			assert(var.children_count == 1);
+			Node id = var.children[0];
 			Value from = ast_node_eval(node.children[1], vars);
 			Value to = ast_node_eval(node.children[2], vars);
 			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
 			Node exp = node.children[3];
 			if (from.num <= to.num) {
 				for (size_t i = from.num; i <= (size_t)(to.num - 1); i++) {
-					var_table_insert(
-						vars, (char*)var.data, (Value) {VALUE_NUM, .num = i}
-					);
+					var_table_insert(vars, (char*)id.data, (Value) {VALUE_NUM, .num = i});
 					ast_node_eval(exp, vars);
 				}
 			} else {
 				for (size_t i = from.num; i >= (size_t)(to.num + 1); i--) {
-					var_table_insert(
-						vars, (char*)var.data, (Value) {VALUE_NUM, .num = i}
-					);
+					var_table_insert(vars, (char*)id.data, (Value) {VALUE_NUM, .num = i});
 					ast_node_eval(exp, vars);
 				}
 			}
-			var_table_insert(vars, (char*)var.data, to);
+			var_table_insert(vars, (char*)id.data, to);
 			val = ast_node_eval(exp, vars);
 			break;
 		}
@@ -255,10 +263,19 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		}
 		case FALA_ASS: {
 			assert(node.children_count == 2);
-			Node id = node.children[0];
-			assert(id.type == FALA_ID);
-			Node expr = node.children[1];
-			val = var_table_insert(vars, (char*)id.data, ast_node_eval(expr, vars));
+			Node var = node.children[0];
+			assert(var.type == FALA_VAR);
+			Node id = var.children[0];
+			Value value = ast_node_eval(node.children[1], vars);
+			if (var.children_count == 2) {
+				Value idx = ast_node_eval(var.children[1], vars);
+				assert(idx.tag == VALUE_NUM);
+				Value arr = var_table_get(vars, (char*)id.data);
+				arr.arr.data[idx.num] = value;
+			} else {
+				var_table_insert(vars, (char*)id.data, value);
+			}
+			val = value;
 			break;
 		}
 		case FALA_OR: BIN_OP(||);
@@ -280,23 +297,41 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 			val = (Value) {VALUE_NUM, .num = !v.num};
 			break;
 		}
-		case FALA_ID: {
-			assert(node.children_count == 0);
-			val = var_table_get(vars, (char*)node.data);
-			break;
-		}
+		case FALA_ID: assert(false);
 		case FALA_STRING: {
 			assert(node.children_count == 0);
 			val = (Value) {VALUE_STR, .str = (char*)node.data};
 			break;
 		}
 		case FALA_DECL: {
-			if (node.children_count == 2) {
+			Node var = node.children[0];
+			Node id = var.children[0];
+			Value* cell = var_table_get_where(vars, (char*)id.data);
+			if (var.children_count == 2) {
+				Value size = ast_node_eval(var.children[1], vars);
+				*cell = (Value) {
+					VALUE_ARR,
+					.arr.data = malloc(sizeof(Value) * size.num),
+					.arr.len = size.num};
+				memset(cell->arr.data, 0, sizeof(Value) * size.num);
+				val = (Value) {VALUE_NUM, .num = 0};
+			} else if (node.children_count == 2) {
 				Value ass = ast_node_eval(node.children[1], vars);
-				val = var_table_insert(vars, (char*)node.children[0].data, ass);
-				break;
+				val = (*cell = ass);
+			} else
+				val = (Value) {VALUE_NUM, .num = 0};
+			break;
+		}
+		case FALA_VAR: {
+			Node id = node.children[0];
+			if (node.children_count == 1) {
+				val = var_table_get(vars, (char*)id.data);
+			} else {
+				Value arr = var_table_get(vars, (char*)id.data);
+				Value idx = ast_node_eval(node.children[1], vars);
+				assert(arr.tag == VALUE_ARR && idx.tag == VALUE_NUM);
+				val = (Value) {VALUE_NUM, .num = arr.arr.data[idx.num].num};
 			}
-			val = (Value) {VALUE_NUM, .num = 0};
 			break;
 		}
 	}

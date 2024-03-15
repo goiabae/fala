@@ -41,6 +41,8 @@
 
 \(      { return PAREN_OPEN; }
 \)      { return PAREN_CLOSE; }
+\[      { return BRACKET_OPEN; }
+\]      { return BRACKET_CLOSE; }
 
 \=\=    { return EQ_EQ; }
 
