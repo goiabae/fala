@@ -67,6 +67,12 @@ VarTable var_table_init(void) {
 
 void var_table_deinit(VarTable tab) {
 	free(tab.names);
+	for (size_t i = 0; i < tab.len; i++) {
+		if (tab.values[i].tag == VALUE_ARR)
+			free(tab.values[i].arr.data);
+		else if (tab.values[i].tag == VALUE_STR)
+			free(tab.values[i].str);
+	}
 	free(tab.values);
 }
 
@@ -235,12 +241,14 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 			if (from.num <= to.num) {
 				for (Number i = from.num; i <= to.num; i++) {
 					Value* addr = env_stack_find(stack, (char*)id.data);
+					if (!addr) addr = env_stack_put_new(stack, (char*)id.data);
 					*addr = (Value) {VALUE_NUM, .num = i};
 					val = ast_node_eval(exp, stack);
 				}
 			} else {
 				for (Number i = from.num; i >= to.num; i--) {
 					Value* addr = env_stack_find(stack, (char*)id.data);
+					if (!addr) addr = env_stack_put_new(stack, (char*)id.data);
 					*addr = (Value) {VALUE_NUM, .num = i};
 					val = ast_node_eval(exp, stack);
 				}
@@ -263,8 +271,10 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 			long num = 0;
 			if (sscanf(buf, "%ld", &num) == 0)
 				val = (Value) {VALUE_STR, .str = buf};
-			else
+			else {
+				free(buf);
 				val = (Value) {VALUE_NUM, .num = num};
+			}
 			break;
 		}
 		case FALA_OUT: {
@@ -370,7 +380,10 @@ static EnvironmentStack env_stack_init() {
 	return stack;
 }
 
-static void env_stack_deinit(EnvironmentStack stack) { free(stack.envs); }
+static void env_stack_deinit(EnvironmentStack stack) {
+	for (size_t i = 0; i < stack.len; i++) var_table_deinit(stack.envs[i].vars);
+	free(stack.envs);
+}
 
 // return is the exit code of the ran program
 static Value ast_eval(AST ast) {
