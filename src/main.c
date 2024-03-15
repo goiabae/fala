@@ -16,6 +16,11 @@
 static void print_value(Value val);
 static void value_deinit(Value val);
 
+static Value* env_stack_find(EnvironmentStack stack, const char* name);
+static void env_stack_push(EnvironmentStack* stack);
+static void env_stack_pop(EnvironmentStack* stack);
+static Value* env_stack_put_new(EnvironmentStack stack, const char* name);
+
 Node new_node(Type type, void* data, size_t len, Node children[len]) {
 	Node node;
 	node.type = type;
@@ -43,24 +48,23 @@ Node block_append_node(Node block, Node next) {
 	return block;
 }
 
-VarTable* var_table_init(void) {
-	VarTable* tab = malloc(sizeof(VarTable));
-	tab->len = 0;
-	tab->cap = 100;
+VarTable var_table_init(void) {
+	VarTable tab;
+	tab.len = 0;
+	tab.cap = 100;
 
-	tab->names = malloc(sizeof(char*) * tab->cap);
-	memset(tab->names, 0, sizeof(char*) * tab->cap);
+	tab.names = malloc(sizeof(char*) * tab.cap);
+	memset(tab.names, 0, sizeof(char*) * tab.cap);
 
-	tab->values = malloc(sizeof(int) * tab->cap);
-	memset(tab->values, 0, sizeof(int) * tab->cap);
+	tab.values = malloc(sizeof(int) * tab.cap);
+	memset(tab.values, 0, sizeof(int) * tab.cap);
 
 	return tab;
 }
 
-void var_table_deinit(VarTable* tab) {
-	free(tab->names);
-	free(tab->values);
-	free(tab);
+void var_table_deinit(VarTable tab) {
+	free(tab.names);
+	free(tab.values);
 }
 
 Value var_table_insert(VarTable* tab, const char* name, Value value) {
@@ -85,8 +89,7 @@ Value var_table_get(VarTable* tab, const char* name) {
 Value* var_table_get_where(VarTable* tab, const char* name) {
 	for (size_t i = 0; i < tab->len; i++)
 		if (strcmp(tab->names[i], name) == 0) return &tab->values[i];
-	tab->names[tab->len] = name;
-	return &tab->values[tab->len++];
+	return NULL;
 }
 
 void yyerror(void* var_table, char* s) {
@@ -173,16 +176,14 @@ static void node_deinit(Node node) {
 static AST ast_init(void) { return (AST) {}; }
 static void ast_deinit(AST ast) { node_deinit(ast.root); }
 
-static Value ast_node_eval(Node node, VarTable* vars);
-
-static Value ast_node_eval(Node node, VarTable* vars) {
+static Value ast_node_eval(Node node, EnvironmentStack stack) {
 	Value val;
 
 #define BIN_OP(OP)                                           \
 	{                                                          \
 		assert(node.children_count == 2);                        \
-		Value left = ast_node_eval(node.children[0], vars);      \
-		Value right = ast_node_eval(node.children[1], vars);     \
+		Value left = ast_node_eval(node.children[0], stack);     \
+		Value right = ast_node_eval(node.children[1], stack);    \
 		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM); \
 		val = (Value) {VALUE_NUM, .num = left.num OP right.num}; \
 		break;                                                   \
@@ -191,60 +192,63 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 	switch (node.type) {
 		case FALA_NUM: return (Value) {VALUE_NUM, .num = *(int*)node.data}; break;
 		case FALA_BLOCK: {
-			for (size_t i = 0; i < (node.children_count - 1); i++)
-				(void)ast_node_eval(node.children[i], vars);
-			val = ast_node_eval(node.children[node.children_count - 1], vars);
+			env_stack_push(&stack);
+			for (size_t i = 0; i < node.children_count; i++)
+				val = ast_node_eval(node.children[i], stack);
+			env_stack_pop(&stack);
 			break;
 		}
 		case FALA_IF: {
 			assert(node.children_count == 3);
-			Value cond = ast_node_eval(node.children[0], vars);
+			Value cond = ast_node_eval(node.children[0], stack);
 			assert(cond.tag == VALUE_NUM);
 			if (cond.num)
-				val = ast_node_eval(node.children[1], vars);
+				val = ast_node_eval(node.children[1], stack);
 			else
-				val = ast_node_eval(node.children[2], vars);
+				val = ast_node_eval(node.children[2], stack);
 			break;
 		}
 		case FALA_WHEN: {
 			assert(node.children_count == 2);
-			Value cond = ast_node_eval(node.children[0], vars);
+			Value cond = ast_node_eval(node.children[0], stack);
 			assert(cond.tag == VALUE_NUM);
 			if (cond.num)
-				val = ast_node_eval(node.children[1], vars);
+				val = ast_node_eval(node.children[1], stack);
 			else
 				val = (Value) {VALUE_NUM, .num = 0};
 			break;
 		}
 		case FALA_FOR: {
+			env_stack_push(&stack);
 			assert(node.children_count == 4);
 			Node var = node.children[0];
 			assert(var.children_count == 1);
 			Node id = var.children[0];
-			Value from = ast_node_eval(node.children[1], vars);
-			Value to = ast_node_eval(node.children[2], vars);
+			Value from = ast_node_eval(node.children[1], stack);
+			Value to = ast_node_eval(node.children[2], stack);
 			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
 			Node exp = node.children[3];
 			if (from.num <= to.num) {
-				for (size_t i = from.num; i <= (size_t)(to.num - 1); i++) {
-					var_table_insert(vars, (char*)id.data, (Value) {VALUE_NUM, .num = i});
-					ast_node_eval(exp, vars);
+				for (Number i = from.num; i <= to.num; i++) {
+					Value* addr = env_stack_find(stack, (char*)id.data);
+					*addr = (Value) {VALUE_NUM, .num = i};
+					val = ast_node_eval(exp, stack);
 				}
 			} else {
-				for (size_t i = from.num; i >= (size_t)(to.num + 1); i--) {
-					var_table_insert(vars, (char*)id.data, (Value) {VALUE_NUM, .num = i});
-					ast_node_eval(exp, vars);
+				for (Number i = from.num; i >= to.num; i--) {
+					Value* addr = env_stack_find(stack, (char*)id.data);
+					*addr = (Value) {VALUE_NUM, .num = i};
+					val = ast_node_eval(exp, stack);
 				}
 			}
-			var_table_insert(vars, (char*)id.data, to);
-			val = ast_node_eval(exp, vars);
+			env_stack_pop(&stack);
 			break;
 		}
 		case FALA_WHILE: {
 			assert(node.children_count == 2);
 			Node cond = node.children[0];
 			Node exp = node.children[1];
-			while (ast_node_eval(cond, vars).num) val = ast_node_eval(exp, vars);
+			while (ast_node_eval(cond, stack).num) val = ast_node_eval(exp, stack);
 			break;
 		}
 		case FALA_IN: {
@@ -261,7 +265,7 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		}
 		case FALA_OUT: {
 			assert(node.children_count == 1);
-			val = ast_node_eval(node.children[0], vars);
+			val = ast_node_eval(node.children[0], stack);
 			print_value(val);
 			break;
 		}
@@ -270,14 +274,17 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 			Node var = node.children[0];
 			assert(var.type == FALA_VAR);
 			Node id = var.children[0];
-			Value value = ast_node_eval(node.children[1], vars);
+			Value value = ast_node_eval(node.children[1], stack);
 			if (var.children_count == 2) {
-				Value idx = ast_node_eval(var.children[1], vars);
+				Value idx = ast_node_eval(var.children[1], stack);
 				assert(idx.tag == VALUE_NUM);
-				Value arr = var_table_get(vars, (char*)id.data);
-				arr.arr.data[idx.num] = value;
+				Value* arr = env_stack_find(stack, (char*)id.data);
+				assert(arr);
+				arr->arr.data[idx.num] = value;
 			} else {
-				var_table_insert(vars, (char*)id.data, value);
+				Value* addr = env_stack_find(stack, (char*)id.data);
+				assert(!addr);
+				*addr = value;
 			}
 			val = value;
 			break;
@@ -297,7 +304,7 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		case FALA_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
-			Value v = ast_node_eval(op, vars);
+			Value v = ast_node_eval(op, stack);
 			val = (Value) {VALUE_NUM, .num = !v.num};
 			break;
 		}
@@ -310,9 +317,9 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		case FALA_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Value* cell = var_table_get_where(vars, (char*)id.data);
+			Value* cell = env_stack_put_new(stack, (char*)id.data);
 			if (var.children_count == 2) {
-				Value size = ast_node_eval(var.children[1], vars);
+				Value size = ast_node_eval(var.children[1], stack);
 				*cell = (Value) {
 					VALUE_ARR,
 					.arr.data = malloc(sizeof(Value) * size.num),
@@ -320,7 +327,7 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 				memset(cell->arr.data, 0, sizeof(Value) * size.num);
 				val = (Value) {VALUE_NUM, .num = 0};
 			} else if (node.children_count == 2) {
-				Value ass = ast_node_eval(node.children[1], vars);
+				Value ass = ast_node_eval(node.children[1], stack);
 				val = (*cell = ass);
 			} else
 				val = (Value) {VALUE_NUM, .num = 0};
@@ -328,13 +335,19 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		}
 		case FALA_VAR: {
 			Node id = node.children[0];
-			if (node.children_count == 1) {
-				val = var_table_get(vars, (char*)id.data);
-			} else {
-				Value arr = var_table_get(vars, (char*)id.data);
-				Value idx = ast_node_eval(node.children[1], vars);
-				assert(arr.tag == VALUE_ARR && idx.tag == VALUE_NUM);
-				val = (Value) {VALUE_NUM, .num = arr.arr.data[idx.num].num};
+			Value* addr = env_stack_find(stack, (char*)id.data);
+			assert(addr && "Variable not previously declared.");
+
+			if (node.children_count == 1) { // id
+				val = *addr;
+			} else { // id[idx]
+				Value idx = ast_node_eval(node.children[1], stack);
+				assert(
+					addr->tag == VALUE_ARR
+					&& "Variable does not correspond to a previously declared array"
+				);
+				assert(idx.tag == VALUE_NUM && "Index is not a number");
+				val = (Value) {VALUE_NUM, .num = addr->arr.data[idx.num].num};
 			}
 			break;
 		}
@@ -345,12 +358,47 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 	return val;
 }
 
+static EnvironmentStack env_stack_init() {
+	EnvironmentStack stack;
+	stack.len = 0;
+	stack.envs = malloc(sizeof(Environment) * 16);
+	stack.cap = 16;
+	return stack;
+}
+
+static void env_stack_deinit(EnvironmentStack stack) { free(stack.envs); }
+
 // return is the exit code of the ran program
 static Value ast_eval(AST ast) {
-	VarTable* vars = var_table_init();
-	Value val = ast_node_eval(ast.root, vars);
-	var_table_deinit(vars);
+	EnvironmentStack stack = env_stack_init();
+	Value val = ast_node_eval(ast.root, stack);
+	env_stack_deinit(stack);
 	return val;
+}
+
+// search environment stack for a variable cell with name.
+// if doesn't find, return a new one in the inner most environment
+static Value* env_stack_find(EnvironmentStack stack, const char* name) {
+	for (size_t i = stack.len; i > 0;) {
+		i -= 1;
+		Value* addr = var_table_get_where(&stack.envs[i].vars, name);
+		if (addr) return addr;
+	}
+	return NULL;
+}
+
+static Value* env_stack_put_new(EnvironmentStack stack, const char* name) {
+	VarTable* last = &stack.envs[stack.len - 1].vars;
+	last->names[last->len] = name;
+	return &last->values[last->len++];
+}
+
+static void env_stack_push(EnvironmentStack* stack) {
+	stack->envs[stack->len++] = (Environment) {.vars = var_table_init()};
+}
+
+static void env_stack_pop(EnvironmentStack* stack) {
+	var_table_deinit(stack->envs[stack->len-- - 1].vars);
 }
 
 static Context context_init() { return (Context) {.ast = ast_init()}; }

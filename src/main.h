@@ -31,12 +31,6 @@ typedef struct VarTable {
 
 void yyerror(void* var_table, char* s);
 
-VarTable* var_table_init(void);
-void var_table_deinit(VarTable* tab);
-Value var_table_insert(VarTable* tab, const char* name, Value value);
-Value var_table_get(VarTable* tab, const char* name);
-Value* var_table_get_where(VarTable* tab, const char* name);
-
 typedef enum Type {
 	FALA_NUM,
 	FALA_BLOCK,
@@ -84,5 +78,15 @@ typedef struct AST {
 typedef struct Context {
 	AST ast;
 } Context;
+
+typedef struct Environment {
+	VarTable vars;
+} Environment;
+
+typedef struct EnvironmentStack {
+	size_t len;
+	size_t cap;
+	Environment* envs;
+} EnvironmentStack;
 
 #endif
