@@ -178,7 +178,7 @@ static Value ast_node_eval(Node node, VarTable* vars) {
 		case FALA_NUM: return (Value) {VALUE_NUM, .num = *(int*)node.data}; break;
 		case FALA_BLOCK: {
 			for (size_t i = 0; i < (node.children_count - 1); i++)
-				value_deinit(ast_node_eval(node.children[i], vars));
+				(void)ast_node_eval(node.children[i], vars);
 			val = ast_node_eval(node.children[node.children_count - 1], vars);
 			break;
 		}
