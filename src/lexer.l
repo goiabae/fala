@@ -10,6 +10,7 @@
 /* don't generate yyunput and input functions */
 %option nounput noinput
 %option noyywrap
+%option reentrant bison-bridge
 
 %%
 
@@ -33,11 +34,11 @@
 "while" { return WHILE; }
 "var"   { return VAR; }
 
-[a-zA-Z_][a-zA-Z0-9_]* { yylval.str = strdup(yytext); return ID; }
+[a-zA-Z_][a-zA-Z0-9_]* { yylval->str = strdup(yytext); return ID; }
 
-[0-9]+  { yylval.num = atoi(yytext); return NUMBER; }
+[0-9]+  { yylval->num = atoi(yytext); return NUMBER; }
 
-\".*\"  { yylval.str = parse_string(yytext); return STRING; }
+\".*\"  { yylval->str = parse_string(yytext); return STRING; }
 
 \(      { return PAREN_OPEN; }
 \)      { return PAREN_CLOSE; }
@@ -60,7 +61,7 @@
 
 [ \t\n] ;
 
-.       { yyerror(NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
+.       { yyerror(NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
 
 %%
 

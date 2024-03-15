@@ -1,4 +1,7 @@
-%parse-param {Context* ctx}
+%define api.pure full
+
+%lex-param {void *scanner}
+%parse-param {void *scanner}{Context* ctx}
 
 %define parse.trace
 
@@ -9,10 +12,8 @@
 %{
 #include <stdio.h>
 
-#include "lexer.h"
 #include "parser.h"
-
-int yylex(void);
+#include "lexer.h"
 %}
 
 %union {

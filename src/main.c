@@ -10,8 +10,11 @@
 #	include <getopt.h>
 #endif
 
-#include "lexer.h"
+// clang-format off
+// need to be included in this order
 #include "parser.h"
+#include "lexer.h"
+// clang-format on
 
 static void print_value(Value val);
 static void value_deinit(Value val);
@@ -92,7 +95,8 @@ Value* var_table_get_where(VarTable* tab, const char* name) {
 	return NULL;
 }
 
-void yyerror(void* var_table, char* s) {
+void yyerror(void* scanner, void* var_table, char* s) {
+	(void)scanner;
 	(void)var_table;
 	fprintf(stderr, "%s\n", s);
 }
@@ -411,12 +415,17 @@ static void context_deinit(Context ctx) {
 static AST context_get_ast(Context ctx) { return ctx.ast; }
 
 static AST parse(FILE* fd) {
-	yyin = fd;
+	yyscan_t scanner = NULL;
+	yylex_init(&scanner);
+	yyset_in(fd, scanner);
+
 	Context ctx = context_init();
-	if (yyparse(&ctx)) {
+	if (yyparse(scanner, &ctx)) {
 		exit(1); // FIXME propagate error up
 	}
+
 	AST ast = context_get_ast(ctx);
+	yylex_destroy(scanner);
 	context_deinit(ctx);
 	return ast;
 }
@@ -492,6 +501,7 @@ int main(int argc, char* argv[]) {
 	Value val = ast_eval(ast);
 
 	ast_deinit(ast);
+	fclose(fd);
 
 	if (val.tag == VALUE_NUM)
 		return val.num;

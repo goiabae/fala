@@ -29,7 +29,7 @@ typedef struct VarTable {
 	Value* values;
 } VarTable;
 
-void yyerror(void* var_table, char* s);
+void yyerror(void* scanner, void* var_table, char* s);
 
 typedef enum Type {
 	FALA_NUM,
