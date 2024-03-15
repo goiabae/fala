@@ -37,7 +37,7 @@
 
 [0-9]+  { yylval.num = atoi(yytext); return NUMBER; }
 
-\".*\"  { yylval.str = fix_string(yytext); return STRING; }
+\".*\"  { yylval.str = parse_string(yytext); return STRING; }
 
 \(      { return PAREN_OPEN; }
 \)      { return PAREN_CLOSE; }
