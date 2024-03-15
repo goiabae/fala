@@ -1,0 +1,7 @@
+var max = 0
+for var i from 0 to 2 do
+	var x = in
+	when x > max
+		max = x
+end
+out max
