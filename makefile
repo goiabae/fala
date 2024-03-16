@@ -1,9 +1,12 @@
 CFLAGS += -ggdb -Wall -Wextra
+# CFLAGS += -D FALA_WITH_REPL
+# LIBS = -lreadline -lhistory
+LIBS =
 
 all: prepare fala
 
 fala: build/parser.o build/main.o build/lexer.o
-	$(CC) $(CFLAGS) -o build/$@ $^
+	$(CC) $(CFLAGS) $(LIBS) -o build/$@ $^
 
 build/main.o: src/main.c src/lexer.h
 	$(CC) $(CFLAGS) -c -o $@ $<

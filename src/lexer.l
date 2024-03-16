@@ -1,10 +1,23 @@
 %{
   #include <string.h>
+  #include <stdlib.h>
+#ifdef FALA_WITH_REPL
+  #include <readline/readline.h>
+  #include <readline/history.h>
+#endif
 
   #include "parser.h"
   #include "main.h"
 
+#if FALA_WITH_REPL
+  #define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
+#endif
+
   static char* parse_string(char* str);
+
+#if FALA_WITH_REPL
+  static int get_input(FILE* fd, char *buf, int size);
+#endif
 %}
 
 /* don't generate yyunput and input functions */
@@ -80,3 +93,20 @@ static char* parse_string(char* str) {
   new[new_len] = '\0';
   return new;
 }
+
+#ifdef FALA_WITH_REPL
+static int get_input(FILE* fd, char *buf, int size) {
+  if (feof(fd)) return YY_NULL;
+
+  char *line = readline("> ");
+  if(!line) return YY_NULL;
+  if(strlen(line) > (size_t)size-2) {
+    fprintf(stderr,"input line too long\n");
+    return YY_NULL;
+  }
+  sprintf(buf,"%s\n",line);
+  add_history(line);
+  free(line);
+  return strlen(buf);
+}
+#endif

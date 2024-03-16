@@ -469,6 +469,9 @@ void usage() {
 typedef struct Options {
 	bool is_invalid;
 	bool verbose;
+#ifdef FALA_WITH_REPL
+	bool run_repl;
+#endif
 	char** argv;
 	int argc;
 } Options;
@@ -497,14 +500,30 @@ Options parse_args(int argc, char* argv[]) {
 	return opts;
 }
 
-int main(int argc, char* argv[]) {
-	Options opts = parse_args(argc, argv);
-	if (opts.is_invalid) {
-		usage();
-		return 1;
+#ifdef FALA_WITH_REPL
+static int repl(Options opts) {
+	FILE* fd = stdin;
+
+	while (!feof(fd)) {
+		AST ast = parse(fd);
+		if (opts.verbose) {
+			print_ast(ast);
+			printf("\n");
+		}
+
+		Value val = ast_eval(ast);
+		print_value(val);
+		printf("\n");
+		ast_deinit(ast);
 	}
 
-	FILE* fd = (!strcmp(opts.argv[0], "-")) ? stdin : fopen(opts.argv[0], "r");
+	fclose(fd);
+	return 0;
+}
+#endif
+
+static int interpret(Options opts) {
+	FILE* fd = fopen(opts.argv[0], "r");
 	if (!fd) return 1;
 
 	AST ast = parse(fd);
@@ -522,4 +541,19 @@ int main(int argc, char* argv[]) {
 		return val.num;
 	else
 		return 0;
+}
+
+int main(int argc, char* argv[]) {
+	Options opts = parse_args(argc, argv);
+	if (opts.is_invalid) {
+		usage();
+		return 1;
+	}
+
+#ifdef FALA_WITH_REPL
+	if (opts.run_repl)
+		return repl(opts);
+	else
+#endif
+		return interpret(opts);
 }
