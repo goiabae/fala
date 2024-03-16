@@ -472,7 +472,6 @@ static void print_value(Value val) {
 		printf("%d", val.num);
 	else
 		printf("%s", val.str);
-	printf("\n");
 }
 
 static void value_deinit(Value val) {
