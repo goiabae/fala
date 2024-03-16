@@ -16,6 +16,10 @@
 #include "lexer.h"
 // clang-format on
 
+typedef struct Interpreter {
+	EnvironmentStack envs;
+} Interpreter;
+
 static void print_value(Value val);
 static void value_deinit(Value val);
 
@@ -386,12 +390,8 @@ static void env_stack_deinit(EnvironmentStack stack) {
 }
 
 // return is the exit code of the ran program
-static Value ast_eval(AST ast) {
-	EnvironmentStack stack = env_stack_init();
-	env_stack_push(&stack);
-	Value val = ast_node_eval(ast.root, stack);
-	env_stack_pop(&stack);
-	env_stack_deinit(stack);
+static Value ast_eval(Interpreter* inter, AST ast) {
+	Value val = ast_node_eval(ast.root, inter->envs);
 	return val;
 }
 
@@ -457,6 +457,18 @@ static void value_deinit(Value val) {
 	if (val.tag == VALUE_STR) free(val.str);
 }
 
+static Interpreter interpreter_init(void) {
+	Interpreter inter;
+	inter.envs = env_stack_init();
+	env_stack_push(&inter.envs);
+	return inter;
+}
+
+static void interpreter_deinit(Interpreter* inter) {
+	env_stack_pop(&inter->envs);
+	env_stack_deinit(inter->envs);
+}
+
 void usage() {
 	printf(
 		"Usage:\n"
@@ -503,6 +515,7 @@ Options parse_args(int argc, char* argv[]) {
 #ifdef FALA_WITH_REPL
 static int repl(Options opts) {
 	FILE* fd = stdin;
+	Interpreter inter = interpreter_init();
 
 	while (!feof(fd)) {
 		AST ast = parse(fd);
@@ -517,6 +530,7 @@ static int repl(Options opts) {
 		ast_deinit(ast);
 	}
 
+	interpreter_deinit(&inter);
 	fclose(fd);
 	return 0;
 }
@@ -532,15 +546,17 @@ static int interpret(Options opts) {
 
 	if (!fd) return 1;
 
+	Interpreter inter = interpreter_init();
 	AST ast = parse(fd);
 	if (opts.verbose) {
 		print_ast(ast);
 		printf("\n");
 	}
 
-	Value val = ast_eval(ast);
+	Value val = ast_eval(&inter, ast);
 
 	ast_deinit(ast);
+	interpreter_deinit(&inter);
 	fclose(fd);
 
 	if (val.tag == VALUE_NUM)
