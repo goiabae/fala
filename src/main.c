@@ -99,12 +99,7 @@ VarTable var_table_init(void) {
 
 void var_table_deinit(VarTable tab) {
 	free(tab.names);
-	for (size_t i = 0; i < tab.len; i++) {
-		if (tab.values[i].tag == VALUE_ARR)
-			free(tab.values[i].arr.data);
-		else if (tab.values[i].tag == VALUE_STR)
-			free(tab.values[i].str);
-	}
+	for (size_t i = 0; i < tab.len; i++) value_deinit(tab.values[i]);
 	free(tab.values);
 }
 
@@ -490,7 +485,12 @@ static void print_value(Value val) {
 }
 
 static void value_deinit(Value val) {
-	if (val.tag == VALUE_STR) free(val.str);
+	if (val.tag == VALUE_STR) {
+		printf("%p\n", val.str);
+		free(val.str);
+
+	} else if (val.tag == VALUE_ARR)
+		free(val.arr.data);
 }
 
 static Interpreter interpreter_init(void) {
