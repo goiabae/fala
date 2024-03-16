@@ -22,7 +22,7 @@ static void value_deinit(Value val);
 static Value* env_stack_find(EnvironmentStack stack, const char* name);
 static void env_stack_push(EnvironmentStack* stack);
 static void env_stack_pop(EnvironmentStack* stack);
-static Value* env_stack_put_new(EnvironmentStack stack, const char* name);
+static Value* env_stack_put_new(EnvironmentStack* stack, const char* name);
 
 Node new_node(Type type, void* data, size_t len, Node children[len]) {
 	Node node;
@@ -241,14 +241,14 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 			if (from.num <= to.num) {
 				for (Number i = from.num; i <= to.num; i++) {
 					Value* addr = env_stack_find(stack, (char*)id.data);
-					if (!addr) addr = env_stack_put_new(stack, (char*)id.data);
+					if (!addr) addr = env_stack_put_new(&stack, (char*)id.data);
 					*addr = (Value) {VALUE_NUM, .num = i};
 					val = ast_node_eval(exp, stack);
 				}
 			} else {
 				for (Number i = from.num; i >= to.num; i--) {
 					Value* addr = env_stack_find(stack, (char*)id.data);
-					if (!addr) addr = env_stack_put_new(stack, (char*)id.data);
+					if (!addr) addr = env_stack_put_new(&stack, (char*)id.data);
 					*addr = (Value) {VALUE_NUM, .num = i};
 					val = ast_node_eval(exp, stack);
 				}
@@ -331,7 +331,7 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 		case FALA_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Value* cell = env_stack_put_new(stack, (char*)id.data);
+			Value* cell = env_stack_put_new(&stack, (char*)id.data);
 			if (var.children_count == 2) {
 				Value size = ast_node_eval(var.children[1], stack);
 				*cell = (Value) {
@@ -388,7 +388,9 @@ static void env_stack_deinit(EnvironmentStack stack) {
 // return is the exit code of the ran program
 static Value ast_eval(AST ast) {
 	EnvironmentStack stack = env_stack_init();
+	env_stack_push(&stack);
 	Value val = ast_node_eval(ast.root, stack);
+	env_stack_pop(&stack);
 	env_stack_deinit(stack);
 	return val;
 }
@@ -404,8 +406,8 @@ static Value* env_stack_find(EnvironmentStack stack, const char* name) {
 	return NULL;
 }
 
-static Value* env_stack_put_new(EnvironmentStack stack, const char* name) {
-	VarTable* last = &stack.envs[stack.len - 1].vars;
+static Value* env_stack_put_new(EnvironmentStack* stack, const char* name) {
+	VarTable* last = &stack->envs[stack->len - 1].vars;
 	last->names[last->len] = name;
 	return &last->values[last->len++];
 }
