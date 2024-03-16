@@ -81,13 +81,12 @@
 static char* parse_string(char* str) {
   const size_t len = strlen(str);
   char* new = malloc(sizeof(char) * (len - 2 + 1));
-  str = &str[1];
   size_t new_len = 0;
-  for (size_t i = 0; i < len; i++) {
+  for (size_t i = 1; i < len-1; i++) {
     if (str[i] == '\\' && str[i+1] == 'n')
-        new[i++] = '\n';
+        new[i++ - 1] = '\n';
     else
-        new[i] = str[i];
+        new[i - 1] = str[i];
     new_len++;
   }
   new[new_len] = '\0';
