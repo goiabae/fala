@@ -523,7 +523,13 @@ static int repl(Options opts) {
 #endif
 
 static int interpret(Options opts) {
+#ifdef FALA_WITH_REPL
 	FILE* fd = fopen(opts.argv[0], "r");
+#else
+	FILE* fd =
+		(strcmp(opts.argv[0], "-") == 0) ? stdin : fopen(opts.argv[0], "r");
+#endif
+
 	if (!fd) return 1;
 
 	AST ast = parse(fd);
