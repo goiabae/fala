@@ -1,4 +1,5 @@
-CFLAGS += -ggdb -Wall -Wextra
+CC = cc
+CFLAGS += -O0 -ggdb -Wall -Wextra
 # CFLAGS += -D FALA_WITH_REPL
 # LIBS = -lreadline -lhistory
 LIBS =
