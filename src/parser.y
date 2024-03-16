@@ -1,7 +1,7 @@
 %define api.pure full
 
 %lex-param {void *scanner}
-%parse-param {void *scanner}{Context* ctx}
+%parse-param {void *scanner}{Context* ctx}{SymbolTable* syms}
 
 %define parse.trace
 
@@ -91,62 +91,62 @@ exps : %empty   { $$ = new_block_node(); }
      ;
 
 exp : DO exps END                { $$ = $2; }
-    | IF exp THEN exp ELSE exp   { $$ = new_node(FALA_IF, NULL, 3, (Node[3]) {$2, $4, $6}); }
-    | WHEN exp exp               { $$ = new_node(FALA_WHEN, NULL, 2, (Node[2]) {$2, $3}); }
-    | FOR VAR var FROM exp TO exp exp { $$ = new_node(FALA_FOR, NULL, 4, (Node[4]){$3, $5, $7, $8}); }
-    | WHILE exp exp              { $$ = new_node(FALA_WHILE, NULL, 2, (Node[2]){$2, $3}); }
-    | IN                         { $$ = new_node(FALA_IN, NULL, 0, NULL); }
-    | OUT exp                    { $$ = new_node(FALA_OUT, NULL, 1, (Node[1]){$2}); }
+    | IF exp THEN exp ELSE exp   { $$ = new_node(FALA_IF, 3, (Node[3]) {$2, $4, $6}); }
+    | WHEN exp exp               { $$ = new_node(FALA_WHEN, 2, (Node[2]) {$2, $3}); }
+    | FOR VAR var FROM exp TO exp exp { $$ = new_node(FALA_FOR, 4, (Node[4]){$3, $5, $7, $8}); }
+    | WHILE exp exp              { $$ = new_node(FALA_WHILE, 2, (Node[2]){$2, $3}); }
+    | IN                         { $$ = new_node(FALA_IN, 0, NULL); }
+    | OUT exp                    { $$ = new_node(FALA_OUT, 1, (Node[1]){$2}); }
     | decl
     | infix
     ;
 
-decl : VAR var { $$ = new_node(FALA_DECL, NULL, 1, (Node[1]) {$2}); }
-     | VAR var EQ exp { $$ = new_node(FALA_DECL, NULL, 2, (Node[2]) {$2, $4}); }
+decl : VAR var { $$ = new_node(FALA_DECL, 1, (Node[1]) {$2}); }
+     | VAR var EQ exp { $$ = new_node(FALA_DECL, 2, (Node[2]) {$2, $4}); }
      ;
 
-var : id                                { $$ = new_node(FALA_VAR, NULL, 1, (Node[1]){$1}); }
-    | id BRACKET_OPEN exp BRACKET_CLOSE { $$ = new_node(FALA_VAR, NULL, 2, (Node[2]){$1, $3}); }
+var : id                                { $$ = new_node(FALA_VAR, 1, (Node[1]){$1}); }
+    | id BRACKET_OPEN exp BRACKET_CLOSE { $$ = new_node(FALA_VAR, 2, (Node[2]){$1, $3}); }
     ;
 
 infix : ass-exp ;
 
 /* a = b. assignment lol */
 ass-exp : logi-exp
-        | var EQ exp { $$ = new_node(FALA_ASS, NULL, 2, (Node[2]){$1, $3}); }
+        | var EQ exp { $$ = new_node(FALA_ASS, 2, (Node[2]){$1, $3}); }
         ;
 
 /* a and b or c */
 logi-exp : rela-exp
-         | logi-exp OR  rela-exp { $$ = new_node(FALA_OR,  NULL, 2, (Node[2]){$1, $3}); }
-         | logi-exp AND rela-exp { $$ = new_node(FALA_AND, NULL, 2, (Node[2]){$1, $3}); }
+         | logi-exp OR  rela-exp { $$ = new_node(FALA_OR,  2, (Node[2]){$1, $3}); }
+         | logi-exp AND rela-exp { $$ = new_node(FALA_AND, 2, (Node[2]){$1, $3}); }
          ;
 
 /* a == b */
 rela-exp : sum-exp
-         | rela-exp GREATER    sum-exp { $$ = new_node(FALA_GREATER,    NULL, 2, (Node[2]){$1, $3}); }
-         | rela-exp LESSER     sum-exp { $$ = new_node(FALA_LESSER,     NULL, 2, (Node[2]){$1, $3}); }
-         | rela-exp GREATER_EQ sum-exp { $$ = new_node(FALA_GREATER_EQ, NULL, 2, (Node[2]){$1, $3}); }
-         | rela-exp LESSER_EQ  sum-exp { $$ = new_node(FALA_LESSER_EQ,  NULL, 2, (Node[2]){$1, $3}); }
-         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ_EQ,      NULL, 2, (Node[2]){$1, $3}); }
+         | rela-exp GREATER    sum-exp { $$ = new_node(FALA_GREATER,    2, (Node[2]){$1, $3}); }
+         | rela-exp LESSER     sum-exp { $$ = new_node(FALA_LESSER,     2, (Node[2]){$1, $3}); }
+         | rela-exp GREATER_EQ sum-exp { $$ = new_node(FALA_GREATER_EQ, 2, (Node[2]){$1, $3}); }
+         | rela-exp LESSER_EQ  sum-exp { $$ = new_node(FALA_LESSER_EQ,  2, (Node[2]){$1, $3}); }
+         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ_EQ,      2, (Node[2]){$1, $3}); }
          ;
 
 /* a + b */
 sum-exp : mul-exp
-        | sum-exp PLUS  mul-exp { $$ = new_node(FALA_ADD, NULL, 2, (Node[2]){$1, $3}); }
-        | sum-exp MINUS mul-exp { $$ = new_node(FALA_SUB, NULL, 2, (Node[2]){$1, $3}); }
+        | sum-exp PLUS  mul-exp { $$ = new_node(FALA_ADD, 2, (Node[2]){$1, $3}); }
+        | sum-exp MINUS mul-exp { $$ = new_node(FALA_SUB, 2, (Node[2]){$1, $3}); }
         ;
 
 /* a * b */
 mul-exp : not-exp
-        | mul-exp ASTER not-exp { $$ = new_node(FALA_MUL, NULL, 2, (Node[2]){$1, $3}); }
-        | mul-exp SLASH not-exp { $$ = new_node(FALA_DIV, NULL, 2, (Node[2]){$1, $3}); }
-        | mul-exp PERCT not-exp { $$ = new_node(FALA_MOD, NULL, 2, (Node[2]){$1, $3}); }
+        | mul-exp ASTER not-exp { $$ = new_node(FALA_MUL, 2, (Node[2]){$1, $3}); }
+        | mul-exp SLASH not-exp { $$ = new_node(FALA_DIV, 2, (Node[2]){$1, $3}); }
+        | mul-exp PERCT not-exp { $$ = new_node(FALA_MOD, 2, (Node[2]){$1, $3}); }
         ;
 
 /* not a */
 not-exp : term
-        | NOT term { $$ = new_node(FALA_NOT, NULL, 1, (Node[1]){$2}); }
+        | NOT term { $$ = new_node(FALA_NOT, 1, (Node[1]){$2}); }
         ;
 
 term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
@@ -155,12 +155,8 @@ term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | string
      ;
 
-number : NUMBER {
-  int* tmp = malloc(sizeof(int));
-  *tmp = $1;
-  $$ = new_node(FALA_NUM, (void*)tmp, 0, NULL);
-};
+number : NUMBER { $$ = new_number_node($1); };
 
-id : ID { $$ = new_node(FALA_ID, (void*)$1, 0, NULL); }
+id : ID { $$ = new_string_node(FALA_ID, syms, $1); }
 
-string : STRING { $$ = new_node(FALA_STRING, (void*)$1, 0, NULL); }
+string : STRING { $$ = new_string_node(FALA_STRING, syms, $1); }

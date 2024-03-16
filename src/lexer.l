@@ -74,7 +74,7 @@
 
 [ \t\n] ;
 
-.       { yyerror(NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
+.       { yyerror(NULL, NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
 
 %%
 

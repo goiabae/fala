@@ -28,10 +28,9 @@ static void env_stack_push(EnvironmentStack* stack);
 static void env_stack_pop(EnvironmentStack* stack);
 static Value* env_stack_get_new(EnvironmentStack* stack, const char* name);
 
-Node new_node(Type type, void* data, size_t len, Node children[len]) {
+Node new_node(Type type, size_t len, Node children[len]) {
 	Node node;
 	node.type = type;
-	node.data = data;
 	node.children_count = len;
 	node.children = NULL;
 	if (len > 0) {
@@ -44,7 +43,6 @@ Node new_node(Type type, void* data, size_t len, Node children[len]) {
 Node new_block_node() {
 	Node node;
 	node.type = FALA_BLOCK;
-	node.data = NULL;
 	node.children_count = 0;
 	node.children = malloc(sizeof(Node) * 100);
 	return node;
@@ -53,6 +51,36 @@ Node new_block_node() {
 Node block_append_node(Node block, Node next) {
 	block.children[block.children_count++] = next;
 	return block;
+}
+
+static size_t sym_table_insert(SymbolTable* tab, String str) {
+	for (size_t i = 0; i < tab->len; i++) {
+		if (strcmp(tab->arr[i], str) == 0) {
+			free(str);
+			return i;
+		}
+	}
+	tab->arr[tab->len++] = str;
+	assert(tab->len <= tab->cap && "Symbol table if full");
+	return tab->len - 1;
+}
+
+static String sym_table_get(SymbolTable* tab, size_t index) {
+	return tab->arr[index];
+}
+
+Node new_string_node(Type type, SymbolTable* tab, String str) {
+	Node node;
+	node.index = sym_table_insert(tab, str);
+	node.type = type;
+	return node;
+}
+
+Node new_number_node(Number num) {
+	Node node;
+	node.type = FALA_NUM;
+	node.num = num;
+	return node;
 }
 
 VarTable var_table_init(void) {
@@ -105,14 +133,14 @@ Value* var_table_get_where(VarTable* tab, const char* name) {
 	return NULL;
 }
 
-void yyerror(void* scanner, void* var_table, char* s) {
+void yyerror(void* scanner, Context* ctx, SymbolTable* syms, char* err_msg) {
 	(void)scanner;
-	(void)var_table;
-	fprintf(stderr, "%s\n", s);
+	(void)ctx;
+	(void)syms;
+	fprintf(stderr, "%s\n", err_msg);
 }
 
-static char* node_repr(Type type, void* data) {
-	(void)data;
+static char* node_repr(Type type) {
 	switch (type) {
 		case FALA_BLOCK: return "do-end";
 		case FALA_IF: return "if";
@@ -144,16 +172,16 @@ static char* node_repr(Type type, void* data) {
 	assert(false);
 }
 
-static void print_node(Node node, unsigned int space) {
+static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 	if (node.type == FALA_NUM) {
-		printf("%d", *(int*)node.data);
+		printf("%d", node.num);
 		return;
 	} else if (node.type == FALA_ID) {
-		printf("%s", (char*)node.data);
+		printf("%s", sym_table_get(tab, node.index));
 		return;
 	} else if (node.type == FALA_STRING) {
 		printf("\"");
-		for (char* it = node.data; *it != '\0'; it++) {
+		for (char* it = sym_table_get(tab, node.index); *it != '\0'; it++) {
 			if (*it == '\n')
 				printf("\\n");
 			else
@@ -165,69 +193,74 @@ static void print_node(Node node, unsigned int space) {
 
 	printf("(");
 
-	printf("%s", node_repr(node.type, node.data));
+	printf("%s", node_repr(node.type));
 
 	space += 2;
 
 	for (size_t i = 0; i < node.children_count; i++) {
 		printf("\n");
 		for (size_t j = 0; j < space; j++) printf(" ");
-		print_node(node.children[i], space);
+		print_node(tab, node.children[i], space);
 	}
 
 	printf(")");
 }
 
-static void print_ast(AST ast) { print_node(ast.root, 0); }
+static void print_ast(AST ast, SymbolTable* syms) {
+	print_node(syms, ast.root, 0);
+}
 
 static void node_deinit(Node node) {
+	if (node.type == FALA_ID || node.type == FALA_NUM || node.type == FALA_STRING)
+		return;
 	for (size_t i = 0; i < node.children_count; i++)
 		node_deinit(node.children[i]);
-	if (node.type == FALA_ID || node.type == FALA_NUM) free(node.data);
 	free(node.children);
 }
 
 static AST ast_init(void) { return (AST) {}; }
 static void ast_deinit(AST ast) { node_deinit(ast.root); }
 
-static Value ast_node_eval(Node node, EnvironmentStack stack) {
+static Value ast_node_eval(
+	Node node, EnvironmentStack stack, SymbolTable* tab
+) {
 	Value val;
 
-#define BIN_OP(OP)                                           \
-	{                                                          \
-		assert(node.children_count == 2);                        \
-		Value left = ast_node_eval(node.children[0], stack);     \
-		Value right = ast_node_eval(node.children[1], stack);    \
-		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM); \
-		val = (Value) {VALUE_NUM, .num = left.num OP right.num}; \
-		break;                                                   \
+#define BIN_OP(OP)                                             \
+	{                                                            \
+		assert(node.children_count == 2);                          \
+		Value left = ast_node_eval(node.children[0], stack, tab);  \
+		Value right = ast_node_eval(node.children[1], stack, tab); \
+		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM);   \
+		val = (Value) {VALUE_NUM, .num = left.num OP right.num};   \
+		break;                                                     \
 	}
 
 	switch (node.type) {
-		case FALA_NUM: return (Value) {VALUE_NUM, .num = *(int*)node.data}; break;
+		case FALA_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
 		case FALA_BLOCK: {
 			env_stack_push(&stack);
 			for (size_t i = 0; i < node.children_count; i++)
-				val = ast_node_eval(node.children[i], stack);
+				val = ast_node_eval(node.children[i], stack, tab);
 			env_stack_pop(&stack);
 			break;
 		}
 		case FALA_IF: {
 			assert(node.children_count == 3);
-			Value cond = ast_node_eval(node.children[0], stack);
+			Value cond = ast_node_eval(node.children[0], stack, tab);
 			assert(cond.tag == VALUE_NUM);
 			if (cond.num)
-				val = ast_node_eval(node.children[1], stack);
+				val = ast_node_eval(node.children[1], stack, tab);
 			else
-				val = ast_node_eval(node.children[2], stack);
+				val = ast_node_eval(node.children[2], stack, tab);
 			break;
 		}
 		case FALA_WHEN: {
 			assert(node.children_count == 2);
-			Value cond = ast_node_eval(node.children[0], stack);
+			Value cond = ast_node_eval(node.children[0], stack, tab);
 			assert(cond.tag == VALUE_NUM);
 			if (cond.num)
-				val = ast_node_eval(node.children[1], stack);
+				val = ast_node_eval(node.children[1], stack, tab);
 			else
 				val = (Value) {VALUE_NUM, .num = 0};
 			break;
@@ -238,23 +271,25 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 			Node var = node.children[0];
 			assert(var.children_count == 1);
 			Node id = var.children[0];
-			Value from = ast_node_eval(node.children[1], stack);
-			Value to = ast_node_eval(node.children[2], stack);
+			Value from = ast_node_eval(node.children[1], stack, tab);
+			Value to = ast_node_eval(node.children[2], stack, tab);
 			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
 			Node exp = node.children[3];
 			if (from.num <= to.num) {
 				for (Number i = from.num; i <= to.num; i++) {
-					Value* addr = env_stack_find(stack, (char*)id.data);
-					if (!addr) addr = env_stack_get_new(&stack, (char*)id.data);
+					Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
+					if (!addr)
+						addr = env_stack_get_new(&stack, sym_table_get(tab, id.index));
 					*addr = (Value) {VALUE_NUM, .num = i};
-					val = ast_node_eval(exp, stack);
+					val = ast_node_eval(exp, stack, tab);
 				}
 			} else {
 				for (Number i = from.num; i >= to.num; i--) {
-					Value* addr = env_stack_find(stack, (char*)id.data);
-					if (!addr) addr = env_stack_get_new(&stack, (char*)id.data);
+					Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
+					if (!addr)
+						addr = env_stack_get_new(&stack, sym_table_get(tab, id.index));
 					*addr = (Value) {VALUE_NUM, .num = i};
-					val = ast_node_eval(exp, stack);
+					val = ast_node_eval(exp, stack, tab);
 				}
 			}
 			env_stack_pop(&stack);
@@ -264,7 +299,8 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 			assert(node.children_count == 2);
 			Node cond = node.children[0];
 			Node exp = node.children[1];
-			while (ast_node_eval(cond, stack).num) val = ast_node_eval(exp, stack);
+			while (ast_node_eval(cond, stack, tab).num)
+				val = ast_node_eval(exp, stack, tab);
 			break;
 		}
 		case FALA_IN: {
@@ -283,7 +319,7 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 		}
 		case FALA_OUT: {
 			assert(node.children_count == 1);
-			val = ast_node_eval(node.children[0], stack);
+			val = ast_node_eval(node.children[0], stack, tab);
 			print_value(val);
 			break;
 		}
@@ -292,15 +328,15 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 			Node var = node.children[0];
 			assert(var.type == FALA_VAR);
 			Node id = var.children[0];
-			Value value = ast_node_eval(node.children[1], stack);
+			Value value = ast_node_eval(node.children[1], stack, tab);
 			if (var.children_count == 2) {
-				Value idx = ast_node_eval(var.children[1], stack);
+				Value idx = ast_node_eval(var.children[1], stack, tab);
 				assert(idx.tag == VALUE_NUM);
-				Value* arr = env_stack_find(stack, (char*)id.data);
+				Value* arr = env_stack_find(stack, sym_table_get(tab, id.index));
 				assert(arr);
 				arr->arr.data[idx.num] = value;
 			} else {
-				Value* addr = env_stack_find(stack, (char*)id.data);
+				Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
 				assert(!addr);
 				*addr = value;
 			}
@@ -322,22 +358,22 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 		case FALA_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
-			Value v = ast_node_eval(op, stack);
+			Value v = ast_node_eval(op, stack, tab);
 			val = (Value) {VALUE_NUM, .num = !v.num};
 			break;
 		}
 		case FALA_ID: assert(false);
 		case FALA_STRING: {
 			assert(node.children_count == 0);
-			val = (Value) {VALUE_STR, .str = (char*)node.data};
+			val = (Value) {VALUE_STR, .str = sym_table_get(tab, node.index)};
 			break;
 		}
 		case FALA_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Value* cell = env_stack_get_new(&stack, (char*)id.data);
+			Value* cell = env_stack_get_new(&stack, sym_table_get(tab, id.index));
 			if (var.children_count == 2) {
-				Value size = ast_node_eval(var.children[1], stack);
+				Value size = ast_node_eval(var.children[1], stack, tab);
 				*cell = (Value) {
 					VALUE_ARR,
 					.arr.data = malloc(sizeof(Value) * size.num),
@@ -345,7 +381,7 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 				memset(cell->arr.data, 0, sizeof(Value) * size.num);
 				val = (Value) {VALUE_NUM, .num = 0};
 			} else if (node.children_count == 2) {
-				Value ass = ast_node_eval(node.children[1], stack);
+				Value ass = ast_node_eval(node.children[1], stack, tab);
 				val = (*cell = ass);
 			} else
 				val = (Value) {VALUE_NUM, .num = 0};
@@ -353,13 +389,13 @@ static Value ast_node_eval(Node node, EnvironmentStack stack) {
 		}
 		case FALA_VAR: {
 			Node id = node.children[0];
-			Value* addr = env_stack_find(stack, (char*)id.data);
+			Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
 			assert(addr && "Variable not previously declared.");
 
 			if (node.children_count == 1) { // id
 				val = *addr;
 			} else { // id[idx]
-				Value idx = ast_node_eval(node.children[1], stack);
+				Value idx = ast_node_eval(node.children[1], stack, tab);
 				assert(
 					addr->tag == VALUE_ARR
 					&& "Variable does not correspond to a previously declared array"
@@ -390,8 +426,8 @@ static void env_stack_deinit(EnvironmentStack stack) {
 }
 
 // return is the exit code of the ran program
-static Value ast_eval(Interpreter* inter, AST ast) {
-	Value val = ast_node_eval(ast.root, inter->envs);
+static Value ast_eval(Interpreter* inter, SymbolTable* syms, AST ast) {
+	Value val = ast_node_eval(ast.root, inter->envs, syms);
 	return val;
 }
 
@@ -429,13 +465,13 @@ static void context_deinit(Context ctx) {
 
 static AST context_get_ast(Context ctx) { return ctx.ast; }
 
-static AST parse(FILE* fd) {
+static AST parse(FILE* fd, SymbolTable* syms) {
 	yyscan_t scanner = NULL;
 	yylex_init(&scanner);
 	yyset_in(fd, scanner);
 
 	Context ctx = context_init();
-	if (yyparse(scanner, &ctx)) {
+	if (yyparse(scanner, &ctx, syms)) {
 		exit(1); // FIXME propagate error up
 	}
 
@@ -516,6 +552,7 @@ Options parse_args(int argc, char* argv[]) {
 static int repl(Options opts) {
 	FILE* fd = stdin;
 	Interpreter inter = interpreter_init();
+	SymbolTable syms = sym_table_init();
 
 	while (!feof(fd)) {
 		AST ast = parse(fd);
@@ -524,17 +561,28 @@ static int repl(Options opts) {
 			printf("\n");
 		}
 
-		Value val = ast_eval(ast);
+		Value val = ast_eval(ast, syms);
 		print_value(val);
 		printf("\n");
 		ast_deinit(ast);
 	}
 
+	sym_table_deinit(&syms);
 	interpreter_deinit(&inter);
 	fclose(fd);
 	return 0;
 }
 #endif
+
+SymbolTable sym_table_init() {
+	SymbolTable syms;
+	syms.cap = 100;
+	syms.arr = malloc(sizeof(char*) * 100);
+	syms.len = 0;
+	return syms;
+}
+
+void sym_table_deinit(SymbolTable* tab) { free(tab->arr); }
 
 static int interpret(Options opts) {
 #ifdef FALA_WITH_REPL
@@ -547,15 +595,18 @@ static int interpret(Options opts) {
 	if (!fd) return 1;
 
 	Interpreter inter = interpreter_init();
-	AST ast = parse(fd);
+	SymbolTable syms = sym_table_init();
+
+	AST ast = parse(fd, &syms);
 	if (opts.verbose) {
-		print_ast(ast);
+		print_ast(ast, &syms);
 		printf("\n");
 	}
 
-	Value val = ast_eval(&inter, ast);
+	Value val = ast_eval(&inter, &syms, ast);
 
 	ast_deinit(ast);
+	sym_table_deinit(&syms);
 	interpreter_deinit(&inter);
 	fclose(fd);
 

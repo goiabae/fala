@@ -29,8 +29,6 @@ typedef struct VarTable {
 	Value* values;
 } VarTable;
 
-void yyerror(void* scanner, void* var_table, char* s);
-
 typedef enum Type {
 	FALA_NUM,
 	FALA_BLOCK,
@@ -62,14 +60,15 @@ typedef enum Type {
 
 typedef struct Node {
 	Type type;
-	void* data; // optional data
-	size_t children_count;
-	struct Node* children;
+	union {
+		Number num;
+		size_t index;
+		struct {
+			size_t children_count;
+			struct Node* children;
+		};
+	};
 } Node;
-
-Node new_node(Type type, void* data, size_t len, Node children[len]);
-Node new_block_node();
-Node block_append_node(Node block, Node next);
 
 typedef struct AST {
 	Node root;
@@ -78,6 +77,20 @@ typedef struct AST {
 typedef struct Context {
 	AST ast;
 } Context;
+
+typedef struct SymbolTable {
+	size_t len;
+	size_t cap;
+	char** arr;
+} SymbolTable;
+
+void yyerror(void* scanner, Context* var_table, SymbolTable* syms, char* s);
+
+Node new_node(Type type, size_t len, Node children[len]);
+Node new_block_node();
+Node new_string_node(Type type, SymbolTable* tab, String str);
+Node new_number_node(Number num);
+Node block_append_node(Node block, Node next);
 
 typedef struct Environment {
 	VarTable vars;
