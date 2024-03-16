@@ -87,10 +87,10 @@ typedef struct SymbolTable {
 void yyerror(void* scanner, Context* var_table, SymbolTable* syms, char* s);
 
 Node new_node(Type type, size_t len, Node children[len]);
-Node new_block_node();
+Node new_list_node();
 Node new_string_node(Type type, SymbolTable* tab, String str);
 Node new_number_node(Number num);
-Node block_append_node(Node block, Node next);
+Node list_append_node(Node list, Node next);
 
 typedef struct Environment {
 	VarTable vars;

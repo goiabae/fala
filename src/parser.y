@@ -86,8 +86,8 @@
 
 program : exp { ctx->ast.root = $1; };
 
-exps : %empty   { $$ = new_block_node(); }
-     | exps exp { (void)$1; $$ = block_append_node($$, $2); }
+exps : %empty   { $$ = new_list_node(); }
+     | exps exp { (void)$1; $$ = list_append_node($$, $2); }
      ;
 
 exp : DO exps END                { $$ = $2; }

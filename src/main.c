@@ -40,7 +40,7 @@ Node new_node(Type type, size_t len, Node children[len]) {
 	return node;
 }
 
-Node new_block_node() {
+Node new_list_node() {
 	Node node;
 	node.type = FALA_BLOCK;
 	node.children_count = 0;
@@ -48,9 +48,9 @@ Node new_block_node() {
 	return node;
 }
 
-Node block_append_node(Node block, Node next) {
-	block.children[block.children_count++] = next;
-	return block;
+Node list_append_node(Node list, Node next) {
+	list.children[list.children_count++] = next;
+	return list;
 }
 
 static size_t sym_table_insert(SymbolTable* tab, String str) {
