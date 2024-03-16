@@ -262,31 +262,22 @@ static Value ast_node_eval(
 		}
 		case FALA_FOR: {
 			env_stack_push(&stack);
-			assert(node.children_count == 4);
+
 			Node var = node.children[0];
-			assert(var.children_count == 1);
 			Node id = var.children[0];
 			Value from = ast_node_eval(node.children[1], stack, tab);
 			Value to = ast_node_eval(node.children[2], stack, tab);
 			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
 			Node exp = node.children[3];
-			if (from.num <= to.num) {
-				for (Number i = from.num; i <= to.num; i++) {
-					Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
-					if (!addr)
-						addr = env_stack_get_new(&stack, sym_table_get(tab, id.index));
-					*addr = (Value) {VALUE_NUM, .num = i};
-					val = ast_node_eval(exp, stack, tab);
-				}
-			} else {
-				for (Number i = from.num; i >= to.num; i--) {
-					Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
-					if (!addr)
-						addr = env_stack_get_new(&stack, sym_table_get(tab, id.index));
-					*addr = (Value) {VALUE_NUM, .num = i};
-					val = ast_node_eval(exp, stack, tab);
-				}
+
+			int inc = (from.num <= to.num) ? 1 : -1;
+			for (Number i = from.num; i != to.num; i += inc) {
+				Value* addr = env_stack_find(stack, tab->arr[id.index]);
+				if (!addr) addr = env_stack_get_new(&stack, tab->arr[id.index]);
+				*addr = (Value) {VALUE_NUM, .num = i};
+				val = ast_node_eval(exp, stack, tab);
 			}
+
 			env_stack_pop(&stack);
 			break;
 		}
