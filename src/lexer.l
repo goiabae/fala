@@ -12,15 +12,14 @@
   #include "parser.h"
   #include "main.h"
 
-#if FALA_WITH_REPL
-  #define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
-#endif
-
   static char* parse_string(char* str);
 
 #if FALA_WITH_REPL
   static int get_input(FILE* fd, char *buf, int size);
+  #define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
 #endif
+
+  #define yyerror(SCAN, AST, SYMS, ...) fprintf (stderr, __VA_ARGS__)
 %}
 
 /* don't generate yyunput and input functions */
@@ -32,26 +31,25 @@
 
 #.*\n ;
 
-"or"    { return OR; }
-"and"   { return AND; }
-"not"   { return NOT; }
+"do"    return DO;
+"end"   return END;
+"if"    return IF;
+"then"  return THEN;
+"else"  return ELSE;
+"when"  return WHEN;
+"for"   return FOR;
+"from"  return FROM;
+"to"    return TO;
+"while" return WHILE;
+"var"   return VAR;
+"let"   return LET;
+"in"    return IN;
+"or"    return OR;
+"and"   return AND;
+"not"   return NOT;
 
-"do"    { return DO; }
-"end"   { return END; }
-"if"    { return IF; }
-"then"  { return THEN; }
-"else"  { return ELSE; }
-"when"  { return WHEN; }
-"for"   { return FOR; }
-"from"  { return FROM; }
-"to"    { return TO; }
-"while" { return WHILE; }
-"var"   { return VAR; }
-"let"   { return LET; }
-"in"    { return IN; }
-
-"nil"   { return NIL; }
-"true"  { return TRUE; }
+"nil"   return NIL;
+"true"  return TRUE;
 
 [a-zA-Z_][a-zA-Z0-9_]* { yylval->str = strdup(yytext); return ID; }
 
@@ -59,31 +57,28 @@
 
 \"[^\"]*\"  { yylval->str = parse_string(yytext); return STRING; }
 
-\(      { return PAREN_OPEN; }
-\)      { return PAREN_CLOSE; }
-\[      { return BRACKET_OPEN; }
-\]      { return BRACKET_CLOSE; }
+\(      return PAREN_OPEN;
+\)      return PAREN_CLOSE;
+\[      return BRACKET_OPEN;
+\]      return BRACKET_CLOSE;
+\;      return SEMICOL;
+\,      return COMMA;
 
-\=\=    { return EQ_EQ; }
-
-\>\=    { return GREATER_EQ; }
-\<\=    { return LESSER_EQ; }
-
-\=      { return EQ; }
-\>      { return GREATER; }
-\<      { return LESSER; }
-\+      { return PLUS; }
-\-      { return MINUS; }
-\*      { return ASTER; }
-\/      { return SLASH; }
-\%      { return SLASH; }
-
-\;      { return SEMICOL; }
-\,      { return COLON; }
+\>\=    return GREATER_EQ;
+\<\=    return LESSER_EQ;
+\=\=    return EQ_EQ;
+\=      return EQ;
+\>      return GREATER;
+\<      return LESSER;
+\+      return PLUS;
+\-      return MINUS;
+\*      return ASTER;
+\/      return SLASH;
+\%      return PERCT;
 
 [ \t\n] ;
 
-.       { yyerror(NULL, NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\""); }
+. { yyerror(NULL, NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\"\n", yytext); }
 
 %%
 

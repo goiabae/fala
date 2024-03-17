@@ -41,13 +41,6 @@ static const char* node_repr[] = {
 	[FALA_VAR] = "var",       [FALA_LET] = "let",
 };
 
-void yyerror(void* scanner, void* ast, void* syms, char* err_msg) {
-	(void)scanner;
-	(void)ast;
-	(void)syms;
-	fprintf(stderr, "%s\n", err_msg);
-}
-
 static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 	if (node.type == FALA_NUM) {
 		printf("%d", node.num);

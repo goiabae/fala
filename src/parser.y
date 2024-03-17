@@ -1,12 +1,12 @@
 %define api.pure full
+%define parse.trace
+%define parse.error verbose
 
 %lex-param {void *scanner}
 %parse-param {void *scanner}{AST* ast}{SymbolTable* syms}
 
-%define parse.trace
-
+/* necessary for node functions */
 %code requires {
-  #include "main.h"
   #include "ast.h"
 }
 
@@ -15,78 +15,37 @@
 
 #include "parser.h"
 #include "lexer.h"
+
+#define yyerror(SCAN, AST, SYMS, ...) fprintf (stderr, __VA_ARGS__)
 %}
 
+/* type of terminal values */
 %union {
   int num;
 	char* str;
 	Node node;
 }
 
+/* terminal values */
 %token <num> NUMBER
 %token <str> ID
 %token <str> STRING
 
-%token OR "or"
-%token AND "and"
+/* keywords and constants */
+%token DO END IF THEN ELSE WHEN FOR FROM TO WHILE VAR LET IN OR AND NOT
+%token NIL TRUE
 
-%token DO "do"
-%token END "end"
-%token IF "if"
-%token THEN "then"
-%token ELSE "else"
-%token WHEN "when"
-%token FOR "for"
-%token FROM "from"
-%token TO "to"
-%token WHILE "while"
-%token VAR "var"
-%token LET "let"
-%token IN "in"
+/* pontuation */
+%token PAREN_OPEN PAREN_CLOSE
+%token BRACKET_OPEN BRACKET_CLOSE
+%token SEMICOL
+%token COMMA
 
-%token NIL "nil"
-%token TRUE "true"
+/* binary operators */
+%token GREATER_EQ LESSER_EQ EQ_EQ EQ GREATER LESSER
+%token PLUS MINUS ASTER SLASH PERCT
 
-%token EQ    '='
-
-%token PLUS  '+'
-%token MINUS '-'
-%token ASTER '*'
-%token SLASH '/'
-%token PERCT '%'
-
-%token GREATER '>'
-%token LESSER '<'
-%token GREATER_EQ ">="
-%token LESSER_EQ "<="
-%token EQ_EQ "=="
-
-%token NOT "not"
-
-%token PAREN_OPEN '('
-%token PAREN_CLOSE ')'
-%token BRACKET_OPEN '['
-%token BRACKET_CLOSE ']'
-
-%token SEMICOL ';'
-%token COLON ','
-
-%type <node> exp
-%type <node> exps
-%type <node> infix
-%type <node> ass-exp
-%type <node> logi-exp
-%type <node> rela-exp
-%type <node> sum-exp
-%type <node> mul-exp
-%type <node> not-exp
-%type <node> term
-%type <node> id
-%type <node> decl
-%type <node> decls
-%type <node> var
-%type <node> args
-%type <node> func
+%type <node> exp exps infix ass-exp logi-exp rela-exp sum-exp mul-exp not-exp term id decl decls var args func
 
 %%
 
@@ -113,21 +72,23 @@ exp : DO exps END                          { $$ = $2; }
 
 func : id | PAREN_OPEN exp PAREN_CLOSE { $$ = $2; } ;
 
-args : term   { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+args : term      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
      | args term { $$ = list_append_node($$, $2); }
      ;
 
-decl : VAR var { $$ = new_node(FALA_DECL, 1, (Node[1]) {$2}); }
+decl : VAR var        { $$ = new_node(FALA_DECL, 1, (Node[1]) {$2}); }
      | VAR var EQ exp { $$ = new_node(FALA_DECL, 2, (Node[2]) {$2, $4}); }
      ;
 
 decls : decl             { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-      | decls COLON decl { $$ = list_append_node($$, $3); }
+      | decls COMMA decl { $$ = list_append_node($$, $3); }
       ;
 
 var : id                                { $$ = new_node(FALA_VAR, 1, (Node[1]){$1}); }
     | id BRACKET_OPEN exp BRACKET_CLOSE { $$ = new_node(FALA_VAR, 2, (Node[2]){$1, $3}); }
     ;
+
+id : ID { $$ = new_string_node(FALA_ID, syms, $1); }
 
 infix : ass-exp ;
 
@@ -148,7 +109,7 @@ rela-exp : sum-exp
          | rela-exp LESSER     sum-exp { $$ = new_node(FALA_LESSER,     2, (Node[2]){$1, $3}); }
          | rela-exp GREATER_EQ sum-exp { $$ = new_node(FALA_GREATER_EQ, 2, (Node[2]){$1, $3}); }
          | rela-exp LESSER_EQ  sum-exp { $$ = new_node(FALA_LESSER_EQ,  2, (Node[2]){$1, $3}); }
-         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ,      2, (Node[2]){$1, $3}); }
+         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ,         2, (Node[2]){$1, $3}); }
          ;
 
 /* a + b */
@@ -176,5 +137,3 @@ term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | NIL                        { $$ = new_nil_node(); }
      | TRUE                       { $$ = new_true_node(); }
      ;
-
-id : ID { $$ = new_string_node(FALA_ID, syms, $1); }
