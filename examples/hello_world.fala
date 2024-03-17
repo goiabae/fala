@@ -1,1 +1,4 @@
-out "Hello, world!\n"
+do
+  out "Hello, world!\n";
+	0
+end

@@ -9,5 +9,6 @@ do
   for var i from 2 to max-1 then do
 	  out "\n";
   	out (fs [i] = (fs [i-1]) + (fs [i-2]))
-  end
+  end;
+	0
 end

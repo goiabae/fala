@@ -4,5 +4,6 @@ do
 	out "foobar"; # string
 	out 1337;     # number
 	out nil;      # nil
-	out true      # true
+	out true;     # true
+	0
 end

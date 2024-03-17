@@ -23,5 +23,6 @@ do
   for var i from 0 to len-1 then do
     out xs [i];
 		out "\n"
-	end
+	end;
+	0
 end

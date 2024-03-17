@@ -6,5 +6,6 @@ do
   		max = x
   end;
 	out "Max is ";
-  out max
+  out max;
+	0
 end
