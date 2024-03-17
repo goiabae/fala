@@ -65,6 +65,12 @@ static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 		}
 		printf("\"");
 		return;
+	} else if (node.type == FALA_NIL) {
+		printf("nil");
+		return;
+	} else if (node.type == FALA_TRUE) {
+		printf("true");
+		return;
 	}
 
 	printf("(");

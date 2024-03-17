@@ -51,6 +51,9 @@ Node new_number_node(Number num) {
 	return node;
 }
 
+Node new_nil_node() { return (Node) {.type = FALA_NIL}; }
+Node new_true_node() { return (Node) {.type = FALA_TRUE}; }
+
 Node list_append_node(Node list, Node next) {
 	list.children[list.children_count++] = next;
 	return list;

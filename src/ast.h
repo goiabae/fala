@@ -32,6 +32,8 @@ typedef enum Type {
 	FALA_STRING,
 	FALA_DECL,
 	FALA_VAR,
+	FALA_NIL,
+	FALA_TRUE,
 } Type;
 
 typedef struct Node {
@@ -65,6 +67,8 @@ Node new_node(Type type, size_t len, Node children[len]);
 Node new_list_node();
 Node new_string_node(Type type, SymbolTable* tab, String str);
 Node new_number_node(Number num);
+Node new_nil_node();
+Node new_true_node();
 Node list_append_node(Node list, Node next);
 
 // symbol table

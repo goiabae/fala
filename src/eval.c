@@ -121,8 +121,7 @@ static Value eval_ast_node(
 		case FALA_IF: {
 			assert(node.children_count == 3);
 			Value cond = eval_ast_node(node.children[0], stack, tab);
-			assert(cond.tag == VALUE_NUM);
-			if (cond.num)
+			if (cond.tag != VALUE_NIL)
 				val = eval_ast_node(node.children[1], stack, tab);
 			else
 				val = eval_ast_node(node.children[2], stack, tab);
@@ -131,9 +130,9 @@ static Value eval_ast_node(
 		case FALA_WHEN: {
 			assert(node.children_count == 2);
 			Value cond = eval_ast_node(node.children[0], stack, tab);
-			assert(cond.tag == VALUE_NUM);
-			val = (cond.num) ? eval_ast_node(node.children[1], stack, tab)
-			                 : (Value) {VALUE_NUM, .num = 0};
+			val = (cond.tag != VALUE_NIL)
+			      ? eval_ast_node(node.children[1], stack, tab)
+			      : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
 		case FALA_FOR: {
@@ -161,7 +160,7 @@ static Value eval_ast_node(
 			assert(node.children_count == 2);
 			Node cond = node.children[0];
 			Node exp = node.children[1];
-			while (eval_ast_node(cond, stack, tab).num)
+			while (eval_ast_node(cond, stack, tab).tag != VALUE_NIL)
 				val = eval_ast_node(exp, stack, tab);
 			break;
 		}
@@ -183,7 +182,31 @@ static Value eval_ast_node(
 			}
 			break;
 		}
-#define BIN_OP(OP)                                             \
+		case FALA_OR: {
+			assert(node.children_count == 2);
+			Value left = eval_ast_node(node.children[0], stack, tab);
+			if (left.tag == VALUE_TRUE) {
+				val = (Value) {VALUE_TRUE, .num = 1};
+				break;
+			}
+			Value right = eval_ast_node(node.children[1], stack, tab);
+			val = (right.tag == VALUE_NIL) ? (Value) {VALUE_NIL, .nil = NULL}
+			                               : (Value) {VALUE_TRUE, .num = 1};
+			break;
+		}
+		case FALA_AND: {
+			assert(node.children_count == 2);
+			Value left = eval_ast_node(node.children[0], stack, tab);
+			if (left.tag == VALUE_NIL) {
+				val = (Value) {VALUE_NIL, .nil = NULL};
+				break;
+			}
+			Value right = eval_ast_node(node.children[1], stack, tab);
+			val = (right.tag == VALUE_NIL) ? (Value) {VALUE_NIL, .nil = NULL}
+			                               : (Value) {VALUE_TRUE, .num = 1};
+			break;
+		}
+#define ARITH_OP(OP)                                           \
 	{                                                            \
 		assert(node.children_count == 2);                          \
 		Value left = eval_ast_node(node.children[0], stack, tab);  \
@@ -192,24 +215,58 @@ static Value eval_ast_node(
 		val = (Value) {VALUE_NUM, .num = left.num OP right.num};   \
 		break;                                                     \
 	}
-		case FALA_OR: BIN_OP(||);
-		case FALA_AND: BIN_OP(&&);
-		case FALA_GREATER: BIN_OP(>);
-		case FALA_LESSER: BIN_OP(<);
-		case FALA_GREATER_EQ: BIN_OP(>=);
-		case FALA_LESSER_EQ: BIN_OP(<=);
-		case FALA_EQ: BIN_OP(==);
-		case FALA_ADD: BIN_OP(+);
-		case FALA_SUB: BIN_OP(-);
-		case FALA_MUL: BIN_OP(*);
-		case FALA_DIV: BIN_OP(/);
-		case FALA_MOD: BIN_OP(%);
-#undef BIN_OP
+		case FALA_ADD: ARITH_OP(+);
+		case FALA_SUB: ARITH_OP(-);
+		case FALA_MUL: ARITH_OP(*);
+		case FALA_DIV: ARITH_OP(/);
+		case FALA_MOD: ARITH_OP(%);
+#undef ARITH_OP
+#define CMP_OP(OP)                                                    \
+	{                                                                   \
+		assert(node.children_count == 2);                                 \
+		Value left = eval_ast_node(node.children[0], stack, tab);         \
+		Value right = eval_ast_node(node.children[1], stack, tab);        \
+		assert(                                                           \
+			left.tag == VALUE_NUM && right.tag == VALUE_NUM                 \
+			&& "Arithmetic comparison is allowed only between numbers"      \
+		);                                                                \
+		val = (left.num OP right.num) ? (Value) {VALUE_TRUE, .num = 1}    \
+		                              : (Value) {VALUE_NIL, .nil = NULL}; \
+		break;                                                            \
+	}
+		case FALA_GREATER: CMP_OP(>);
+		case FALA_LESSER: CMP_OP(<);
+		case FALA_GREATER_EQ: CMP_OP(>=);
+		case FALA_LESSER_EQ: CMP_OP(<=);
+#undef CMP_OP
+		case FALA_EQ: {
+			assert(node.children_count == 2);
+			Value left = eval_ast_node(node.children[0], stack, tab);
+			Value right = eval_ast_node(node.children[1], stack, tab);
+			if (left.tag == VALUE_NIL && right.tag == VALUE_NIL) {
+				val = (Value) {VALUE_TRUE, .num = 1};
+				break;
+			}
+
+			if (left.tag == VALUE_TRUE && right.tag == VALUE_TRUE) {
+				val = (Value) {VALUE_TRUE, .num = 1};
+				break;
+			}
+
+			assert(
+				left.tag == VALUE_NUM && right.tag == VALUE_NUM
+				&& "Only nil, true and number comparison are implemented"
+			);
+			val = (left.num == right.num) ? (Value) {VALUE_TRUE, .num = 1}
+			                              : (Value) {VALUE_NIL, .nil = NULL};
+			break;
+		}
 		case FALA_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
 			Value v = eval_ast_node(op, stack, tab);
-			val = (Value) {VALUE_NUM, .num = !v.num};
+			val = (v.tag == VALUE_NIL) ? (Value) {VALUE_TRUE, .num = 1}
+			                           : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
 		case FALA_ID: assert(false);
@@ -240,7 +297,7 @@ static Value eval_ast_node(
 
 			// var id and var arr [size]
 			// no value to return
-			val = (Value) {VALUE_NUM, .num = 0};
+			val = (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
 		case FALA_VAR: {
@@ -261,6 +318,14 @@ static Value eval_ast_node(
 			}
 			break;
 		}
+		case FALA_NIL: {
+			val = (Value) {VALUE_NIL, .nil = NULL};
+			break;
+		}
+		case FALA_TRUE: {
+			val = (Value) {VALUE_TRUE, .num = 1};
+			break;
+		}
 	}
 	return val;
 }
@@ -268,8 +333,12 @@ static Value eval_ast_node(
 static void print_value(Value val) {
 	if (val.tag == VALUE_NUM)
 		printf("%d", val.num);
-	else
+	else if (val.tag == VALUE_STR)
 		printf("%s", val.str);
+	else if (val.tag == VALUE_TRUE)
+		printf("true");
+	else if (val.tag == VALUE_NIL)
+		printf("nil");
 }
 
 static void value_deinit(Value val) {
@@ -304,7 +373,10 @@ static Value builtin_in(size_t _1, Value* _2) {
 	(void)_1;
 	(void)_2;
 	char* buf = malloc(sizeof(char) * 100);
-	assert(fgets(buf, 100, stdin) != NULL && "Failed reading input from stdin");
+	if (fgets(buf, 100, stdin) == NULL) {
+		free(buf);
+		return (Value) {VALUE_NIL, .nil = NULL};
+	}
 	const size_t len = strlen(buf);
 	buf[len - 1] = '\0';
 	long num = 0;

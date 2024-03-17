@@ -48,6 +48,9 @@
 "while" { return WHILE; }
 "var"   { return VAR; }
 
+"nil"   { return NIL; }
+"true"  { return TRUE; }
+
 [a-zA-Z_][a-zA-Z0-9_]* { yylval->str = strdup(yytext); return ID; }
 
 [0-9]+  { yylval->num = atoi(yytext); return NUMBER; }

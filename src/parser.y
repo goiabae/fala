@@ -42,6 +42,9 @@
 %token WHILE "while"
 %token VAR "var"
 
+%token NIL "nil"
+%token TRUE "true"
+
 %token EQ    '='
 
 %token PLUS  '+'
@@ -161,6 +164,8 @@ term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | NUMBER                     { $$ = new_number_node($1); };
      | var
      | STRING                     { $$ = new_string_node(FALA_STRING, syms, $1); }
+     | NIL                        { $$ = new_nil_node(); }
+     | TRUE                       { $$ = new_true_node(); }
      ;
 
 id : ID { $$ = new_string_node(FALA_ID, syms, $1); }

@@ -13,6 +13,8 @@ typedef struct Value {
 		VALUE_ARR,
 		VALUE_STR,
 		VALUE_FUN,
+		VALUE_NIL,
+		VALUE_TRUE,
 	} tag;
 	union {
 		Number num;
@@ -22,6 +24,7 @@ typedef struct Value {
 		} arr;
 		Funktion func;
 		String str;
+		void* nil;
 	};
 } Value;
 
