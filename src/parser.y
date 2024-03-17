@@ -96,8 +96,8 @@ program : %empty { ast->root = new_number_node(0); }
         | exp    { ast->root = $1; }
         ;
 
-exps : exp              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-     | exps SEMICOL exp { $$ = list_append_node($$, $3); }
+exps : exp SEMICOL      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+     | exps exp SEMICOL { $$ = list_append_node($$, $2); }
      ;
 
 exp : DO exps END                          { $$ = $2; }
