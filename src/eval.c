@@ -14,8 +14,8 @@ static void env_stack_push(EnvironmentStack* stack);
 static void env_stack_pop(EnvironmentStack* stack);
 static Value* env_stack_get_new(EnvironmentStack* stack, const char* name);
 
-static Value builtin_in(size_t len, Value* args);
-static Value builtin_out(size_t len, Value* args);
+static Value builtin_read(size_t len, Value* args);
+static Value builtin_write(size_t len, Value* args);
 
 static Value eval_ast_node(Node node, EnvironmentStack stack, SymbolTable* tab);
 
@@ -371,7 +371,7 @@ static Value apply_function(
 	return val;
 }
 
-static Value builtin_in(size_t _1, Value* _2) {
+static Value builtin_read(size_t _1, Value* _2) {
 	(void)_1;
 	(void)_2;
 	char* buf = malloc(sizeof(char) * 100);
@@ -392,7 +392,7 @@ static Value builtin_in(size_t _1, Value* _2) {
 	return val;
 }
 
-static Value builtin_out(size_t len, Value* args) {
+static Value builtin_write(size_t len, Value* args) {
 	assert(len == 1 && "Wrong number of arguments. 1 expected.");
 	print_value(args[0]);
 	return args[0];
@@ -402,10 +402,10 @@ Interpreter interpreter_init(void) {
 	Interpreter inter;
 	inter.envs = env_stack_init();
 	env_stack_push(&inter.envs);
-	*env_stack_get_new(&inter.envs, "in") =
-		(Value) {VALUE_FUN, .func = builtin_in};
-	*env_stack_get_new(&inter.envs, "out") =
-		(Value) {VALUE_FUN, .func = builtin_out};
+	*env_stack_get_new(&inter.envs, "read") =
+		(Value) {VALUE_FUN, .func = builtin_read};
+	*env_stack_get_new(&inter.envs, "write") =
+		(Value) {VALUE_FUN, .func = builtin_write};
 	return inter;
 }
 
