@@ -21,4 +21,4 @@ SpaceBeforeParens: ControlStatements
 SpacesBeforeTrailingComments: 1
 SpacesInCStyleCastParentheses: false
 TabWidth: 2
-UseTab: Always
+UseTab: AlignWithSpaces
