@@ -85,8 +85,8 @@
 
 %start program ;
 
-program : %empty { ast->root = new_number_node(0); YYACCEPT; }
-        | exp    { ast->root = $1;                 YYACCEPT; }
+program : %empty { ast->root = new_number_node(0); }
+        | exp    { ast->root = $1; }
         ;
 
 exps : exp              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
