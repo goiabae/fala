@@ -146,9 +146,11 @@ static Value eval_ast_node(
 			Node exp = node.children[3];
 
 			int inc = (from.num <= to.num) ? 1 : -1;
-			for (Number i = from.num; i != to.num; i += inc) {
-				Value* addr = env_stack_find(stack, tab->arr[id.index]);
-				if (!addr) addr = env_stack_get_new(&stack, tab->arr[id.index]);
+
+			Value* addr = env_stack_find(stack, tab->arr[id.index]);
+			if (!addr) addr = env_stack_get_new(&stack, tab->arr[id.index]);
+
+			for (Number i = from.num; (i - inc) != to.num; i += inc) {
 				*addr = (Value) {VALUE_NUM, .num = i};
 				val = eval_ast_node(exp, stack, tab);
 			}
