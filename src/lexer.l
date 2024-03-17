@@ -79,6 +79,7 @@
 \%      { return SLASH; }
 
 \;      { return SEMICOL; }
+\,      { return COLON; }
 
 [ \t\n] ;
 

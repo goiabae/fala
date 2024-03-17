@@ -69,6 +69,7 @@
 %token BRACKET_CLOSE ']'
 
 %token SEMICOL ';'
+%token COLON ','
 
 %type <node> exp
 %type <node> exps
@@ -120,8 +121,8 @@ decl : VAR var { $$ = new_node(FALA_DECL, 1, (Node[1]) {$2}); }
      | VAR var EQ exp { $$ = new_node(FALA_DECL, 2, (Node[2]) {$2, $4}); }
      ;
 
-decls : decl              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-      | exps SEMICOL decl { $$ = list_append_node($$, $3); }
+decls : decl             { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+      | decls COLON decl { $$ = list_append_node($$, $3); }
       ;
 
 var : id                                { $$ = new_node(FALA_VAR, 1, (Node[1]){$1}); }
