@@ -137,7 +137,7 @@ rela-exp : sum-exp
          | rela-exp LESSER     sum-exp { $$ = new_node(FALA_LESSER,     2, (Node[2]){$1, $3}); }
          | rela-exp GREATER_EQ sum-exp { $$ = new_node(FALA_GREATER_EQ, 2, (Node[2]){$1, $3}); }
          | rela-exp LESSER_EQ  sum-exp { $$ = new_node(FALA_LESSER_EQ,  2, (Node[2]){$1, $3}); }
-         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ_EQ,      2, (Node[2]){$1, $3}); }
+         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ,      2, (Node[2]){$1, $3}); }
          ;
 
 /* a + b */

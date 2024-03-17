@@ -155,7 +155,7 @@ static char* node_repr(Type type) {
 		case FALA_LESSER: return "<";
 		case FALA_GREATER_EQ: return ">=";
 		case FALA_LESSER_EQ: return "<=";
-		case FALA_EQ_EQ: return "==";
+		case FALA_EQ: return "==";
 		case FALA_ADD: return "+";
 		case FALA_SUB: return "-";
 		case FALA_MUL: return "*";
@@ -342,7 +342,7 @@ static Value ast_node_eval(
 		case FALA_LESSER: BIN_OP(<);
 		case FALA_GREATER_EQ: BIN_OP(>=);
 		case FALA_LESSER_EQ: BIN_OP(<=);
-		case FALA_EQ_EQ: BIN_OP(==);
+		case FALA_EQ: BIN_OP(==);
 		case FALA_ADD: BIN_OP(+);
 		case FALA_SUB: BIN_OP(-);
 		case FALA_MUL: BIN_OP(*);
