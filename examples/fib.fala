@@ -1,7 +1,7 @@
 let var max = read nil,
     var fs [max]
 in do
-  write (fs [0] = 0) "\n" (fs [1] = 1);
-  for var i from 2 to max-1 then
-  	write "\n" (fs [i] = (fs [i-1]) + (fs [i-2]));
+	write (fs [0] = 0) "\n" (fs [1] = 1);
+	for var i from 2 to max-1 then
+		write "\n" (fs [i] = (fs [i-1]) + (fs [i-2]));
 end

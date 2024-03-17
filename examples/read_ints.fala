@@ -1,9 +1,9 @@
 do
-  var max = 0;
-  for var i from 0 to ((read nil) - 1) then
-  	let var x = read nil
+	var max = 0;
+	for var i from 0 to ((read nil) - 1) then
+		let var x = read nil
 		in when x > max then
-  		max = x;
+			max = x;
 	write "Max is ";
-  write max;
+	write max;
 end

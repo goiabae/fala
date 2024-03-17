@@ -1,27 +1,27 @@
 let
-  var xs[1000],
-  var x,
-  var len = 0
+	var xs[1000],
+	var x,
+	var len = 0
 in do
-  while x = read nil then do
-    xs[len] = x;
-    len = len + 1;
-  end;
+	while x = read nil then do
+		xs[len] = x;
+		len = len + 1;
+	end;
 
-  # insertion sort xs
-  # impl took from https://pt.wikipedia.org/wiki/Insertion_sort
+	# insertion sort xs
+	# impl took from https://pt.wikipedia.org/wiki/Insertion_sort
 
-  for var i from 1 to len-1 then
-  let var key = xs[i],
-      var j = i - 1
-  in do
-    while j >= 0 and xs[j] > key then do
-      xs[j+1] = xs[j];
-      j = j - 1;
-    end;
-    xs[j+1] = key;
-  end;
+	for var i from 1 to len-1 then
+	let var key = xs[i],
+			var j = i - 1
+	in do
+		while j >= 0 and xs[j] > key then do
+			xs[j+1] = xs[j];
+			j = j - 1;
+		end;
+		xs[j+1] = key;
+	end;
 
-  for var i from 0 to len-1 then
-    write xs[i] "\n";
+	for var i from 0 to len-1 then
+		write xs[i] "\n";
 end
