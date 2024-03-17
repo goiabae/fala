@@ -324,18 +324,16 @@ static Value ast_node_eval(
 			assert(var.type == FALA_VAR);
 			Node id = var.children[0];
 			Value value = ast_node_eval(node.children[1], stack, tab);
-			if (var.children_count == 2) {
+			Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
+			assert(addr && "Variable not found. Address is 0x0");
+
+			if (var.children_count == 2) { // array indexing
 				Value idx = ast_node_eval(var.children[1], stack, tab);
 				assert(idx.tag == VALUE_NUM);
-				Value* arr = env_stack_find(stack, sym_table_get(tab, id.index));
-				assert(arr);
-				arr->arr.data[idx.num] = value;
-			} else {
-				Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
-				assert(!addr);
-				*addr = value;
+				val = (addr->arr.data[idx.num] = value);
+			} else { // plain
+				val = (*addr = value);
 			}
-			val = value;
 			break;
 		}
 		case FALA_OR: BIN_OP(||);
