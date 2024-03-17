@@ -1,0 +1,8 @@
+do
+  out (in nil); # string
+  out (in nil); # number
+	out "foobar"; # string
+	out 1337;     # number
+	out nil;      # nil
+	out true      # true
+end

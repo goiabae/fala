@@ -1,4 +1,6 @@
-a = 3
-b = 4
-c = 5
-a*a + b*b == c*c
+do
+  var a = 3;
+  var b = 4;
+  var c = 5;
+  out (a*a + b*b == c*c)
+end
