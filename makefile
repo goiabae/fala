@@ -8,16 +8,16 @@ LIBS =
 
 all: prepare fala
 
-fala: build/parser.o build/main.o build/lexer.o
+fala: build/parser.o build/main.o build/lexer.o build/ast.o build/eval.o
 	$(CC) $(CFLAGS) $(LIBS) -o build/$@ $^
 
 build/main.o: src/main.c src/lexer.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-build/%.o: src/%.c
+build/%.o: src/%.c src/%.h
 	$(CC) $(CFLAGS)  -c -o $@ $<
 
-src/parser.c: src/parser.y src/lexer.h
+src/parser.c src/parser.h: src/parser.y src/lexer.h
 	bison --header=src/parser.h --output=$@ $<
 
 src/lexer.c src/lexer.h: src/lexer.l

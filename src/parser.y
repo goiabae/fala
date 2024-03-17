@@ -1,12 +1,13 @@
 %define api.pure full
 
 %lex-param {void *scanner}
-%parse-param {void *scanner}{Context* ctx}{SymbolTable* syms}
+%parse-param {void *scanner}{AST* ast}{SymbolTable* syms}
 
 %define parse.trace
 
 %code requires {
   #include "main.h"
+  #include "ast.h"
 }
 
 %{
@@ -86,8 +87,8 @@
 
 %start program ;
 
-program : %empty { ctx->ast.root = new_number_node(0); YYACCEPT; }
-        | exp    { ctx->ast.root = $1;                 YYACCEPT; }
+program : %empty { ast->root = new_number_node(0); YYACCEPT; }
+        | exp    { ast->root = $1;                 YYACCEPT; }
         ;
 
 exps : exp              { $$ = new_list_node(); $$ = list_append_node($$, $1); }

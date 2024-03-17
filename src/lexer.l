@@ -6,6 +6,9 @@
   #include <readline/history.h>
 #endif
 
+  int fileno(FILE *stream);
+  char *strdup(const char *s);
+
   #include "parser.h"
   #include "main.h"
 
