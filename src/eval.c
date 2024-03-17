@@ -393,7 +393,7 @@ static Value builtin_in(size_t _1, Value* _2) {
 }
 
 static Value builtin_out(size_t len, Value* args) {
-	assert(len == 1);
+	assert(len == 1 && "Wrong number of arguments. 1 expected.");
 	print_value(args[0]);
 	return args[0];
 }
