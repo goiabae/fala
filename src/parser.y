@@ -34,8 +34,6 @@
 %token IF "if"
 %token THEN "then"
 %token ELSE "else"
-%token IN "in"
-%token OUT "out"
 %token WHEN "when"
 %token FOR "for"
 %token FROM "from"
@@ -64,6 +62,8 @@
 %token BRACKET_OPEN '['
 %token BRACKET_CLOSE ']'
 
+%token SEMICOL ';'
+
 %type <node> exp
 %type <node> exps
 %type <node> infix
@@ -79,6 +79,8 @@
 %type <node> string
 %type <node> decl
 %type <node> var
+%type <node> args
+%type <node> func
 
 %%
 
@@ -86,20 +88,25 @@
 
 program : exp { ctx->ast.root = $1; };
 
-exps : %empty   { $$ = new_list_node(); }
-     | exps exp { (void)$1; $$ = list_append_node($$, $2); }
+exps : exp              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+     | exps SEMICOL exp { $$ = list_append_node($$, $3); }
      ;
 
-exp : DO exps END                { $$ = $2; }
-    | IF exp THEN exp ELSE exp   { $$ = new_node(FALA_IF, 3, (Node[3]) {$2, $4, $6}); }
-    | WHEN exp exp               { $$ = new_node(FALA_WHEN, 2, (Node[2]) {$2, $3}); }
-    | FOR VAR var FROM exp TO exp exp { $$ = new_node(FALA_FOR, 4, (Node[4]){$3, $5, $7, $8}); }
-    | WHILE exp exp              { $$ = new_node(FALA_WHILE, 2, (Node[2]){$2, $3}); }
-    | IN                         { $$ = new_node(FALA_IN, 0, NULL); }
-    | OUT exp                    { $$ = new_node(FALA_OUT, 1, (Node[1]){$2}); }
+exp : DO exps END                          { $$ = $2; }
+    | IF exp THEN exp ELSE exp             { $$ = new_node(FALA_IF,    3, (Node[3]) {$2, $4, $6}); }
+    | WHEN exp THEN exp                    { $$ = new_node(FALA_WHEN,  2, (Node[2]) {$2, $4}); }
+    | FOR VAR var FROM exp TO exp THEN exp { $$ = new_node(FALA_FOR,   4, (Node[4]){$3, $5, $7, $9}); }
+    | WHILE exp THEN exp                   { $$ = new_node(FALA_WHILE, 2, (Node[2]){$2, $4}); }
     | decl
     | infix
+    | func args                            { $$ = new_node(FALA_APP,   2, (Node[2]){$1, $2}); }
     ;
+
+func : id | PAREN_OPEN exp PAREN_CLOSE { $$ = $2; } ;
+
+args : term   { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+     | args term { $$ = list_append_node($$, $2); }
+     ;
 
 decl : VAR var { $$ = new_node(FALA_DECL, 1, (Node[1]) {$2}); }
      | VAR var EQ exp { $$ = new_node(FALA_DECL, 2, (Node[2]) {$2, $4}); }

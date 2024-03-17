@@ -6,11 +6,16 @@
 typedef int Number;
 typedef char* String;
 
+struct Value;
+
+typedef struct Value (*Function)(size_t, struct Value*);
+
 typedef struct Value {
 	enum {
 		VALUE_NUM,
 		VALUE_ARR,
 		VALUE_STR,
+		VALUE_FUN,
 	} tag;
 	union {
 		Number num;
@@ -18,6 +23,7 @@ typedef struct Value {
 			size_t len;
 			struct Value* data;
 		} arr;
+		Function func;
 		String str;
 	};
 } Value;
@@ -30,14 +36,13 @@ typedef struct VarTable {
 } VarTable;
 
 typedef enum Type {
+	FALA_APP,
 	FALA_NUM,
 	FALA_BLOCK,
 	FALA_IF,
 	FALA_WHEN,
 	FALA_FOR,
 	FALA_WHILE,
-	FALA_IN,
-	FALA_OUT,
 	FALA_ASS,
 	FALA_OR,
 	FALA_AND,
@@ -84,7 +89,7 @@ typedef struct SymbolTable {
 	char** arr;
 } SymbolTable;
 
-void yyerror(void* scanner, Context* var_table, SymbolTable* syms, char* s);
+void yyerror(void* scanner, Context* ctx, SymbolTable* syms, char* err_msg);
 
 Node new_node(Type type, size_t len, Node children[len]);
 Node new_list_node();

@@ -28,6 +28,11 @@ static void env_stack_push(EnvironmentStack* stack);
 static void env_stack_pop(EnvironmentStack* stack);
 static Value* env_stack_get_new(EnvironmentStack* stack, const char* name);
 
+static Value builtin_in(size_t len, Value* args);
+static Value builtin_out(size_t len, Value* args);
+
+static Value ast_node_eval(Node node, EnvironmentStack stack, SymbolTable* tab);
+
 Node new_node(Type type, size_t len, Node children[len]) {
 	Node node;
 	node.type = type;
@@ -137,13 +142,12 @@ void yyerror(void* scanner, Context* ctx, SymbolTable* syms, char* err_msg) {
 
 static char* node_repr(Type type) {
 	switch (type) {
+		case FALA_APP: return "app";
 		case FALA_BLOCK: return "do-end";
 		case FALA_IF: return "if";
 		case FALA_WHEN: return "when";
 		case FALA_FOR: return "for";
 		case FALA_WHILE: return "while";
-		case FALA_IN: return "in";
-		case FALA_OUT: return "out";
 		case FALA_ASS: return "=";
 		case FALA_OR: return "or";
 		case FALA_AND: return "and";
@@ -204,6 +208,24 @@ static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 static void print_ast(AST ast, SymbolTable* syms) {
 	print_node(syms, ast.root, 0);
 }
+static Value apply_function(
+	SymbolTable* tab, EnvironmentStack* stack, Node func_node, Node args_node
+) {
+	assert(func_node.type == FALA_ID && "Unnamed functions are not implemented");
+
+	String func_name = sym_table_get(tab, func_node.index);
+	Value* func_ptr = env_stack_find(*stack, func_name);
+	Function func = (Function)func_ptr->func;
+	assert(func && "For now, only in and out builtins are implemented");
+
+	Value* args = malloc(sizeof(Value) * args_node.children_count);
+	for (size_t i = 0; i < args_node.children_count; i++)
+		args[i] = ast_node_eval(args_node.children[i], *stack, tab);
+
+	Value val = func(args_node.children_count, args);
+	free(args);
+	return val;
+}
 
 static void node_deinit(Node node) {
 	if (node.type == FALA_ID || node.type == FALA_NUM || node.type == FALA_STRING)
@@ -233,6 +255,13 @@ static Value ast_node_eval(
 
 	switch (node.type) {
 		case FALA_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
+		case FALA_APP: {
+			assert(node.children_count == 2);
+			Node func = node.children[0];
+			Node args = node.children[1];
+			val = apply_function(tab, &stack, func, args);
+			break;
+		}
 		case FALA_BLOCK: {
 			env_stack_push(&stack);
 			for (size_t i = 0; i < node.children_count; i++)
@@ -289,26 +318,6 @@ static Value ast_node_eval(
 				val = ast_node_eval(exp, stack, tab);
 			break;
 		}
-		case FALA_IN: {
-			char* buf = malloc(sizeof(char) * 100);
-			fgets(buf, 100, stdin);
-			const size_t len = strlen(buf);
-			buf[len - 1] = '\0';
-			long num = 0;
-			if (sscanf(buf, "%ld", &num) == 0)
-				val = (Value) {VALUE_STR, .str = buf};
-			else {
-				free(buf);
-				val = (Value) {VALUE_NUM, .num = num};
-			}
-			break;
-		}
-		case FALA_OUT: {
-			assert(node.children_count == 1);
-			val = ast_node_eval(node.children[0], stack, tab);
-			print_value(val);
-			break;
-		}
 		case FALA_ASS: {
 			assert(node.children_count == 2);
 			Node var = node.children[0];
@@ -350,7 +359,6 @@ static Value ast_node_eval(
 		}
 		case FALA_ID: assert(false);
 		case FALA_STRING: {
-			assert(node.children_count == 0);
 			val = (Value) {VALUE_STR, .str = sym_table_get(tab, node.index)};
 			break;
 		}
@@ -483,10 +491,38 @@ static void value_deinit(Value val) {
 		free(val.arr.data);
 }
 
+static Value builtin_in(size_t _1, Value* _2) {
+	(void)_1;
+	(void)_2;
+	char* buf = malloc(sizeof(char) * 100);
+	assert(fgets(buf, 100, stdin) != NULL && "Failed reading input from stdin");
+	const size_t len = strlen(buf);
+	buf[len - 1] = '\0';
+	long num = 0;
+	Value val;
+	if (sscanf(buf, "%ld", &num) == 0)
+		val = (Value) {VALUE_STR, .str = buf};
+	else {
+		free(buf);
+		val = (Value) {VALUE_NUM, .num = num};
+	}
+	return val;
+}
+
+static Value builtin_out(size_t len, Value* args) {
+	assert(len == 1);
+	print_value(args[0]);
+	return args[0];
+}
+
 static Interpreter interpreter_init(void) {
 	Interpreter inter;
 	inter.envs = env_stack_init();
 	env_stack_push(&inter.envs);
+	*env_stack_get_new(&inter.envs, "in") =
+		(Value) {VALUE_FUN, .func = builtin_in};
+	*env_stack_get_new(&inter.envs, "out") =
+		(Value) {VALUE_FUN, .func = builtin_out};
 	return inter;
 }
 

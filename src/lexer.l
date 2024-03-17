@@ -38,8 +38,6 @@
 "if"    { return IF; }
 "then"  { return THEN; }
 "else"  { return ELSE; }
-"in"    { return IN; }
-"out"   { return OUT; }
 "when"  { return WHEN; }
 "for"   { return FOR; }
 "from"  { return FROM; }
@@ -71,6 +69,8 @@
 \*      { return ASTER; }
 \/      { return SLASH; }
 \%      { return SLASH; }
+
+\;      { return SEMICOL; }
 
 [ \t\n] ;
 
