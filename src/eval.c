@@ -359,8 +359,8 @@ static Value apply_function(
 
 	String func_name = sym_table_get(tab, func_node.index);
 	Value* func_ptr = env_stack_find(*stack, func_name);
+	assert(func_ptr && "For now, only read and write builtins are implemented");
 	Funktion func = (Funktion)func_ptr->func;
-	assert(func && "For now, only in and out builtins are implemented");
 
 	Value* args = malloc(sizeof(Value) * args_node.children_count);
 	for (size_t i = 0; i < args_node.children_count; i++)
