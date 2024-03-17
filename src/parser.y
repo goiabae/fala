@@ -75,9 +75,7 @@
 %type <node> mul-exp
 %type <node> not-exp
 %type <node> term
-%type <node> number
 %type <node> id
-%type <node> string
 %type <node> decl
 %type <node> var
 %type <node> args
@@ -160,13 +158,9 @@ not-exp : term
         ;
 
 term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
-     | number
+     | NUMBER                     { $$ = new_number_node($1); };
      | var
-     | string
+     | STRING                     { $$ = new_string_node(FALA_STRING, syms, $1); }
      ;
 
-number : NUMBER { $$ = new_number_node($1); };
-
 id : ID { $$ = new_string_node(FALA_ID, syms, $1); }
-
-string : STRING { $$ = new_string_node(FALA_STRING, syms, $1); }
