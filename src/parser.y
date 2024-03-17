@@ -32,7 +32,7 @@
 %token <str> STRING
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO WHILE VAR LET IN OR AND NOT
+%token DO END IF THEN ELSE WHEN FOR FROM TO WHILE VAR LET IN
 %token NIL TRUE
 
 /* pontuation */
@@ -42,10 +42,20 @@
 %token COMMA
 
 /* binary operators */
-%token GREATER_EQ LESSER_EQ EQ_EQ EQ GREATER LESSER
-%token PLUS MINUS ASTER SLASH PERCT
+%token EQ
+%token OR AND
+%token GREATER_EQ LESSER_EQ EQ_EQ GREATER LESSER
+%token PLUS MINUS
+%token ASTER SLASH PERCT
+%token  NOT
 
-%type <node> exp exps infix ass-exp logi-exp rela-exp sum-exp mul-exp not-exp term id decl decls var args func
+%left OR AND
+%left GREATER_EQ LESSER_EQ EQ_EQ GREATER LESSER
+%left PLUS MINUS
+%left ASTER SLASH PERCT
+%nonassoc NOT
+
+%type <node> exp exps infix term id decl decls var args func
 
 %%
 
@@ -66,6 +76,7 @@ exp : DO exps END                          { $$ = $2; }
     | WHILE exp THEN exp                   { $$ = new_node(FALA_WHILE, 2, (Node[2]){$2, $4}); }
     | LET decls IN exp                     { $$ = new_node(FALA_LET,   2, (Node[2]){$2, $4}); }
     | decl
+    | var EQ exp                           { $$ = new_node(FALA_ASS,   2, (Node[2]){$1, $3}); }
     | infix
     | func args                            { $$ = new_node(FALA_APP,   2, (Node[2]){$1, $2}); }
     ;
@@ -90,45 +101,21 @@ var : id                                { $$ = new_node(FALA_VAR, 1, (Node[1]){$
 
 id : ID { $$ = new_string_node(FALA_ID, syms, $1); }
 
-infix : ass-exp ;
-
-/* a = b. assignment lol */
-ass-exp : logi-exp
-        | var EQ exp { $$ = new_node(FALA_ASS, 2, (Node[2]){$1, $3}); }
-        ;
-
-/* a and b or c */
-logi-exp : rela-exp
-         | logi-exp OR  rela-exp { $$ = new_node(FALA_OR,  2, (Node[2]){$1, $3}); }
-         | logi-exp AND rela-exp { $$ = new_node(FALA_AND, 2, (Node[2]){$1, $3}); }
-         ;
-
-/* a == b */
-rela-exp : sum-exp
-         | rela-exp GREATER    sum-exp { $$ = new_node(FALA_GREATER,    2, (Node[2]){$1, $3}); }
-         | rela-exp LESSER     sum-exp { $$ = new_node(FALA_LESSER,     2, (Node[2]){$1, $3}); }
-         | rela-exp GREATER_EQ sum-exp { $$ = new_node(FALA_GREATER_EQ, 2, (Node[2]){$1, $3}); }
-         | rela-exp LESSER_EQ  sum-exp { $$ = new_node(FALA_LESSER_EQ,  2, (Node[2]){$1, $3}); }
-         | rela-exp EQ_EQ      sum-exp { $$ = new_node(FALA_EQ,         2, (Node[2]){$1, $3}); }
-         ;
-
-/* a + b */
-sum-exp : mul-exp
-        | sum-exp PLUS  mul-exp { $$ = new_node(FALA_ADD, 2, (Node[2]){$1, $3}); }
-        | sum-exp MINUS mul-exp { $$ = new_node(FALA_SUB, 2, (Node[2]){$1, $3}); }
-        ;
-
-/* a * b */
-mul-exp : not-exp
-        | mul-exp ASTER not-exp { $$ = new_node(FALA_MUL, 2, (Node[2]){$1, $3}); }
-        | mul-exp SLASH not-exp { $$ = new_node(FALA_DIV, 2, (Node[2]){$1, $3}); }
-        | mul-exp PERCT not-exp { $$ = new_node(FALA_MOD, 2, (Node[2]){$1, $3}); }
-        ;
-
-/* not a */
-not-exp : term
-        | NOT term { $$ = new_node(FALA_NOT, 1, (Node[1]){$2}); }
-        ;
+infix : term
+      | infix OR         infix { $$ = new_node(FALA_OR,         2, (Node[2]){$1, $3}); }
+      | infix AND        infix { $$ = new_node(FALA_AND,        2, (Node[2]){$1, $3}); }
+      | infix GREATER    infix { $$ = new_node(FALA_GREATER,    2, (Node[2]){$1, $3}); }
+      | infix LESSER     infix { $$ = new_node(FALA_LESSER,     2, (Node[2]){$1, $3}); }
+      | infix GREATER_EQ infix { $$ = new_node(FALA_GREATER_EQ, 2, (Node[2]){$1, $3}); }
+      | infix LESSER_EQ  infix { $$ = new_node(FALA_LESSER_EQ,  2, (Node[2]){$1, $3}); }
+      | infix EQ_EQ      infix { $$ = new_node(FALA_EQ,         2, (Node[2]){$1, $3}); }
+      | infix PLUS       infix { $$ = new_node(FALA_ADD,        2, (Node[2]){$1, $3}); }
+      | infix MINUS      infix { $$ = new_node(FALA_SUB,        2, (Node[2]){$1, $3}); }
+      | infix ASTER      infix { $$ = new_node(FALA_MUL,        2, (Node[2]){$1, $3}); }
+      | infix SLASH      infix { $$ = new_node(FALA_DIV,        2, (Node[2]){$1, $3}); }
+      | infix PERCT      infix { $$ = new_node(FALA_MOD,        2, (Node[2]){$1, $3}); }
+      | NOT infix              { $$ = new_node(FALA_NOT,        1, (Node[1]){$2}); }
+      ;
 
 term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
      | NUMBER                     { $$ = new_number_node($1); };
