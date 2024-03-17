@@ -47,6 +47,8 @@
 "to"    { return TO; }
 "while" { return WHILE; }
 "var"   { return VAR; }
+"let"   { return LET; }
+"in"    { return IN; }
 
 "nil"   { return NIL; }
 "true"  { return TRUE; }

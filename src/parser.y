@@ -41,6 +41,8 @@
 %token TO "to"
 %token WHILE "while"
 %token VAR "var"
+%token LET "let"
+%token IN "in"
 
 %token NIL "nil"
 %token TRUE "true"
@@ -80,6 +82,7 @@
 %type <node> term
 %type <node> id
 %type <node> decl
+%type <node> decls
 %type <node> var
 %type <node> args
 %type <node> func
@@ -97,10 +100,11 @@ exps : exp              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
      ;
 
 exp : DO exps END                          { $$ = $2; }
-    | IF exp THEN exp ELSE exp             { $$ = new_node(FALA_IF,    3, (Node[3]) {$2, $4, $6}); }
-    | WHEN exp THEN exp                    { $$ = new_node(FALA_WHEN,  2, (Node[2]) {$2, $4}); }
+    | IF exp THEN exp ELSE exp             { $$ = new_node(FALA_IF,    3, (Node[3]){$2, $4, $6}); }
+    | WHEN exp THEN exp                    { $$ = new_node(FALA_WHEN,  2, (Node[2]){$2, $4}); }
     | FOR VAR var FROM exp TO exp THEN exp { $$ = new_node(FALA_FOR,   4, (Node[4]){$3, $5, $7, $9}); }
     | WHILE exp THEN exp                   { $$ = new_node(FALA_WHILE, 2, (Node[2]){$2, $4}); }
+    | LET decls IN exp                     { $$ = new_node(FALA_LET,   2, (Node[2]){$2, $4}); }
     | decl
     | infix
     | func args                            { $$ = new_node(FALA_APP,   2, (Node[2]){$1, $2}); }
@@ -115,6 +119,10 @@ args : term   { $$ = new_list_node(); $$ = list_append_node($$, $1); }
 decl : VAR var { $$ = new_node(FALA_DECL, 1, (Node[1]) {$2}); }
      | VAR var EQ exp { $$ = new_node(FALA_DECL, 2, (Node[2]) {$2, $4}); }
      ;
+
+decls : decl              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+      | exps SEMICOL decl { $$ = list_append_node($$, $3); }
+      ;
 
 var : id                                { $$ = new_node(FALA_VAR, 1, (Node[1]){$1}); }
     | id BRACKET_OPEN exp BRACKET_CLOSE { $$ = new_node(FALA_VAR, 2, (Node[2]){$1, $3}); }

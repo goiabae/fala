@@ -328,6 +328,20 @@ static Value eval_ast_node(
 			val = (Value) {VALUE_TRUE, .num = 1};
 			break;
 		}
+		case FALA_LET: {
+			Node decls = node.children[0];
+			Node exp = node.children[1];
+			env_stack_push(&stack);
+
+			for (size_t i = 0; i < decls.children_count; i++) {
+				Node decl = decls.children[i];
+				eval_ast_node(decl, stack, tab);
+			}
+
+			val = eval_ast_node(exp, stack, tab);
+			env_stack_pop(&stack);
+			break;
+		}
 	}
 	return val;
 }

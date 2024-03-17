@@ -34,6 +34,7 @@ typedef enum Type {
 	FALA_VAR,
 	FALA_NIL,
 	FALA_TRUE,
+	FALA_LET,
 } Type;
 
 typedef struct Node {

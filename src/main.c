@@ -38,7 +38,7 @@ static const char* node_repr[] = {
 	[FALA_ADD] = "+",         [FALA_SUB] = "-",        [FALA_MUL] = "*",
 	[FALA_DIV] = "/",         [FALA_MOD] = "%",        [FALA_NOT] = "not",
 	[FALA_ID] = NULL,         [FALA_STRING] = NULL,    [FALA_DECL] = "decl",
-	[FALA_VAR] = "var",
+	[FALA_VAR] = "var",       [FALA_LET] = "let",
 };
 
 void yyerror(void* scanner, void* ast, void* syms, char* err_msg) {
