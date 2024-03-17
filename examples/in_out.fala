@@ -5,5 +5,4 @@ do
 	write 1337;     # number
 	write nil;      # nil
 	write true;     # true
-	0
 end
