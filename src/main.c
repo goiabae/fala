@@ -215,7 +215,7 @@ static Value apply_function(
 
 	String func_name = sym_table_get(tab, func_node.index);
 	Value* func_ptr = env_stack_find(*stack, func_name);
-	Function func = (Function)func_ptr->func;
+	Funktion func = (Funktion)func_ptr->func;
 	assert(func && "For now, only in and out builtins are implemented");
 
 	Value* args = malloc(sizeof(Value) * args_node.children_count);
@@ -572,6 +572,16 @@ Options parse_args(int argc, char* argv[]) {
 	return opts;
 }
 
+SymbolTable sym_table_init() {
+	SymbolTable syms;
+	syms.cap = 100;
+	syms.arr = malloc(sizeof(char*) * 100);
+	syms.len = 0;
+	return syms;
+}
+
+void sym_table_deinit(SymbolTable* tab) { free(tab->arr); }
+
 #ifdef FALA_WITH_REPL
 static int repl(Options opts) {
 	FILE* fd = stdin;
@@ -579,13 +589,13 @@ static int repl(Options opts) {
 	SymbolTable syms = sym_table_init();
 
 	while (!feof(fd)) {
-		AST ast = parse(fd);
+		AST ast = parse(fd, &syms);
 		if (opts.verbose) {
-			print_ast(ast);
+			print_ast(ast, &syms);
 			printf("\n");
 		}
 
-		Value val = ast_eval(ast, syms);
+		Value val = ast_eval(&inter, &syms, ast);
 		print_value(val);
 		printf("\n");
 		ast_deinit(ast);
@@ -597,16 +607,6 @@ static int repl(Options opts) {
 	return 0;
 }
 #endif
-
-SymbolTable sym_table_init() {
-	SymbolTable syms;
-	syms.cap = 100;
-	syms.arr = malloc(sizeof(char*) * 100);
-	syms.len = 0;
-	return syms;
-}
-
-void sym_table_deinit(SymbolTable* tab) { free(tab->arr); }
 
 static int interpret(Options opts) {
 #ifdef FALA_WITH_REPL

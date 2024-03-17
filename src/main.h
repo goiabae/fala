@@ -8,7 +8,7 @@ typedef char* String;
 
 struct Value;
 
-typedef struct Value (*Function)(size_t, struct Value*);
+typedef struct Value (*Funktion)(size_t, struct Value*);
 
 typedef struct Value {
 	enum {
@@ -23,7 +23,7 @@ typedef struct Value {
 			size_t len;
 			struct Value* data;
 		} arr;
-		Function func;
+		Funktion func;
 		String str;
 	};
 } Value;
