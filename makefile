@@ -1,5 +1,7 @@
 CC = cc
-CFLAGS += -O0 -ggdb -Wall -Wextra
+CFLAGS += -std=c11
+CFLAGS += -O0 -ggdb
+CFLAGS += -Wall -Wextra -pedantic -Wmissing-declarations
 # CFLAGS += -D FALA_WITH_REPL
 # LIBS = -lreadline -lhistory
 LIBS =
