@@ -15,7 +15,7 @@ static void env_stack_pop(EnvironmentStack* stack);
 static Value* env_stack_get_new(EnvironmentStack* stack, const char* name);
 
 static Value builtin_read(size_t len, Value* args);
-static Value builtin_write(size_t len, Value* args);
+static Value builtin_write(size_t len, Value args[len]);
 
 static Value eval_ast_node(Node node, EnvironmentStack stack, SymbolTable* tab);
 
@@ -406,10 +406,9 @@ static Value builtin_read(size_t _1, Value* _2) {
 	return val;
 }
 
-static Value builtin_write(size_t len, Value* args) {
-	assert(len == 1 && "Wrong number of arguments. 1 expected.");
-	print_value(args[0]);
-	return args[0];
+static Value builtin_write(size_t len, Value args[len]) {
+	for (size_t i = 0; i < len; i++) print_value(args[i]);
+	return (Value) {VALUE_NIL, .nil = NULL};
 }
 
 Interpreter interpreter_init(void) {
