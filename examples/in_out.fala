@@ -1,9 +1,9 @@
 do
-  out (in nil); # string
-  out (in nil); # number
-	out "foobar"; # string
-	out 1337;     # number
-	out nil;      # nil
-	out true;     # true
+  write (read nil); # string
+  write (read nil); # number
+	write "foobar"; # string
+	write 1337;     # number
+	write nil;      # nil
+	write true;     # true
 	0
 end

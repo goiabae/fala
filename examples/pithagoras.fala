@@ -1,7 +1,9 @@
 do
-  var a = 3;
-  var b = 4;
-  var c = 5;
-  out (a*a + b*b == c*c);
+	let
+	  var a = 3;
+	  var b = 4;
+    var c = 5
+  in
+    write (a*a + b*b == c*c);
 	0
 end

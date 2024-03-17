@@ -1,11 +1,10 @@
 do
   var max = 0;
-  for var i from 0 to ((in nil) - 1) then do
-  	var x = in nil;
-  	when x > max then
-  		max = x
-  end;
-	out "Max is ";
-  out max;
+  for var i from 0 to ((read nil) - 1) then
+  	let var x = read nil
+		in when x > max then
+  		max = x;
+	write "Max is ";
+  write max;
 	0
 end
