@@ -140,36 +140,17 @@ void yyerror(void* scanner, Context* ctx, SymbolTable* syms, char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 }
 
-static char* node_repr(Type type) {
-	switch (type) {
-		case FALA_APP: return "app";
-		case FALA_BLOCK: return "do-end";
-		case FALA_IF: return "if";
-		case FALA_WHEN: return "when";
-		case FALA_FOR: return "for";
-		case FALA_WHILE: return "while";
-		case FALA_ASS: return "=";
-		case FALA_OR: return "or";
-		case FALA_AND: return "and";
-		case FALA_GREATER: return ">";
-		case FALA_LESSER: return "<";
-		case FALA_GREATER_EQ: return ">=";
-		case FALA_LESSER_EQ: return "<=";
-		case FALA_EQ: return "==";
-		case FALA_ADD: return "+";
-		case FALA_SUB: return "-";
-		case FALA_MUL: return "*";
-		case FALA_DIV: return "/";
-		case FALA_MOD: return "%";
-		case FALA_NOT: return "!";
-		case FALA_NUM: return NULL;
-		case FALA_ID: return NULL;
-		case FALA_STRING: return NULL;
-		case FALA_DECL: return "decl";
-		case FALA_VAR: return "var";
-	}
-	assert(false);
-}
+static const char* node_repr[] = {
+	[FALA_APP] = "app",       [FALA_NUM] = NULL,       [FALA_BLOCK] = "block",
+	[FALA_IF] = "if",         [FALA_WHEN] = "when",    [FALA_FOR] = "for",
+	[FALA_WHILE] = "while",   [FALA_ASS] = "=",        [FALA_OR] = "or",
+	[FALA_AND] = "and",       [FALA_GREATER] = ">",    [FALA_LESSER] = "<",
+	[FALA_GREATER_EQ] = ">=", [FALA_LESSER_EQ] = "<=", [FALA_EQ] = "==",
+	[FALA_ADD] = "+",         [FALA_SUB] = "-",        [FALA_MUL] = "*",
+	[FALA_DIV] = "/",         [FALA_MOD] = "%",        [FALA_NOT] = "not",
+	[FALA_ID] = NULL,         [FALA_STRING] = NULL,    [FALA_DECL] = "decl",
+	[FALA_VAR] = "var",
+};
 
 static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 	if (node.type == FALA_NUM) {
@@ -192,7 +173,7 @@ static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 
 	printf("(");
 
-	printf("%s", node_repr(node.type));
+	printf("%s", node_repr[node.type]);
 
 	space += 2;
 
@@ -242,17 +223,6 @@ static Value ast_node_eval(
 	Node node, EnvironmentStack stack, SymbolTable* tab
 ) {
 	Value val;
-
-#define BIN_OP(OP)                                             \
-	{                                                            \
-		assert(node.children_count == 2);                          \
-		Value left = ast_node_eval(node.children[0], stack, tab);  \
-		Value right = ast_node_eval(node.children[1], stack, tab); \
-		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM);   \
-		val = (Value) {VALUE_NUM, .num = left.num OP right.num};   \
-		break;                                                     \
-	}
-
 	switch (node.type) {
 		case FALA_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
 		case FALA_APP: {
@@ -283,10 +253,8 @@ static Value ast_node_eval(
 			assert(node.children_count == 2);
 			Value cond = ast_node_eval(node.children[0], stack, tab);
 			assert(cond.tag == VALUE_NUM);
-			if (cond.num)
-				val = ast_node_eval(node.children[1], stack, tab);
-			else
-				val = (Value) {VALUE_NUM, .num = 0};
+			val = (cond.num) ? ast_node_eval(node.children[1], stack, tab)
+			                 : (Value) {VALUE_NUM, .num = 0};
 			break;
 		}
 		case FALA_FOR: {
@@ -336,6 +304,15 @@ static Value ast_node_eval(
 			}
 			break;
 		}
+#define BIN_OP(OP)                                             \
+	{                                                            \
+		assert(node.children_count == 2);                          \
+		Value left = ast_node_eval(node.children[0], stack, tab);  \
+		Value right = ast_node_eval(node.children[1], stack, tab); \
+		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM);   \
+		val = (Value) {VALUE_NUM, .num = left.num OP right.num};   \
+		break;                                                     \
+	}
 		case FALA_OR: BIN_OP(||);
 		case FALA_AND: BIN_OP(&&);
 		case FALA_GREATER: BIN_OP(>);
@@ -348,6 +325,7 @@ static Value ast_node_eval(
 		case FALA_MUL: BIN_OP(*);
 		case FALA_DIV: BIN_OP(/);
 		case FALA_MOD: BIN_OP(%);
+#undef BIN_OP
 		case FALA_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
@@ -364,6 +342,14 @@ static Value ast_node_eval(
 			Node var = node.children[0];
 			Node id = var.children[0];
 			Value* cell = env_stack_get_new(&stack, sym_table_get(tab, id.index));
+
+			// var id = exp
+			if (node.children_count == 2) {
+				val = *cell = ast_node_eval(node.children[1], stack, tab);
+				break;
+			}
+
+			// var arr [size]
 			if (var.children_count == 2) {
 				Value size = ast_node_eval(var.children[1], stack, tab);
 				*cell = (Value) {
@@ -371,12 +357,11 @@ static Value ast_node_eval(
 					.arr.data = malloc(sizeof(Value) * size.num),
 					.arr.len = size.num};
 				memset(cell->arr.data, 0, sizeof(Value) * size.num);
-				val = (Value) {VALUE_NUM, .num = 0};
-			} else if (node.children_count == 2) {
-				Value ass = ast_node_eval(node.children[1], stack, tab);
-				val = (*cell = ass);
-			} else
-				val = (Value) {VALUE_NUM, .num = 0};
+			}
+
+			// var id and var arr [size]
+			// no value to return
+			val = (Value) {VALUE_NUM, .num = 0};
 			break;
 		}
 		case FALA_VAR: {
@@ -398,9 +383,6 @@ static Value ast_node_eval(
 			break;
 		}
 	}
-
-#undef BIN_OP
-
 	return val;
 }
 
