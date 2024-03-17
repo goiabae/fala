@@ -86,7 +86,9 @@
 
 %start program ;
 
-program : exp { ctx->ast.root = $1; };
+program : %empty { ctx->ast.root = new_number_node(0); YYACCEPT; }
+        | exp    { ctx->ast.root = $1;                 YYACCEPT; }
+        ;
 
 exps : exp              { $$ = new_list_node(); $$ = list_append_node($$, $1); }
      | exps SEMICOL exp { $$ = list_append_node($$, $3); }
