@@ -1,12 +1,27 @@
 #include "ast.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "main.h"
 
 static void node_deinit(Node node);
+
+// clang-format can't format this properly
+// relevant issue https://github.com/llvm/llvm-project/issues/61560
+static const char* node_repr[] = {
+	[AST_APP] = "app",     [AST_NUM] = NULL,    [AST_BLK] = "block",
+	[AST_IF] = "if",       [AST_WHEN] = "when", [AST_FOR] = "for",
+	[AST_WHILE] = "while", [AST_ASS] = "=",     [AST_OR] = "or",
+	[AST_AND] = "and",     [AST_GTN] = ">",     [AST_LTN] = "<",
+	[AST_GTE] = ">=",      [AST_LTE] = "<=",    [AST_EQ] = "==",
+	[AST_ADD] = "+",       [AST_SUB] = "-",     [AST_MUL] = "*",
+	[AST_DIV] = "/",       [AST_MOD] = "%",     [AST_NOT] = "not",
+	[AST_ID] = NULL,       [AST_STR] = NULL,    [AST_DECL] = "decl",
+	[AST_VAR] = "var",     [AST_LET] = "let",
+};
 
 AST ast_init(void) {
 	AST ast;
@@ -16,6 +31,50 @@ AST ast_init(void) {
 }
 
 void ast_deinit(AST ast) { node_deinit(ast.root); }
+
+static void ast_node_print(SymbolTable* tab, Node node, unsigned int space) {
+	if (node.type == AST_NUM) {
+		printf("%d", node.num);
+		return;
+	} else if (node.type == AST_ID) {
+		printf("%s", sym_table_get(tab, node.index));
+		return;
+	} else if (node.type == AST_STR) {
+		printf("\"");
+		for (char* it = sym_table_get(tab, node.index); *it != '\0'; it++) {
+			if (*it == '\n')
+				printf("\\n");
+			else
+				printf("%c", *it);
+		}
+		printf("\"");
+		return;
+	} else if (node.type == AST_NIL) {
+		printf("nil");
+		return;
+	} else if (node.type == AST_TRUE) {
+		printf("true");
+		return;
+	}
+
+	printf("(");
+
+	printf("%s", node_repr[node.type]);
+
+	space += 2;
+
+	for (size_t i = 0; i < node.children_count; i++) {
+		printf("\n");
+		for (size_t j = 0; j < space; j++) printf(" ");
+		ast_node_print(tab, node.children[i], space);
+	}
+
+	printf(")");
+}
+
+void ast_print(AST ast, SymbolTable* syms) {
+	ast_node_print(syms, ast.root, 0);
+}
 
 Node new_node(Type type, size_t len, Node children[len]) {
 	Node node;

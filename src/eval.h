@@ -54,4 +54,6 @@ void interpreter_deinit(Interpreter* inter);
 
 Value ast_eval(Interpreter* inter, SymbolTable* syms, AST ast);
 
+void print_value(Value val);
+
 #endif

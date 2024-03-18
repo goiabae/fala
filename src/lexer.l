@@ -1,6 +1,7 @@
 %{
   #include <string.h>
   #include <stdlib.h>
+	#include <stdbool.h>
 #ifdef FALA_WITH_REPL
   #include <readline/readline.h>
   #include <readline/history.h>
@@ -13,8 +14,9 @@
   #include "main.h"
 
   static char* parse_string(char* str);
+	bool is_interactive(void* scanner);
 
-#if FALA_WITH_REPL
+#ifdef FALA_WITH_REPL
   static int get_input(FILE* fd, char *buf, int size);
   #define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
 #endif
@@ -76,7 +78,13 @@
 \/      return SLASH;
 \%      return PERCT;
 
-[ \t\n] ;
+[ \t] ;
+
+\n {
+  #ifdef FALA_WITH_REPL
+    if (is_interactive(yyscanner)) return EOF;
+  #endif
+}
 
 . { yyerror(NULL, NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\"\n", yytext); }
 
@@ -101,15 +109,30 @@ static char* parse_string(char* str) {
 static int get_input(FILE* fd, char *buf, int size) {
   if (feof(fd)) return YY_NULL;
 
-  char *line = readline("> ");
+  char* line = NULL;
+
+  if (fd == stdin) {
+    line = readline("fala> ");
+    add_history(line);
+  } else {
+    line = malloc(sizeof(char) * size);
+    fgets(line, size, fd);
+  }
+
   if(!line) return YY_NULL;
-  if(strlen(line) > (size_t)size-2) {
+  const size_t len = strlen(line);
+  if(len == 0) return YY_NULL;
+  if(len > (size_t)size-2) {
     fprintf(stderr,"input line too long\n");
     return YY_NULL;
   }
   sprintf(buf,"%s\n",line);
-  add_history(line);
   free(line);
   return strlen(buf);
 }
 #endif
+
+bool is_interactive(void* scanner) {
+  struct yyguts_t* yyg = (struct yyguts_t*)scanner;
+	return yyg->yyin_r == stdin;
+}

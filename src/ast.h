@@ -7,9 +7,9 @@ typedef int Number;
 typedef char* String;
 
 typedef enum Type {
-	AST_APP,
+	AST_APP, // function application
 	AST_NUM,
-	AST_BLK,
+	AST_BLK, // block
 	AST_IF,
 	AST_WHEN,
 	AST_FOR,
@@ -31,7 +31,7 @@ typedef enum Type {
 	AST_ID,
 	AST_STR,
 	AST_DECL,
-	AST_VAR,
+	AST_VAR, // variable id or id[idx]
 	AST_NIL,
 	AST_TRUE,
 	AST_LET,
@@ -62,6 +62,7 @@ typedef struct SymbolTable {
 // AST
 AST ast_init(void);
 void ast_deinit(AST ast);
+void ast_print(AST ast, SymbolTable* syms);
 
 // nodes
 Node new_node(Type type, size_t len, Node children[len]);

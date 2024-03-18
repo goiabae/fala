@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void print_value(Value val);
+void print_value(Value val);
 static void value_deinit(Value val);
 
 static Value* env_stack_find(EnvironmentStack stack, const char* name);
@@ -346,7 +346,7 @@ static Value eval_ast_node(
 	return val;
 }
 
-static void print_value(Value val) {
+void print_value(Value val) {
 	if (val.tag == VALUE_NUM)
 		printf("%d", val.num);
 	else if (val.tag == VALUE_STR)

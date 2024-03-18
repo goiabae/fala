@@ -12,11 +12,13 @@
 
 %{
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "parser.h"
 #include "lexer.h"
 
-#define yyerror(SCAN, AST, SYMS, ...) fprintf (stderr, __VA_ARGS__)
+bool is_interactive(void* scanner);
+#define yyerror(SCAN, AST, SYMS, ...) fprintf(stderr, __VA_ARGS__)
 %}
 
 /* type of terminal values */
@@ -26,7 +28,7 @@
 	Node node;
 }
 
-/* terminal values */
+/* values */
 %token <num> NUMBER
 %token <str> ID
 %token <str> STRING
@@ -55,14 +57,15 @@
 %left ASTER SLASH PERCT
 %nonassoc NOT
 
+/* non-terminals */
 %type <node> exp exps infix term id decl decls var args func
 
 %%
 
 %start program ;
 
-program : %empty { ast->root = new_number_node(0); }
-        | exp    { ast->root = $1; }
+program : %empty { ast->root = new_number_node(0); if (is_interactive(scanner)) YYACCEPT; }
+        | exp    { ast->root = $1; if (is_interactive(scanner)) YYACCEPT; }
         ;
 
 exps : exp ";"      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
