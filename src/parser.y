@@ -36,18 +36,18 @@
 %token NIL TRUE
 
 /* pontuation */
-%token PAREN_OPEN PAREN_CLOSE
-%token BRACKET_OPEN BRACKET_CLOSE
-%token SEMICOL
-%token COMMA
+%token PAREN_OPEN "(" PAREN_CLOSE ")"
+%token BRACKET_OPEN "[" BRACKET_CLOSE "]"
+%token SEMICOL ";"
+%token COMMA ","
 
 /* binary operators */
-%token EQ
+%token EQ "="
 %token OR AND
-%token GREATER_EQ LESSER_EQ EQ_EQ GREATER LESSER
-%token PLUS MINUS
-%token ASTER SLASH PERCT
-%token  NOT
+%token GREATER_EQ ">=" LESSER_EQ "<=" EQ_EQ "==" GREATER ">" LESSER "<"
+%token PLUS "+" MINUS "-"
+%token ASTER "*" SLASH "/" PERCT "%"
+%token NOT
 
 %left OR AND
 %left GREATER_EQ LESSER_EQ EQ_EQ GREATER LESSER
@@ -65,8 +65,8 @@ program : %empty { ast->root = new_number_node(0); }
         | exp    { ast->root = $1; }
         ;
 
-exps : exp SEMICOL      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-     | exps exp SEMICOL { $$ = list_append_node($$, $2); }
+exps : exp ";"      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+     | exps exp ";" { $$ = list_append_node($$, $2); }
      ;
 
 exp : DO exps END                          { $$ = $2; }
@@ -76,51 +76,51 @@ exp : DO exps END                          { $$ = $2; }
     | WHILE exp THEN exp                   { $$ = new_node(AST_WHILE, 2, (Node[2]){$2, $4}); }
     | LET decls IN exp                     { $$ = new_node(AST_LET,   2, (Node[2]){$2, $4}); }
     | decl
-    | var EQ exp                           { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
+    | var "=" exp                          { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
     | infix
     | func args                            { $$ = new_node(AST_APP,   2, (Node[2]){$1, $2}); }
     ;
 
-func : id | PAREN_OPEN exp PAREN_CLOSE { $$ = $2; } ;
+func : id | "(" exp ")" { $$ = $2; } ;
 
 args : term      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
      | args term { $$ = list_append_node($$, $2); }
      ;
 
-decl : VAR var        { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
-     | VAR var EQ exp { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
+decl : VAR var         { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
+     | VAR var "=" exp { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
      ;
 
-decls : decl             { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-      | decls COMMA decl { $$ = list_append_node($$, $3); }
+decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+      | decls "," decl { $$ = list_append_node($$, $3); }
       ;
 
-var : id                                { $$ = new_node(AST_VAR, 1, (Node[1]){$1}); }
-    | id BRACKET_OPEN exp BRACKET_CLOSE { $$ = new_node(AST_VAR, 2, (Node[2]){$1, $3}); }
+var : id             { $$ = new_node(AST_VAR, 1, (Node[1]){$1}); }
+    | id "[" exp "]" { $$ = new_node(AST_VAR, 2, (Node[2]){$1, $3}); }
     ;
 
 id : ID { $$ = new_string_node(AST_ID, syms, $1); }
 
 infix : term
-      | infix OR         infix { $$ = new_node(AST_OR,  2, (Node[2]){$1, $3}); }
-      | infix AND        infix { $$ = new_node(AST_AND, 2, (Node[2]){$1, $3}); }
-      | infix GREATER    infix { $$ = new_node(AST_GTN, 2, (Node[2]){$1, $3}); }
-      | infix LESSER     infix { $$ = new_node(AST_LTN, 2, (Node[2]){$1, $3}); }
-      | infix GREATER_EQ infix { $$ = new_node(AST_GTE, 2, (Node[2]){$1, $3}); }
-      | infix LESSER_EQ  infix { $$ = new_node(AST_LTE, 2, (Node[2]){$1, $3}); }
-      | infix EQ_EQ      infix { $$ = new_node(AST_EQ,  2, (Node[2]){$1, $3}); }
-      | infix PLUS       infix { $$ = new_node(AST_ADD, 2, (Node[2]){$1, $3}); }
-      | infix MINUS      infix { $$ = new_node(AST_SUB, 2, (Node[2]){$1, $3}); }
-      | infix ASTER      infix { $$ = new_node(AST_MUL, 2, (Node[2]){$1, $3}); }
-      | infix SLASH      infix { $$ = new_node(AST_DIV, 2, (Node[2]){$1, $3}); }
-      | infix PERCT      infix { $$ = new_node(AST_MOD, 2, (Node[2]){$1, $3}); }
-      | NOT infix              { $$ = new_node(AST_NOT, 1, (Node[1]){$2}); }
+      | infix OR   infix { $$ = new_node(AST_OR,  2, (Node[2]){$1, $3}); }
+      | infix AND  infix { $$ = new_node(AST_AND, 2, (Node[2]){$1, $3}); }
+      | infix ">"  infix { $$ = new_node(AST_GTN, 2, (Node[2]){$1, $3}); }
+      | infix "<"  infix { $$ = new_node(AST_LTN, 2, (Node[2]){$1, $3}); }
+      | infix ">=" infix { $$ = new_node(AST_GTE, 2, (Node[2]){$1, $3}); }
+      | infix "<=" infix { $$ = new_node(AST_LTE, 2, (Node[2]){$1, $3}); }
+      | infix "==" infix { $$ = new_node(AST_EQ,  2, (Node[2]){$1, $3}); }
+      | infix "+"  infix { $$ = new_node(AST_ADD, 2, (Node[2]){$1, $3}); }
+      | infix "-"  infix { $$ = new_node(AST_SUB, 2, (Node[2]){$1, $3}); }
+      | infix "*"  infix { $$ = new_node(AST_MUL, 2, (Node[2]){$1, $3}); }
+      | infix "/"  infix { $$ = new_node(AST_DIV, 2, (Node[2]){$1, $3}); }
+      | infix "%"  infix { $$ = new_node(AST_MOD, 2, (Node[2]){$1, $3}); }
+      | NOT infix        { $$ = new_node(AST_NOT, 1, (Node[1]){$2}); }
       ;
 
-term : PAREN_OPEN exp PAREN_CLOSE { $$ = $2; }
-     | NUMBER                     { $$ = new_number_node($1); };
+term : "(" exp ")" { $$ = $2; }
+     | NUMBER      { $$ = new_number_node($1); };
      | var
-     | STRING                     { $$ = new_string_node(AST_STR, syms, $1); }
-     | NIL                        { $$ = new_nil_node(); }
-     | TRUE                       { $$ = new_true_node(); }
+     | STRING      { $$ = new_string_node(AST_STR, syms, $1); }
+     | NIL         { $$ = new_nil_node(); }
+     | TRUE        { $$ = new_true_node(); }
      ;
