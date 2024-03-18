@@ -28,25 +28,21 @@ typedef struct Value {
 	};
 } Value;
 
-typedef struct VarTable {
-	size_t len;
-	size_t cap;
-	size_t* indexes; // symbol table indexes
-	Value* values;
-} VarTable;
+typedef struct Variable {
+	size_t sym;   // symbol table index
+	size_t scope; // declaration scope index
+} Variable;
 
 typedef struct Environment {
-	VarTable vars;
-} Environment;
-
-typedef struct EnvironmentStack {
 	size_t len;
 	size_t cap;
-	Environment* envs;
-} EnvironmentStack;
+	size_t scope_count;
+	Variable* vars;
+	Value* values;
+} Environment;
 
 typedef struct Interpreter {
-	EnvironmentStack envs;
+	Environment env;
 } Interpreter;
 
 Interpreter interpreter_init(SymbolTable* syms);
