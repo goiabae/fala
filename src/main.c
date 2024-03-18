@@ -79,8 +79,8 @@ static int interpret(Options opts) {
 	FILE* fd = opts.from_stdin ? stdin : fopen(opts.argv[0], "r");
 	if (!fd) return 1;
 
-	Interpreter inter = interpreter_init();
 	SymbolTable syms = sym_table_init();
+	Interpreter inter = interpreter_init(&syms);
 	Value val;
 
 	while (!feof(fd)) {
@@ -97,8 +97,8 @@ static int interpret(Options opts) {
 		ast_deinit(ast);
 	}
 
-	sym_table_deinit(&syms);
 	interpreter_deinit(&inter);
+	sym_table_deinit(&syms);
 	fclose(fd);
 
 	return (val.tag == VALUE_NUM) ? val.num : 0;

@@ -6,13 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
+
 void print_value(Value val);
 static void value_deinit(Value val);
 
-static Value* env_stack_find(EnvironmentStack stack, const char* name);
+static Value* env_stack_find(EnvironmentStack stack, size_t sym_idx);
 static void env_stack_push(EnvironmentStack* stack);
 static void env_stack_pop(EnvironmentStack* stack);
-static Value* env_stack_get_new(EnvironmentStack* stack, const char* name);
+static Value* env_stack_get_new(EnvironmentStack* stack, size_t sym_idx);
 
 static Value builtin_read(size_t len, Value* args);
 static Value builtin_write(size_t len, Value args[len]);
@@ -27,27 +29,23 @@ static VarTable var_table_init(void) {
 	VarTable tab;
 	tab.len = 0;
 	tab.cap = 100;
-
-	tab.names = malloc(sizeof(char*) * tab.cap);
-	memset(tab.names, 0, sizeof(char*) * tab.cap);
-
-	tab.values = malloc(sizeof(int) * tab.cap);
+	tab.indexes = malloc(sizeof(size_t) * tab.cap);
+	tab.values = malloc(sizeof(Value) * tab.cap);
 	memset(tab.values, 0, sizeof(int) * tab.cap);
-
 	return tab;
 }
 
 static void var_table_deinit(VarTable tab) {
-	free(tab.names);
+	free(tab.indexes);
 	for (size_t i = 0; i < tab.len; i++) value_deinit(tab.values[i]);
 	free(tab.values);
 }
 
 // retrieve pointer to location of variable. if variable doesn't exists returns
 // a new location
-static Value* var_table_get_where(VarTable* tab, const char* name) {
+static Value* var_table_get_where(VarTable* tab, size_t index) {
 	for (size_t i = 0; i < tab->len; i++)
-		if (strcmp(tab->names[i], name) == 0) return &tab->values[i];
+		if (tab->indexes[i] == index) return &tab->values[i];
 	return NULL;
 }
 
@@ -72,19 +70,19 @@ static void env_stack_deinit(EnvironmentStack stack) {
 
 // search environment stack for a variable cell with name.
 // if doesn't find, return a new one in the inner most environment
-static Value* env_stack_find(EnvironmentStack stack, const char* name) {
+static Value* env_stack_find(EnvironmentStack stack, size_t sym_idx) {
 	for (size_t i = stack.len; i > 0;) {
 		i -= 1;
-		Value* addr = var_table_get_where(&stack.envs[i].vars, name);
+		Value* addr = var_table_get_where(&stack.envs[i].vars, sym_idx);
 		if (addr) return addr;
 	}
 	return NULL;
 }
 
 // returns the address of a new cell in the inner most scope
-static Value* env_stack_get_new(EnvironmentStack* stack, const char* name) {
+static Value* env_stack_get_new(EnvironmentStack* stack, size_t sym_idx) {
 	VarTable* last = &stack->envs[stack->len - 1].vars;
-	last->names[last->len] = name;
+	last->indexes[last->len] = sym_idx;
 	return &last->values[last->len++];
 }
 
@@ -147,8 +145,8 @@ static Value eval_ast_node(
 
 			int inc = (from.num <= to.num) ? 1 : -1;
 
-			Value* addr = env_stack_find(stack, tab->arr[id.index]);
-			if (!addr) addr = env_stack_get_new(&stack, tab->arr[id.index]);
+			Value* addr = env_stack_find(stack, id.index);
+			if (!addr) addr = env_stack_get_new(&stack, id.index);
 
 			for (Number i = from.num; (i - inc) != to.num; i += inc) {
 				*addr = (Value) {VALUE_NUM, .num = i};
@@ -172,7 +170,7 @@ static Value eval_ast_node(
 			assert(var.type == AST_VAR);
 			Node id = var.children[0];
 			Value value = eval_ast_node(node.children[1], stack, tab);
-			Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
+			Value* addr = env_stack_find(stack, id.index);
 			assert(addr && "Variable not found. Address is 0x0");
 
 			if (var.children_count == 2) { // array indexing
@@ -279,7 +277,7 @@ static Value eval_ast_node(
 		case AST_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Value* cell = env_stack_get_new(&stack, sym_table_get(tab, id.index));
+			Value* cell = env_stack_get_new(&stack, id.index);
 
 			// var id = exp
 			if (node.children_count == 2) {
@@ -304,7 +302,7 @@ static Value eval_ast_node(
 		}
 		case AST_VAR: {
 			Node id = node.children[0];
-			Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
+			Value* addr = env_stack_find(stack, id.index);
 			assert(addr && "Variable not previously declared.");
 
 			if (node.children_count == 1) { // id
@@ -371,8 +369,7 @@ static Value apply_function(
 ) {
 	assert(func_node.type == AST_ID && "Unnamed functions are not implemented");
 
-	String func_name = sym_table_get(tab, func_node.index);
-	Value* func_ptr = env_stack_find(*stack, func_name);
+	Value* func_ptr = env_stack_find(*stack, func_node.index);
 	assert(func_ptr && "For now, only read and write builtins are implemented");
 	Funktion func = (Funktion)func_ptr->func;
 
@@ -411,13 +408,13 @@ static Value builtin_write(size_t len, Value args[len]) {
 	return (Value) {VALUE_NIL, .nil = NULL};
 }
 
-Interpreter interpreter_init(void) {
+Interpreter interpreter_init(SymbolTable* syms) {
 	Interpreter inter;
 	inter.envs = env_stack_init();
 	env_stack_push(&inter.envs);
-	*env_stack_get_new(&inter.envs, "read") =
+	*env_stack_get_new(&inter.envs, sym_table_insert(syms, "read")) =
 		(Value) {VALUE_FUN, .func = builtin_read};
-	*env_stack_get_new(&inter.envs, "write") =
+	*env_stack_get_new(&inter.envs, sym_table_insert(syms, "write")) =
 		(Value) {VALUE_FUN, .func = builtin_write};
 	return inter;
 }

@@ -31,7 +31,7 @@ typedef struct Value {
 typedef struct VarTable {
 	size_t len;
 	size_t cap;
-	const char** names;
+	size_t* indexes; // symbol table indexes
 	Value* values;
 } VarTable;
 
@@ -49,7 +49,7 @@ typedef struct Interpreter {
 	EnvironmentStack envs;
 } Interpreter;
 
-Interpreter interpreter_init(void);
+Interpreter interpreter_init(SymbolTable* syms);
 void interpreter_deinit(Interpreter* inter);
 
 Value ast_eval(Interpreter* inter, SymbolTable* syms, AST ast);
