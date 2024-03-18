@@ -1,0 +1,11 @@
+let
+	var max = read nil,
+	var minus2 = do write 0 "\n"; 0; end,
+	var minus1 = do write 1 "\n"; 1; end,
+	var cur
+in for var i from 2 to max-1 then do
+	cur = minus1 + minus2;
+	write cur "\n";
+	minus2 = minus1;
+	minus1 = cur;
+end
