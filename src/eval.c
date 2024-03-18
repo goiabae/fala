@@ -103,22 +103,22 @@ static Value eval_ast_node(
 ) {
 	Value val;
 	switch (node.type) {
-		case FALA_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
-		case FALA_APP: {
+		case AST_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
+		case AST_APP: {
 			assert(node.children_count == 2);
 			Node func = node.children[0];
 			Node args = node.children[1];
 			val = apply_function(tab, &stack, func, args);
 			break;
 		}
-		case FALA_BLOCK: {
+		case AST_BLK: {
 			env_stack_push(&stack);
 			for (size_t i = 0; i < node.children_count; i++)
 				val = eval_ast_node(node.children[i], stack, tab);
 			env_stack_pop(&stack);
 			break;
 		}
-		case FALA_IF: {
+		case AST_IF: {
 			assert(node.children_count == 3);
 			Value cond = eval_ast_node(node.children[0], stack, tab);
 			if (cond.tag != VALUE_NIL)
@@ -127,7 +127,7 @@ static Value eval_ast_node(
 				val = eval_ast_node(node.children[2], stack, tab);
 			break;
 		}
-		case FALA_WHEN: {
+		case AST_WHEN: {
 			assert(node.children_count == 2);
 			Value cond = eval_ast_node(node.children[0], stack, tab);
 			val = (cond.tag != VALUE_NIL)
@@ -135,7 +135,7 @@ static Value eval_ast_node(
 			      : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
-		case FALA_FOR: {
+		case AST_FOR: {
 			env_stack_push(&stack);
 
 			Node var = node.children[0];
@@ -158,7 +158,7 @@ static Value eval_ast_node(
 			env_stack_pop(&stack);
 			break;
 		}
-		case FALA_WHILE: {
+		case AST_WHILE: {
 			assert(node.children_count == 2);
 			Node cond = node.children[0];
 			Node exp = node.children[1];
@@ -166,10 +166,10 @@ static Value eval_ast_node(
 				val = eval_ast_node(exp, stack, tab);
 			break;
 		}
-		case FALA_ASS: {
+		case AST_ASS: {
 			assert(node.children_count == 2);
 			Node var = node.children[0];
-			assert(var.type == FALA_VAR);
+			assert(var.type == AST_VAR);
 			Node id = var.children[0];
 			Value value = eval_ast_node(node.children[1], stack, tab);
 			Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
@@ -184,7 +184,7 @@ static Value eval_ast_node(
 			}
 			break;
 		}
-		case FALA_OR: {
+		case AST_OR: {
 			assert(node.children_count == 2);
 			Value left = eval_ast_node(node.children[0], stack, tab);
 			if (left.tag == VALUE_TRUE) {
@@ -196,7 +196,7 @@ static Value eval_ast_node(
 			                               : (Value) {VALUE_TRUE, .num = 1};
 			break;
 		}
-		case FALA_AND: {
+		case AST_AND: {
 			assert(node.children_count == 2);
 			Value left = eval_ast_node(node.children[0], stack, tab);
 			if (left.tag == VALUE_NIL) {
@@ -217,11 +217,11 @@ static Value eval_ast_node(
 		val = (Value) {VALUE_NUM, .num = left.num OP right.num};   \
 		break;                                                     \
 	}
-		case FALA_ADD: ARITH_OP(+);
-		case FALA_SUB: ARITH_OP(-);
-		case FALA_MUL: ARITH_OP(*);
-		case FALA_DIV: ARITH_OP(/);
-		case FALA_MOD: ARITH_OP(%);
+		case AST_ADD: ARITH_OP(+);
+		case AST_SUB: ARITH_OP(-);
+		case AST_MUL: ARITH_OP(*);
+		case AST_DIV: ARITH_OP(/);
+		case AST_MOD: ARITH_OP(%);
 #undef ARITH_OP
 #define CMP_OP(OP)                                                    \
 	{                                                                   \
@@ -236,12 +236,12 @@ static Value eval_ast_node(
 		                              : (Value) {VALUE_NIL, .nil = NULL}; \
 		break;                                                            \
 	}
-		case FALA_GREATER: CMP_OP(>);
-		case FALA_LESSER: CMP_OP(<);
-		case FALA_GREATER_EQ: CMP_OP(>=);
-		case FALA_LESSER_EQ: CMP_OP(<=);
+		case AST_GTN: CMP_OP(>);
+		case AST_LTN: CMP_OP(<);
+		case AST_GTE: CMP_OP(>=);
+		case AST_LTE: CMP_OP(<=);
 #undef CMP_OP
-		case FALA_EQ: {
+		case AST_EQ: {
 			assert(node.children_count == 2);
 			Value left = eval_ast_node(node.children[0], stack, tab);
 			Value right = eval_ast_node(node.children[1], stack, tab);
@@ -263,7 +263,7 @@ static Value eval_ast_node(
 			                              : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
-		case FALA_NOT: {
+		case AST_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
 			Value v = eval_ast_node(op, stack, tab);
@@ -271,12 +271,12 @@ static Value eval_ast_node(
 			                           : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
-		case FALA_ID: assert(false);
-		case FALA_STRING: {
+		case AST_ID: assert(false);
+		case AST_STR: {
 			val = (Value) {VALUE_STR, .str = sym_table_get(tab, node.index)};
 			break;
 		}
-		case FALA_DECL: {
+		case AST_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
 			Value* cell = env_stack_get_new(&stack, sym_table_get(tab, id.index));
@@ -302,7 +302,7 @@ static Value eval_ast_node(
 			val = (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
-		case FALA_VAR: {
+		case AST_VAR: {
 			Node id = node.children[0];
 			Value* addr = env_stack_find(stack, sym_table_get(tab, id.index));
 			assert(addr && "Variable not previously declared.");
@@ -320,15 +320,15 @@ static Value eval_ast_node(
 			}
 			break;
 		}
-		case FALA_NIL: {
+		case AST_NIL: {
 			val = (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
-		case FALA_TRUE: {
+		case AST_TRUE: {
 			val = (Value) {VALUE_TRUE, .num = 1};
 			break;
 		}
-		case FALA_LET: {
+		case AST_LET: {
 			Node decls = node.children[0];
 			Node exp = node.children[1];
 			env_stack_push(&stack);
@@ -369,7 +369,7 @@ static void value_deinit(Value val) {
 static Value apply_function(
 	SymbolTable* tab, EnvironmentStack* stack, Node func_node, Node args_node
 ) {
-	assert(func_node.type == FALA_ID && "Unnamed functions are not implemented");
+	assert(func_node.type == AST_ID && "Unnamed functions are not implemented");
 
 	String func_name = sym_table_get(tab, func_node.index);
 	Value* func_ptr = env_stack_find(*stack, func_name);

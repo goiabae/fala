@@ -30,25 +30,25 @@ typedef struct Options {
 } Options;
 
 static const char* node_repr[] = {
-	[FALA_APP] = "app",       [FALA_NUM] = NULL,       [FALA_BLOCK] = "block",
-	[FALA_IF] = "if",         [FALA_WHEN] = "when",    [FALA_FOR] = "for",
-	[FALA_WHILE] = "while",   [FALA_ASS] = "=",        [FALA_OR] = "or",
-	[FALA_AND] = "and",       [FALA_GREATER] = ">",    [FALA_LESSER] = "<",
-	[FALA_GREATER_EQ] = ">=", [FALA_LESSER_EQ] = "<=", [FALA_EQ] = "==",
-	[FALA_ADD] = "+",         [FALA_SUB] = "-",        [FALA_MUL] = "*",
-	[FALA_DIV] = "/",         [FALA_MOD] = "%",        [FALA_NOT] = "not",
-	[FALA_ID] = NULL,         [FALA_STRING] = NULL,    [FALA_DECL] = "decl",
-	[FALA_VAR] = "var",       [FALA_LET] = "let",
+	[AST_APP] = "app",     [AST_NUM] = NULL,    [AST_BLK] = "block",
+	[AST_IF] = "if",       [AST_WHEN] = "when", [AST_FOR] = "for",
+	[AST_WHILE] = "while", [AST_ASS] = "=",     [AST_OR] = "or",
+	[AST_AND] = "and",     [AST_GTN] = ">",     [AST_LTN] = "<",
+	[AST_GTE] = ">=",      [AST_LTE] = "<=",    [AST_EQ] = "==",
+	[AST_ADD] = "+",       [AST_SUB] = "-",     [AST_MUL] = "*",
+	[AST_DIV] = "/",       [AST_MOD] = "%",     [AST_NOT] = "not",
+	[AST_ID] = NULL,       [AST_STR] = NULL,    [AST_DECL] = "decl",
+	[AST_VAR] = "var",     [AST_LET] = "let",
 };
 
 static void print_node(SymbolTable* tab, Node node, unsigned int space) {
-	if (node.type == FALA_NUM) {
+	if (node.type == AST_NUM) {
 		printf("%d", node.num);
 		return;
-	} else if (node.type == FALA_ID) {
+	} else if (node.type == AST_ID) {
 		printf("%s", sym_table_get(tab, node.index));
 		return;
-	} else if (node.type == FALA_STRING) {
+	} else if (node.type == AST_STR) {
 		printf("\"");
 		for (char* it = sym_table_get(tab, node.index); *it != '\0'; it++) {
 			if (*it == '\n')
@@ -58,10 +58,10 @@ static void print_node(SymbolTable* tab, Node node, unsigned int space) {
 		}
 		printf("\"");
 		return;
-	} else if (node.type == FALA_NIL) {
+	} else if (node.type == AST_NIL) {
 		printf("nil");
 		return;
-	} else if (node.type == FALA_TRUE) {
+	} else if (node.type == AST_TRUE) {
 		printf("true");
 		return;
 	}

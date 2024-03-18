@@ -31,7 +31,7 @@ Node new_node(Type type, size_t len, Node children[len]) {
 
 Node new_list_node() {
 	Node node;
-	node.type = FALA_BLOCK;
+	node.type = AST_BLK;
 	node.children_count = 0;
 	node.children = malloc(sizeof(Node) * 100);
 	return node;
@@ -46,13 +46,13 @@ Node new_string_node(Type type, SymbolTable* tab, String str) {
 
 Node new_number_node(Number num) {
 	Node node;
-	node.type = FALA_NUM;
+	node.type = AST_NUM;
 	node.num = num;
 	return node;
 }
 
-Node new_nil_node() { return (Node) {.type = FALA_NIL}; }
-Node new_true_node() { return (Node) {.type = FALA_TRUE}; }
+Node new_nil_node() { return (Node) {.type = AST_NIL}; }
+Node new_true_node() { return (Node) {.type = AST_TRUE}; }
 
 Node list_append_node(Node list, Node next) {
 	list.children[list.children_count++] = next;
@@ -60,7 +60,7 @@ Node list_append_node(Node list, Node next) {
 }
 
 static void node_deinit(Node node) {
-	if (node.type == FALA_ID || node.type == FALA_NUM || node.type == FALA_STRING)
+	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR)
 		return;
 	for (size_t i = 0; i < node.children_count; i++)
 		node_deinit(node.children[i]);
