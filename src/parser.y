@@ -2,12 +2,22 @@
 %define parse.trace
 %define parse.error verbose
 
+%locations
+%define api.location.type {Location}
+
 %lex-param {void *scanner}
 %parse-param {void *scanner}{AST* ast}{SymbolTable* syms}
 
 /* necessary for node functions */
 %code requires {
   #include "ast.h"
+
+typedef struct Location {
+  int first_line;
+  int first_column;
+  int last_line;
+  int last_column;
+} Location;
 }
 
 %{
@@ -18,7 +28,8 @@
 #include "lexer.h"
 
 bool is_interactive(void* scanner);
-#define yyerror(SCAN, AST, SYMS, ...) fprintf(stderr, __VA_ARGS__)
+void error_report(FILE* fd, Location* yyloc, const char* msg);
+#define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
 %}
 
 /* type of terminal values */
@@ -127,3 +138,17 @@ term : "(" exp ")" { $$ = $2; }
      | NIL         { $$ = new_nil_node(); }
      | TRUE        { $$ = new_true_node(); }
      ;
+
+%%
+
+void error_report(FILE* fd, Location* yyloc, const char* msg) {
+		fprintf(
+			fd,
+			"ERROR from (%d, %d) to (%d, %d): %s",
+			yyloc->first_line+1,
+			yyloc->first_column+1,
+			yyloc->last_line+1,
+			yyloc->last_column+1,
+			msg
+		);
+}

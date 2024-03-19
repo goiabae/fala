@@ -21,13 +21,26 @@
   #define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
 #endif
 
-  #define yyerror(SCAN, AST, SYMS, ...) fprintf (stderr, __VA_ARGS__)
+#define YY_USER_ACTION                             \
+     yylloc->first_line = yylloc->last_line;       \
+     yylloc->first_column = yylloc->last_column;   \
+     for (int i = 0; yytext[i] != '\0'; i++) {     \
+       if(yytext[i] == '\n') {                     \
+         yylloc->last_line++;                      \
+         yylloc->last_column = 0;                  \
+         continue;                                 \
+       }                                           \
+       yylloc->last_column++;                      \
+     }
+
+extern void error_report(FILE* fd, Location* yyloc, const char* msg);
+#define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
 %}
 
 /* don't generate yyunput and input functions */
 %option nounput noinput
 %option noyywrap
-%option reentrant bison-bridge
+%option reentrant bison-bridge bison-locations
 
 %%
 
@@ -86,7 +99,10 @@
   #endif
 }
 
-. { yyerror(NULL, NULL, NULL, "LEXICAL_ERR: Unrecognized token \"%s\"\n", yytext); }
+. {
+  yyerror(yylloc, NULL, NULL, NULL, "LEX_ERR: Unknown symbol");
+  return YYerror;
+}
 
 %%
 
