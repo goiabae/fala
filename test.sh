@@ -9,10 +9,13 @@ for f in ./examples/*.fala; do
 	f="${f##*/}"
 	f="${f%.*}"
 
-	echo -e "\n${purple}TESTING ${f}${reset}"
+	echo -e "\n${purple}TESTING INTEPRETED ${f}${reset}"
 	if [ -f ./examples/$f.input ]; then
-		./build/fala ./examples/$f.fala < ./examples/$f.input
+		./build/fala -i ./examples/$f.fala < ./examples/$f.input
 	else
-		./build/fala ./examples/$f.fala
+		./build/fala -i ./examples/$f.fala
 	fi
+
+	echo -e "\n${purple}TESTING COMPILED ${f}${reset}"
+	./build/fala -c -o ./examples/$f.rap ./examples/$f.fala
 done
