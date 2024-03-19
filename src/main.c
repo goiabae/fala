@@ -59,6 +59,8 @@ static Options parse_args(int argc, char* argv[]) {
 	opts.is_invalid = false;
 	opts.output_path = NULL;
 	opts.from_stdin = false;
+	opts.compile = false;
+	opts.interpret = false;
 
 	// getopt comes from POSIX which is not available on Windows
 #ifndef _WIN32
@@ -127,13 +129,14 @@ static int compile(Options opts) {
 		printf("\n");
 	}
 	Chunk chunk = compile_ast(ast, &syms);
-	if (opts.verbose) {
+
+	if (opts.output_path) {
+		FILE* out = fopen(opts.output_path, "w");
+		print_chunk(out, chunk);
+		fclose(out);
+	} else if (opts.verbose) {
 		print_chunk(stdout, chunk);
 	}
-
-	FILE* out = !opts.output_path ? stdout : fopen(opts.output_path, "w");
-	print_chunk(out, chunk);
-	fclose(out);
 
 	chunk_deinit(&chunk);
 	sym_table_deinit(&syms);

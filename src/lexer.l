@@ -108,16 +108,13 @@ static char* parse_string(char* str) {
 #ifdef FALA_WITH_REPL
 static int get_input(FILE* fd, char *buf, int size) {
   if (feof(fd)) return YY_NULL;
-
-  char* line = NULL;
-
-  if (fd == stdin) {
-    line = readline("fala> ");
-    add_history(line);
-  } else {
-    line = malloc(sizeof(char) * size);
-    fgets(line, size, fd);
+  if (fd != stdin) {
+    if (!fgets(buf, size, fd)) return YY_NULL;
+    return strlen(buf);
   }
+
+  char* line = readline("fala> ");
+  add_history(line);
 
   if(!line) return YY_NULL;
   const size_t len = strlen(line);
