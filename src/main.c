@@ -1,6 +1,5 @@
 #include "main.h"
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,12 +16,16 @@
 // clang-format on
 
 #include "ast.h"
+#include "compiler.h"
 #include "eval.h"
 
 typedef struct Options {
 	bool is_invalid;
 	bool verbose;
 	bool from_stdin;
+	char* output_path;
+	bool compile;
+	bool interpret;
 	char** argv;
 	int argc;
 } Options;
@@ -54,11 +57,16 @@ static Options parse_args(int argc, char* argv[]) {
 	Options opts;
 	opts.verbose = false;
 	opts.is_invalid = false;
+	opts.output_path = NULL;
+	opts.from_stdin = false;
 
 	// getopt comes from POSIX which is not available on Windows
 #ifndef _WIN32
-	for (char c = 0; (c = getopt(argc, argv, "V")) != -1;) switch (c) {
+	for (char c = 0; (c = getopt(argc, argv, "Vo:ci")) != -1;) switch (c) {
 			case 'V': opts.verbose = true; break;
+			case 'o': opts.output_path = optarg; break;
+			case 'c': opts.compile = true; break;
+			case 'i': opts.interpret = true; break;
 			default: break;
 		}
 
@@ -69,8 +77,12 @@ static Options parse_args(int argc, char* argv[]) {
 	opts.argc = argc - 1;
 #endif
 
-	if (opts.argc < 1) opts.is_invalid = true;
-	if (strcmp(opts.argv[0], "-") == 0) opts.from_stdin = true;
+	if (opts.argc < 1) {
+		opts.is_invalid = true;
+		return opts;
+	}
+
+	if (opts.argc > 0 && strcmp(opts.argv[0], "-") == 0) opts.from_stdin = true;
 
 	return opts;
 }
@@ -104,6 +116,31 @@ static int interpret(Options opts) {
 	return (val.tag == VALUE_NUM) ? val.num : 0;
 }
 
+static int compile(Options opts) {
+	FILE* fd = opts.from_stdin ? stdin : fopen(opts.argv[0], "r");
+	if (!fd) return 1;
+
+	SymbolTable syms = sym_table_init();
+	AST ast = parse(fd, &syms);
+	if (opts.verbose) {
+		ast_print(ast, &syms);
+		printf("\n");
+	}
+	Chunk chunk = compile_ast(ast, &syms);
+	if (opts.verbose) {
+		print_chunk(stdout, chunk);
+	}
+
+	FILE* out = !opts.output_path ? stdout : fopen(opts.output_path, "w");
+	print_chunk(out, chunk);
+	fclose(out);
+
+	chunk_deinit(&chunk);
+	sym_table_deinit(&syms);
+	fclose(fd);
+	return 0;
+}
+
 int main(int argc, char* argv[]) {
 	Options opts = parse_args(argc, argv);
 	if (opts.is_invalid) {
@@ -111,5 +148,8 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	return interpret(opts);
+	if (opts.compile)
+		return compile(opts);
+	else if (opts.interpret)
+		return interpret(opts);
 }
