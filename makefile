@@ -8,7 +8,7 @@ LIBS =
 
 all: prepare fala
 
-fala: build/parser.o build/main.o build/lexer.o build/ast.o build/eval.o build/compiler.o
+fala: build/parser.o build/main.o build/lexer.o build/ast.o build/eval.o build/compiler.o build/env.o
 	$(CC) $(CFLAGS) $(LIBS) -o build/$@ $^
 
 build/main.o: src/main.c src/lexer.h

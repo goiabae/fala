@@ -93,17 +93,16 @@ static int interpret(Options opts) {
 	FILE* fd = opts.from_stdin ? stdin : fopen(opts.argv[0], "r");
 	if (!fd) return 1;
 
-	SymbolTable syms = sym_table_init();
-	Interpreter inter = interpreter_init(&syms);
+	Interpreter inter = interpreter_init();
 	Value val;
 
 	while (!feof(fd)) {
-		AST ast = parse(fd, &syms);
+		AST ast = parse(fd, &inter.syms);
 		if (opts.verbose) {
-			ast_print(ast, &syms);
+			ast_print(ast, &inter.syms);
 			printf("\n");
 		}
-		val = ast_eval(&inter, &syms, ast);
+		val = ast_eval(&inter, ast);
 		if (opts.from_stdin) {
 			print_value(val);
 			printf("\n");
@@ -112,7 +111,6 @@ static int interpret(Options opts) {
 	}
 
 	interpreter_deinit(&inter);
-	sym_table_deinit(&syms);
 	fclose(fd);
 
 	return (val.tag == VALUE_NUM) ? val.num : 0;

@@ -7,74 +7,48 @@
 #include <string.h>
 
 #include "ast.h"
+#include "env.h"
 
-void print_value(Value val);
 static void value_deinit(Value val);
+static void value_stack_pop(ValueStack* stack, size_t index);
 
-static void env_push(Environment* env);
-static void env_pop(Environment* env);
-static Value* env_find(Environment* env, size_t sym_idx);
-static Value* env_get_new(Environment* env, size_t sym_idx);
+static void inter_env_push(Interpreter* inter);
+static void inter_env_pop(Interpreter* inter);
+static Value* inter_env_get_new(Interpreter* inter, size_t sym_index);
+static Value* inter_env_find(Interpreter* inter, size_t sym_index);
 
 static Value builtin_read(size_t len, Value* args);
 static Value builtin_write(size_t len, Value args[len]);
 
-static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab);
+static Value ast_node_eval(Interpreter* inter, Node node);
+static Value apply_function(Interpreter* inter, Node func_node, Node args_node);
 
-static Value apply_function(
-	SymbolTable* tab, Environment* env, Node func_node, Node args_node
-);
+static void inter_env_push(Interpreter* inter) { env_push(&inter->env); }
 
-Value ast_eval(Interpreter* inter, SymbolTable* syms, AST ast) {
-	return eval_ast_node(ast.root, &inter->env, syms);
+static void inter_env_pop(Interpreter* inter) {
+	env_pop(
+		&inter->env, (void (*)(void*, size_t))value_stack_pop, &inter->values
+	);
 }
 
-static Environment env_init() {
-	Environment env;
-	env.len = 0;
-	env.cap = 32;
-	env.scope_count = 0;
-	env.vars = malloc(sizeof(Variable) * env.cap);
-	env.values = malloc(sizeof(Value) * env.cap);
-	return env;
+static Value* inter_env_get_new(Interpreter* inter, size_t sym_index) {
+	size_t idx = env_get_new(&inter->env, sym_index);
+	inter->values.len++;
+	return &inter->values.values[idx];
 }
 
-static void env_deinit(Environment* env) {
-	for (size_t i = 0; i < env->len; i++) value_deinit(env->values[i]);
-	free(env->vars);
-	free(env->values);
+static Value* inter_env_find(Interpreter* inter, size_t sym_index) {
+	bool found = true;
+	size_t idx = env_find(&inter->env, sym_index, &found);
+	if (!found) return NULL;
+	return &inter->values.values[idx];
 }
 
-static void env_push(Environment* env) { env->scope_count++; }
-
-// go from top to bottom of the stack and remove vars belonging to the current
-// scope
-static void env_pop(Environment* env) {
-	assert(env->scope_count > 0 && "Environment was empty");
-	for (size_t i = env->len; i-- > 0; env->len--) {
-		if (env->vars[i].scope != (env->scope_count - 1)) break;
-		value_deinit(env->values[i]);
-	}
-	env->scope_count--;
+Value ast_eval(Interpreter* inter, AST ast) {
+	return ast_node_eval(inter, ast.root);
 }
 
-// search for sym in env. if not found return NULL
-static Value* env_find(Environment* env, size_t sym_idx) {
-	for (size_t i = env->len; i > 0;) {
-		--i;
-		if (env->vars[i].sym == sym_idx) return &env->values[i];
-	}
-	return NULL;
-}
-
-// add sym to environment and return a new value cell
-static Value* env_get_new(Environment* env, size_t sym_idx) {
-	env->vars[env->len] =
-		(Variable) {.sym = sym_idx, .scope = env->scope_count - 1};
-	return &env->values[env->len++];
-}
-
-static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
+static Value ast_node_eval(Interpreter* inter, Node node) {
 	Value val;
 	switch (node.type) {
 		case AST_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
@@ -82,59 +56,59 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 			assert(node.children_count == 2);
 			Node func = node.children[0];
 			Node args = node.children[1];
-			val = apply_function(tab, env, func, args);
+			val = apply_function(inter, func, args);
 			break;
 		}
 		case AST_BLK: {
-			env_push(env);
+			inter_env_push(inter);
 			for (size_t i = 0; i < node.children_count; i++)
-				val = eval_ast_node(node.children[i], env, tab);
-			env_pop(env);
+				val = ast_node_eval(inter, node.children[i]);
+			inter_env_pop(inter);
 			break;
 		}
 		case AST_IF: {
 			assert(node.children_count == 3);
-			Value cond = eval_ast_node(node.children[0], env, tab);
+			Value cond = ast_node_eval(inter, node.children[0]);
 			if (cond.tag != VALUE_NIL)
-				val = eval_ast_node(node.children[1], env, tab);
+				val = ast_node_eval(inter, node.children[1]);
 			else
-				val = eval_ast_node(node.children[2], env, tab);
+				val = ast_node_eval(inter, node.children[2]);
 			break;
 		}
 		case AST_WHEN: {
 			assert(node.children_count == 2);
-			Value cond = eval_ast_node(node.children[0], env, tab);
-			val = (cond.tag != VALUE_NIL) ? eval_ast_node(node.children[1], env, tab)
+			Value cond = ast_node_eval(inter, node.children[0]);
+			val = (cond.tag != VALUE_NIL) ? ast_node_eval(inter, node.children[1])
 			                              : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
 		case AST_FOR: {
-			env_push(env);
+			inter_env_push(inter);
 
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Value from = eval_ast_node(node.children[1], env, tab);
-			Value to = eval_ast_node(node.children[2], env, tab);
+			Value from = ast_node_eval(inter, node.children[1]);
+			Value to = ast_node_eval(inter, node.children[2]);
 			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
 			Node exp = node.children[3];
 
 			int inc = (from.num <= to.num) ? 1 : -1;
 
-			Value* addr = env_get_new(env, id.index);
+			Value* addr = inter_env_get_new(inter, id.index);
 			for (Number i = from.num; (i - inc) != to.num; i += inc) {
 				*addr = (Value) {VALUE_NUM, .num = i};
-				val = eval_ast_node(exp, env, tab);
+				val = ast_node_eval(inter, exp);
 			}
 
-			env_pop(env);
+			inter_env_pop(inter);
 			break;
 		}
 		case AST_WHILE: {
 			assert(node.children_count == 2);
 			Node cond = node.children[0];
 			Node exp = node.children[1];
-			while (eval_ast_node(cond, env, tab).tag != VALUE_NIL)
-				val = eval_ast_node(exp, env, tab);
+			while (ast_node_eval(inter, cond).tag != VALUE_NIL)
+				val = ast_node_eval(inter, exp);
 			break;
 		}
 		case AST_ASS: {
@@ -142,12 +116,12 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 			Node var = node.children[0];
 			assert(var.type == AST_VAR);
 			Node id = var.children[0];
-			Value value = eval_ast_node(node.children[1], env, tab);
-			Value* addr = env_find(env, id.index);
+			Value value = ast_node_eval(inter, node.children[1]);
+			Value* addr = inter_env_find(inter, id.index);
 			assert(addr && "Variable not found. Address is 0x0");
 
 			if (var.children_count == 2) { // array indexing
-				Value idx = eval_ast_node(var.children[1], env, tab);
+				Value idx = ast_node_eval(inter, var.children[1]);
 				assert(idx.tag == VALUE_NUM);
 				val = (addr->arr.data[idx.num] = value);
 			} else { // plain
@@ -157,24 +131,24 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 		}
 		case AST_OR: {
 			assert(node.children_count == 2);
-			Value left = eval_ast_node(node.children[0], env, tab);
+			Value left = ast_node_eval(inter, node.children[0]);
 			if (left.tag == VALUE_TRUE) {
 				val = (Value) {VALUE_TRUE, .num = 1};
 				break;
 			}
-			Value right = eval_ast_node(node.children[1], env, tab);
+			Value right = ast_node_eval(inter, node.children[1]);
 			val = (right.tag == VALUE_NIL) ? (Value) {VALUE_NIL, .nil = NULL}
 			                               : (Value) {VALUE_TRUE, .num = 1};
 			break;
 		}
 		case AST_AND: {
 			assert(node.children_count == 2);
-			Value left = eval_ast_node(node.children[0], env, tab);
+			Value left = ast_node_eval(inter, node.children[0]);
 			if (left.tag == VALUE_NIL) {
 				val = (Value) {VALUE_NIL, .nil = NULL};
 				break;
 			}
-			Value right = eval_ast_node(node.children[1], env, tab);
+			Value right = ast_node_eval(inter, node.children[1]);
 			val = (right.tag == VALUE_NIL) ? (Value) {VALUE_NIL, .nil = NULL}
 			                               : (Value) {VALUE_TRUE, .num = 1};
 			break;
@@ -182,8 +156,8 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 #define ARITH_OP(OP)                                         \
 	{                                                          \
 		assert(node.children_count == 2);                        \
-		Value left = eval_ast_node(node.children[0], env, tab);  \
-		Value right = eval_ast_node(node.children[1], env, tab); \
+		Value left = ast_node_eval(inter, node.children[0]);     \
+		Value right = ast_node_eval(inter, node.children[1]);    \
 		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM); \
 		val = (Value) {VALUE_NUM, .num = left.num OP right.num}; \
 		break;                                                   \
@@ -197,8 +171,8 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 #define CMP_OP(OP)                                                    \
 	{                                                                   \
 		assert(node.children_count == 2);                                 \
-		Value left = eval_ast_node(node.children[0], env, tab);           \
-		Value right = eval_ast_node(node.children[1], env, tab);          \
+		Value left = ast_node_eval(inter, node.children[0]);              \
+		Value right = ast_node_eval(inter, node.children[1]);             \
 		assert(                                                           \
 			left.tag == VALUE_NUM && right.tag == VALUE_NUM                 \
 			&& "Arithmetic comparison is allowed only between numbers"      \
@@ -214,8 +188,8 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 #undef CMP_OP
 		case AST_EQ: {
 			assert(node.children_count == 2);
-			Value left = eval_ast_node(node.children[0], env, tab);
-			Value right = eval_ast_node(node.children[1], env, tab);
+			Value left = ast_node_eval(inter, node.children[0]);
+			Value right = ast_node_eval(inter, node.children[1]);
 			if (left.tag == VALUE_NIL && right.tag == VALUE_NIL) {
 				val = (Value) {VALUE_TRUE, .num = 1};
 				break;
@@ -237,30 +211,30 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 		case AST_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
-			Value v = eval_ast_node(op, env, tab);
+			Value v = ast_node_eval(inter, op);
 			val = (v.tag == VALUE_NIL) ? (Value) {VALUE_TRUE, .num = 1}
 			                           : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
 		case AST_ID: assert(false);
 		case AST_STR: {
-			val = (Value) {VALUE_STR, .str = sym_table_get(tab, node.index)};
+			val = (Value) {VALUE_STR, .str = sym_table_get(&inter->syms, node.index)};
 			break;
 		}
 		case AST_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Value* cell = env_get_new(env, id.index);
+			Value* cell = inter_env_get_new(inter, id.index);
 
 			// var id = exp
 			if (node.children_count == 2) {
-				val = *cell = eval_ast_node(node.children[1], env, tab);
+				val = *cell = ast_node_eval(inter, node.children[1]);
 				break;
 			}
 
 			// var arr [size]
 			if (var.children_count == 2) {
-				Value size = eval_ast_node(var.children[1], env, tab);
+				Value size = ast_node_eval(inter, var.children[1]);
 				*cell = (Value) {
 					VALUE_ARR,
 					.arr.data = malloc(sizeof(Value) * size.num),
@@ -275,13 +249,13 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 		}
 		case AST_VAR: {
 			Node id = node.children[0];
-			Value* addr = env_find(env, id.index);
+			Value* addr = inter_env_find(inter, id.index);
 			assert(addr && "Variable not previously declared.");
 
 			if (node.children_count == 1) { // id
 				val = *addr;
 			} else { // id[idx]
-				Value idx = eval_ast_node(node.children[1], env, tab);
+				Value idx = ast_node_eval(inter, node.children[1]);
 				assert(
 					addr->tag == VALUE_ARR
 					&& "Variable does not correspond to a previously declared array"
@@ -302,15 +276,15 @@ static Value eval_ast_node(Node node, Environment* env, SymbolTable* tab) {
 		case AST_LET: {
 			Node decls = node.children[0];
 			Node exp = node.children[1];
-			env_push(env);
+			inter_env_push(inter);
 
 			for (size_t i = 0; i < decls.children_count; i++) {
 				Node decl = decls.children[i];
-				eval_ast_node(decl, env, tab);
+				ast_node_eval(inter, decl);
 			}
 
-			val = eval_ast_node(exp, env, tab);
-			env_pop(env);
+			val = ast_node_eval(inter, exp);
+			inter_env_pop(inter);
 			break;
 		}
 	}
@@ -338,17 +312,17 @@ static void value_deinit(Value val) {
 }
 
 static Value apply_function(
-	SymbolTable* tab, Environment* env, Node func_node, Node args_node
+	Interpreter* inter, Node func_node, Node args_node
 ) {
 	assert(func_node.type == AST_ID && "Unnamed functions are not implemented");
 
-	Value* func_ptr = env_find(env, func_node.index);
+	Value* func_ptr = inter_env_find(inter, func_node.index);
 	assert(func_ptr && "For now, only read and write builtins are implemented");
 	Funktion func = (Funktion)func_ptr->func;
 
 	Value* args = malloc(sizeof(Value) * args_node.children_count);
 	for (size_t i = 0; i < args_node.children_count; i++)
-		args[i] = eval_ast_node(args_node.children[i], env, tab);
+		args[i] = ast_node_eval(inter, args_node.children[i]);
 
 	Value val = func(args_node.children_count, args);
 	free(args);
@@ -381,18 +355,30 @@ static Value builtin_write(size_t len, Value args[len]) {
 	return (Value) {VALUE_NIL, .nil = NULL};
 }
 
-Interpreter interpreter_init(SymbolTable* syms) {
+static void value_stack_pop(ValueStack* stack, size_t index) {
+	value_deinit(stack->values[index]);
+	stack->len--;
+}
+
+Interpreter interpreter_init() {
 	Interpreter inter;
+	inter.values.values = malloc(sizeof(Value) * 32);
+	inter.values.cap = 32;
+	inter.values.len = 0;
+	inter.syms = sym_table_init();
 	inter.env = env_init();
-	env_push(&inter.env);
-	*env_get_new(&inter.env, sym_table_insert(syms, "read")) =
+	inter_env_push(&inter);
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "read")) =
 		(Value) {VALUE_FUN, .func = builtin_read};
-	*env_get_new(&inter.env, sym_table_insert(syms, "write")) =
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "write")) =
 		(Value) {VALUE_FUN, .func = builtin_write};
 	return inter;
 }
 
 void interpreter_deinit(Interpreter* inter) {
-	env_pop(&inter->env);
-	env_deinit(&inter->env);
+	free(inter->values.values);
+	sym_table_deinit(&inter->syms);
+	env_deinit(
+		&inter->env, (void (*)(void*, size_t))value_stack_pop, &inter->values
+	);
 }

@@ -2,6 +2,7 @@
 #define FALA_EVAL_H
 
 #include "ast.h"
+#include "env.h"
 
 struct Value;
 
@@ -28,27 +29,22 @@ typedef struct Value {
 	};
 } Value;
 
-typedef struct Variable {
-	size_t sym;   // symbol table index
-	size_t scope; // declaration scope index
-} Variable;
-
-typedef struct Environment {
+typedef struct ValueStack {
 	size_t len;
 	size_t cap;
-	size_t scope_count;
-	Variable* vars;
 	Value* values;
-} Environment;
+} ValueStack;
 
 typedef struct Interpreter {
+	SymbolTable syms;
+	ValueStack values;
 	Environment env;
 } Interpreter;
 
-Interpreter interpreter_init(SymbolTable* syms);
+Interpreter interpreter_init();
 void interpreter_deinit(Interpreter* inter);
 
-Value ast_eval(Interpreter* inter, SymbolTable* syms, AST ast);
+Value ast_eval(Interpreter* inter, AST ast);
 
 void print_value(Value val);
 
