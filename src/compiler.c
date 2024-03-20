@@ -210,10 +210,11 @@ static Operand compile_node(
 		case AST_NUM: return (Operand) {.type = OPND_NUM, .num = node.num};
 		case AST_BLK: {
 			comp_env_push(comp);
+			Operand opnd;
 			for (size_t i = 0; i < node.children_count; i++)
-				compile_node(comp, node.children[i], syms, chunk);
+				opnd = compile_node(comp, node.children[i], syms, chunk);
 			comp_env_pop(comp);
-			return OPERAND_NIL();
+			return opnd;
 		}
 		case AST_IF: {
 			// code for condition
