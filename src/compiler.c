@@ -182,23 +182,122 @@ static Operand compile_node(
 			return OPERAND_NIL();
 		}
 		case AST_IF: {
+			// code for condition
+			// if condition false jump to label 1
+			// code for true branch
+			// move result value to tmp
+			// jump to label 2
+			// label 1
+			// code for false branch
+			// move result value to tmp
+			// label 2
+
 			Node cond = node.children[0];
 			Node yes = node.children[1];
 			Node no = node.children[2];
 
-			Operand cond_opnd = compile_node(cond, syms, chunk, vars, temps);
-			Operand yes_opnd = compile_node(yes, syms, chunk, vars, temps);
-			Operand no_opnd = compile_node(no, syms, chunk, vars, temps);
-			(void)cond_opnd;
-			(void)yes_opnd;
-			(void)no_opnd;
-			// TODO
-			assert(false && "COMPILER_ERR: if expressions not implemented");
-			return OPERAND_NIL();
+			size_t l1 = comp->label_count++;
+			size_t l2 = comp->label_count++;
+			Operand tmp = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+
+			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
+
+			Instruction jfalse;
+			jfalse.opcode = OP_JMP_FALSE;
+			jfalse.operands[0] = cond_opnd;
+			jfalse.operands[1] = (Operand) {OPND_LAB, .index = l1};
+			chunk_append(chunk, jfalse);
+
+			Operand yes_opnd = compile_node(comp, yes, syms, chunk);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = tmp,
+					.operands[1] = yes_opnd,
+				}
+			);
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_JMP, .operands[0] = (Operand) {OPND_LAB, .index = l2}}
+			);
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l1}}
+			);
+
+			Operand no_opnd = compile_node(comp, no, syms, chunk);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = tmp,
+					.operands[1] = no_opnd,
+				}
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l2}}
+			);
+
+			return tmp;
 		}
-		case AST_WHEN:
-			assert(false && "COMPILER_ERR: when expressions not implemented");
-			return OPERAND_NIL();
+		case AST_WHEN: {
+			// cond code
+			// mov nil to result reg
+			// if cond is false jmp to label l1
+			// yes code
+			// mov yes result to result reg
+			// label l1
+
+			Node cond = node.children[0];
+			Node yes = node.children[1];
+
+			size_t l1 = comp->label_count++;
+			Operand res = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+
+			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = res,
+					.operands[1] = (Operand) {OPND_NIL, .nil = NULL}}
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_JMP_FALSE,
+					.operands[0] = cond_opnd,
+					.operands[1] = (Operand) {OPND_LAB, .index = l1}}
+			);
+
+			Operand yes_opnd = compile_node(comp, yes, syms, chunk);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = res,
+					.operands[1] = yes_opnd,
+				}
+			);
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l1}}
+			);
+
+			return res;
+		}
 		case AST_FOR:
 			assert(false && "COMPILER_ERR: for loops not implemented");
 			return OPERAND_NIL();
