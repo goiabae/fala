@@ -47,10 +47,17 @@ static AST parse(FILE* fd, SymbolTable* syms) {
 static void usage() {
 	printf(
 		"Usage:\n"
-		"\tfala [<options> ...] <filepath>\n"
+		"\tfala <mode> [<options> ...] <filepath>\n"
+		"\n"
+		"Filepath:\n"
+		"\tif <filepath> is \"-\", then stdin is used and a REPL session is "
+	  "started\n"
+		"\n"
 		"Options:\n"
 		"\t-V          verbose output\n"
-		"\t-o <path>   output file path\n"
+		"\t-o <path>   output file path. if no path is provided, stdout is used\n"
+		"\n"
+		"Modes:\n"
 		"\t-c          compile\n"
 		"\t-i          intepret\n"
 	);
