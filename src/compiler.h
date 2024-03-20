@@ -76,7 +76,6 @@ typedef struct VariableStack {
 
 typedef struct Compiler {
 	size_t label_count;
-	size_t var_count;
 	size_t tmp_count;
 	Environment env;
 	VariableStack vars;

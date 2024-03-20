@@ -28,7 +28,6 @@ static void var_stack_pop(VariableStack* vars, size_t index) {
 Compiler compiler_init() {
 	Compiler comp;
 	comp.label_count = 0;
-	comp.var_count = 0;
 	comp.tmp_count = 0;
 	comp.vars.len = 0;
 	comp.vars.cap = 32;
@@ -534,7 +533,7 @@ static Operand compile_node(
 			// var id = exp
 			if (node.children_count == 2) {
 				Operand tmp = compile_node(comp, node.children[1], syms, chunk);
-				*opnd = (Operand) {OPND_REG, .index = comp->var_count++};
+				*opnd = (Operand) {OPND_REG, .index = comp->vars.len - 1};
 				chunk_append(
 					chunk,
 					(Instruction) {
@@ -552,7 +551,7 @@ static Operand compile_node(
 				&& "COMPILER_ERR: Array variable declaration not implemented"
 			);
 
-			*opnd = (Operand) {OPND_REG, .index = comp->var_count++};
+			*opnd = (Operand) {OPND_REG, .index = comp->vars.len - 1};
 			chunk_append(
 				chunk,
 				(Instruction) {
