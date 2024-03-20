@@ -67,9 +67,18 @@ typedef struct Chunk {
 	Instruction* insts;
 } Chunk;
 
+typedef struct Compiler {
+	size_t label_count;
+	size_t var_count;
+	size_t tmp_count;
+} Compiler;
+
 void chunk_deinit(Chunk*);
 void print_chunk(FILE*, Chunk);
 
-Chunk compile_ast(AST ast, SymbolTable* syms);
+Compiler compiler_init();
+void compiler_deinit(Compiler* comp);
+
+Chunk compile_ast(Compiler* comp, AST ast, SymbolTable* syms);
 
 #endif

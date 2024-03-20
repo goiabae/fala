@@ -14,8 +14,21 @@
 static Chunk chunk_init();
 static void chunk_append(Chunk* chunk, Instruction inst);
 
+Compiler compiler_init() {
+	Compiler comp;
+	comp.label_count = 0;
+	comp.var_count = 0;
+	comp.tmp_count = 0;
+	return comp;
+}
+
+void compiler_deinit(Compiler* comp) {
+	(void)comp;
+	return;
+}
+
 static Operand compile_node(
-	Node node, SymbolTable* syms, Chunk* chunk, size_t* vars, size_t* temps
+	Compiler* comp, Node node, SymbolTable* syms, Chunk* chunk
 );
 
 static Operand compile_builtin_write(Chunk* chunk, size_t argc, Operand* args);
@@ -100,11 +113,9 @@ void print_chunk(FILE* fd, Chunk chunk) {
 	}
 }
 
-Chunk compile_ast(AST ast, SymbolTable* syms) {
+Chunk compile_ast(Compiler* comp, AST ast, SymbolTable* syms) {
 	Chunk chunk = chunk_init();
-	size_t vars = 0;
-	size_t temps = 0;
-	Operand op = compile_node(ast.root, syms, &chunk, &vars, &temps);
+	Operand op = compile_node(comp, ast.root, syms, &chunk);
 	(void)op;
 	return chunk;
 }
@@ -137,7 +148,7 @@ static Operand compile_builtin_read(
 
 // returns the result register or immediate value
 static Operand compile_node(
-	Node node, SymbolTable* syms, Chunk* chunk, size_t* vars, size_t* temps
+	Compiler* comp, Node node, SymbolTable* syms, Chunk* chunk
 ) {
 	(void)syms;
 	switch (node.type) { // TODO
@@ -148,12 +159,14 @@ static Operand compile_node(
 			Operand res;
 			Operand* args_op = malloc(sizeof(Operand) * args.children_count);
 			for (size_t i = 0; i < args.children_count; i++)
-				args_op[i] = compile_node(args.children[i], syms, chunk, vars, temps);
+				args_op[i] = compile_node(comp, args.children[i], syms, chunk);
 
 			if (strcmp(func_name, "write") == 0)
 				res = compile_builtin_write(chunk, args.children_count, args_op);
 			else if (strcmp(func_name, "read") == 0)
-				res = compile_builtin_read(chunk, args.children_count, args_op, temps);
+				res = compile_builtin_read(
+					chunk, args.children_count, args_op, &comp->tmp_count
+				);
 			else
 				assert(false && "COMPILER_ERR: Function application outside of builtins not implemented");
 
@@ -162,9 +175,10 @@ static Operand compile_node(
 		}
 		case AST_NUM: return (Operand) {.type = OPND_NUM, .num = node.num};
 		case AST_BLK: {
-			size_t new_vars = *vars;
+			size_t old_var_count = comp->var_count;
 			for (size_t i = 0; i < node.children_count; i++)
-				compile_node(node.children[i], syms, chunk, &new_vars, temps);
+				compile_node(comp, node.children[i], syms, chunk);
+			comp->var_count = old_var_count;
 			return OPERAND_NIL();
 		}
 		case AST_IF: {
@@ -195,21 +209,21 @@ static Operand compile_node(
 			assert(false && "COMPILER_ERR: assignment not implemented");
 			return OPERAND_NIL();
 
-#define BINARY_ARITH(OPCODE)                                          \
-	{                                                                   \
-		Node left = node.children[0];                                     \
-		Node right = node.children[1];                                    \
-		Operand left_op = compile_node(left, syms, chunk, vars, temps);   \
-		Operand right_op = compile_node(right, syms, chunk, vars, temps); \
-		Operand res = (Operand) {.type = OPND_TMP, .index = (*temps)++};  \
-                                                                      \
-		Instruction inst;                                                 \
-		inst.opcode = OPCODE;                                             \
-		inst.operands[0] = res;                                           \
-		inst.operands[1] = left_op;                                       \
-		inst.operands[2] = right_op;                                      \
-		chunk_append(chunk, inst);                                        \
-		return res;                                                       \
+#define BINARY_ARITH(OPCODE)                                                \
+	{                                                                         \
+		Node left = node.children[0];                                           \
+		Node right = node.children[1];                                          \
+		Operand left_op = compile_node(comp, left, syms, chunk);                \
+		Operand right_op = compile_node(comp, right, syms, chunk);              \
+		Operand res = (Operand) {.type = OPND_TMP, .index = comp->tmp_count++}; \
+                                                                            \
+		Instruction inst;                                                       \
+		inst.opcode = OPCODE;                                                   \
+		inst.operands[0] = res;                                                 \
+		inst.operands[1] = left_op;                                             \
+		inst.operands[2] = right_op;                                            \
+		chunk_append(chunk, inst);                                              \
+		return res;                                                             \
 	}
 
 		case AST_OR: BINARY_ARITH(OP_OR);
@@ -225,12 +239,11 @@ static Operand compile_node(
 		case AST_DIV: BINARY_ARITH(OP_DIV);
 		case AST_MOD: BINARY_ARITH(OP_MOD);
 		case AST_NOT: {
-			Operand res = (Operand) {.type = OPND_TMP, .index = (*temps)++};
+			Operand res = (Operand) {.type = OPND_TMP, .index = comp->tmp_count++};
 			Instruction inst;
 			inst.opcode = OP_NOT;
 			inst.operands[0] = res;
-			inst.operands[1] =
-				compile_node(node.children[0], syms, chunk, vars, temps);
+			inst.operands[1] = compile_node(comp, node.children[0], syms, chunk);
 			chunk_append(chunk, inst);
 			return res;
 		}

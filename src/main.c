@@ -126,7 +126,9 @@ static int compile(Options opts) {
 		ast_print(ast, &syms);
 		printf("\n");
 	}
-	Chunk chunk = compile_ast(ast, &syms);
+
+	Compiler comp = compiler_init();
+	Chunk chunk = compile_ast(&comp, ast, &syms);
 
 	if (opts.output_path) {
 		FILE* out = fopen(opts.output_path, "w");
@@ -136,6 +138,7 @@ static int compile(Options opts) {
 		print_chunk(stdout, chunk);
 	}
 
+	compiler_deinit(&comp);
 	chunk_deinit(&chunk);
 	sym_table_deinit(&syms);
 	fclose(fd);

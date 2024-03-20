@@ -10,7 +10,7 @@
 
 /* necessary for node functions */
 %code requires {
-  #include "ast.h"
+#include "ast.h"
 
 typedef struct Location {
   int first_line;
@@ -140,15 +140,14 @@ term : "(" exp ")" { $$ = $2; }
      ;
 
 %%
-
 void error_report(FILE* fd, Location* yyloc, const char* msg) {
-		fprintf(
-			fd,
-			"ERROR from (%d, %d) to (%d, %d): %s",
-			yyloc->first_line+1,
-			yyloc->first_column+1,
-			yyloc->last_line+1,
-			yyloc->last_column+1,
-			msg
-		);
+	fprintf(
+		fd,
+		"ERROR from (%d, %d) to (%d, %d): %s",
+		yyloc->first_line + 1,
+		yyloc->first_column + 1,
+		yyloc->last_line + 1,
+		yyloc->last_column + 1,
+		msg
+	);
 }
