@@ -466,7 +466,7 @@ static Operand compile_node(
 			Operand tmp = compile_node(comp, exp, syms, chunk);
 			Operand* reg = comp_env_find(comp, id.index);
 
-			assert(
+			assert( // TODO
 				var.children_count == 1
 				&& "COMPILER_ERR: array assignment not implemented"
 			);
@@ -545,7 +545,7 @@ static Operand compile_node(
 				return OPERAND_NIL();
 			}
 
-			// var arr [size]
+			// TODO var arr [size]
 			assert(
 				var.children_count == 1
 				&& "COMPILER_ERR: Array variable declaration not implemented"
@@ -566,7 +566,7 @@ static Operand compile_node(
 			Node id = node.children[0];
 			Operand* reg = comp_env_find(comp, id.index);
 			assert(reg && "Variable not previously declared");
-			assert(
+			assert( // TODO
 				node.children_count == 1
 				&& "COMPILER_ERR: Array indexing not implemented"
 			);
