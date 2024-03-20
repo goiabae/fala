@@ -455,9 +455,19 @@ static Operand compile_node(
 		}
 		case AST_NIL: return (Operand) {.type = OPND_NUM, .num = 0};
 		case AST_TRUE: return (Operand) {.type = OPND_NUM, .num = 1};
-		case AST_LET:
-			assert(false && "COMPILER_ERR: let bindings not implemented");
-			return OPERAND_NIL();
+		case AST_LET: {
+			Node decls = node.children[0];
+			Node exp = node.children[1];
+			comp_env_push(comp);
+
+			for (size_t i = 0; i < decls.children_count; i++)
+				compile_node(comp, decls.children[i], syms, chunk);
+
+			Operand res = compile_node(comp, exp, syms, chunk);
+
+			comp_env_pop(comp);
+			return res;
+		}
 	}
 	assert(false);
 }
