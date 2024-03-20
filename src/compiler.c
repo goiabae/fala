@@ -333,9 +333,93 @@ static Operand compile_node(
 
 			return res;
 		}
-		case AST_FOR:
-			assert(false && "COMPILER_ERR: for loops not implemented");
-			return OPERAND_NIL();
+		case AST_FOR: {
+			Node var = node.children[0];
+			Node id = var.children[0];
+			Node from = node.children[1];
+			Node to = node.children[2];
+			Node exp = node.children[3];
+
+			size_t l1 = comp->label_count++;
+			size_t l2 = comp->label_count++;
+
+			comp_env_push(comp);
+
+			Operand from_opnd = compile_node(comp, from, syms, chunk);
+			Operand to_opnd = compile_node(comp, to, syms, chunk);
+			Operand* var_opnd = comp_env_get_new(comp, id.index);
+			*var_opnd = (Operand) {OPND_REG, .index = comp->vars.len - 1};
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = *var_opnd,
+					.operands[1] = from_opnd,
+				}
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LABEL,
+					.operands[0] = (Operand) {OPND_LAB, .index = l1},
+				}
+			);
+
+			// FIXME hardcode comparison
+			// comparison cannot be determined at compile-time
+			Operand cmp = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LESS_EQ,
+					.operands[0] = cmp,
+					.operands[1] = *var_opnd,
+					.operands[2] = to_opnd,
+				}
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_JMP_FALSE,
+					.operands[0] = cmp,
+					.operands[1] = (Operand) {OPND_LAB, .index = l2}}
+			);
+
+			Operand exp_opnd = compile_node(comp, exp, syms, chunk);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_ADD,
+					.operands[0] = *var_opnd,
+					.operands[1] = *var_opnd,
+					.operands[2] = (Operand) {OPND_NUM, .num = 1},
+				}
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_JMP,
+					.operands[0] = (Operand) {OPND_LAB, .index = l1},
+				}
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LABEL,
+					.operands[0] = (Operand) {OPND_LAB, .index = l2},
+				}
+			);
+
+			comp_env_pop(comp);
+
+			return exp_opnd;
+		}
 		case AST_WHILE: {
 			Node cond = node.children[0];
 			Node exp = node.children[1];
