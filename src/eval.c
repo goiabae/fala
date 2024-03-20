@@ -304,9 +304,7 @@ void print_value(Value val) {
 
 static void value_deinit(Value val) {
 	if (val.tag == VALUE_STR) {
-		printf("%p\n", val.str);
 		free(val.str);
-
 	} else if (val.tag == VALUE_ARR)
 		free(val.arr.data);
 }
