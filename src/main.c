@@ -49,7 +49,10 @@ static void usage() {
 		"Usage:\n"
 		"\tfala [<options> ...] <filepath>\n"
 		"Options:\n"
-		"\t-V    verbose output"
+		"\t-V          verbose output\n"
+		"\t-o <path>   output file path\n"
+		"\t-c          compile\n"
+		"\t-i          intepret\n"
 	);
 }
 
