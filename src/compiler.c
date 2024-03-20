@@ -339,9 +339,30 @@ static Operand compile_node(
 		case AST_WHILE:
 			assert(false && "COMPILER_ERR: while loops not implemented");
 			return OPERAND_NIL();
-		case AST_ASS:
-			assert(false && "COMPILER_ERR: assignment not implemented");
-			return OPERAND_NIL();
+		case AST_ASS: {
+			Node var = node.children[0];
+			Node exp = node.children[1];
+			Node id = var.children[0];
+
+			Operand tmp = compile_node(comp, exp, syms, chunk);
+			Operand* reg = comp_env_find(comp, id.index);
+
+			assert(
+				var.children_count == 1
+				&& "COMPILER_ERR: array assignment not implemented"
+			);
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = *reg,
+					.operands[1] = tmp,
+				}
+			);
+
+			return *reg;
+		}
 
 #define BINARY_ARITH(OPCODE)                                                \
 	{                                                                         \
@@ -385,12 +406,53 @@ static Operand compile_node(
 		case AST_STR:
 			return (Operand) {
 				.type = OPND_STR, .str = sym_table_get(syms, node.index)};
-		case AST_DECL:
-			assert(false && "COMPILER_ERR: variable declaration not implemented");
+		case AST_DECL: {
+			Node var = node.children[0];
+			Node id = var.children[0];
+			Operand* opnd = comp_env_get_new(comp, id.index);
+
+			// var id = exp
+			if (node.children_count == 2) {
+				Operand tmp = compile_node(comp, node.children[1], syms, chunk);
+				*opnd = (Operand) {OPND_REG, .index = comp->var_count++};
+				chunk_append(
+					chunk,
+					(Instruction) {
+						.opcode = OP_MOV,
+						.operands[0] = *opnd,
+						.operands[1] = tmp,
+					}
+				);
+				return OPERAND_NIL();
+			}
+
+			// var arr [size]
+			assert(
+				var.children_count == 1
+				&& "COMPILER_ERR: Array variable declaration not implemented"
+			);
+
+			*opnd = (Operand) {OPND_REG, .index = comp->var_count++};
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_MOV,
+					.operands[0] = *opnd,
+					.operands[1] = OPERAND_NIL(),
+				}
+			);
 			return OPERAND_NIL();
-		case AST_VAR:
-			assert(false && "COMPILER_ERR: variable access not implemented");
-			return OPERAND_NIL();
+		}
+		case AST_VAR: {
+			Node id = node.children[0];
+			Operand* reg = comp_env_find(comp, id.index);
+			assert(reg && "Variable not previously declared");
+			assert(
+				node.children_count == 1
+				&& "COMPILER_ERR: Array indexing not implemented"
+			);
+			return *reg;
+		}
 		case AST_NIL: return (Operand) {.type = OPND_NUM, .num = 0};
 		case AST_TRUE: return (Operand) {.type = OPND_NUM, .num = 1};
 		case AST_LET:
