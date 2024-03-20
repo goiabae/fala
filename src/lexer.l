@@ -1,40 +1,40 @@
 %{
-  #include <string.h>
   #include <stdlib.h>
-	#include <stdbool.h>
-#ifdef FALA_WITH_REPL
-  #include <readline/readline.h>
-  #include <readline/history.h>
-#endif
+  #include <string.h>
+  #include <stdbool.h>
+  #ifdef FALA_WITH_REPL
+  #	include <readline/history.h>
+  #	include <readline/readline.h>
+  #endif
 
-  int fileno(FILE *stream);
-  char *strdup(const char *s);
+  int fileno(FILE* stream);
+  char* strdup(const char* s);
 
-  #include "parser.h"
   #include "main.h"
+  #include "parser.h"
 
   static char* parse_string(char* str);
-	bool is_interactive(void* scanner);
+  bool is_interactive(void* scanner);
 
-#ifdef FALA_WITH_REPL
-  static int get_input(FILE* fd, char *buf, int size);
-  #define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
-#endif
+  #ifdef FALA_WITH_REPL
+  static int get_input(FILE* fd, char* buf, int size);
+  #	define YY_INPUT(BUF, RES, MAX) RES = get_input(yyin, BUF, MAX);
+  #endif
 
-#define YY_USER_ACTION                             \
-     yylloc->first_line = yylloc->last_line;       \
-     yylloc->first_column = yylloc->last_column;   \
-     for (int i = 0; yytext[i] != '\0'; i++) {     \
-       if(yytext[i] == '\n') {                     \
-         yylloc->last_line++;                      \
-         yylloc->last_column = 0;                  \
-         continue;                                 \
-       }                                           \
-       yylloc->last_column++;                      \
-     }
+  #define YY_USER_ACTION                        \
+  	yylloc->first_line = yylloc->last_line;     \
+  	yylloc->first_column = yylloc->last_column; \
+  	for (int i = 0; yytext[i] != '\0'; i++) {   \
+  		if (yytext[i] == '\n') {                  \
+  			yylloc->last_line++;                    \
+  			yylloc->last_column = 0;                \
+  			continue;                               \
+  		}                                         \
+  		yylloc->last_column++;                    \
+  	}
 
-extern void error_report(FILE* fd, Location* yyloc, const char* msg);
-#define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
+  extern void error_report(FILE* fd, Location* yyloc, const char* msg);
+  #define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
 %}
 
 /* don't generate yyunput and input functions */
