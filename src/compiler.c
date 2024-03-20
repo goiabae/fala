@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "env.h"
 
 #define OPERAND_NIL() \
 	(Operand) { .type = OPND_NIL, .nil = NULL }
@@ -14,15 +15,49 @@
 static Chunk chunk_init();
 static void chunk_append(Chunk* chunk, Instruction inst);
 
+static void operand_deinit(Operand opnd) {
+	if (opnd.type == OPND_STR) free(opnd.str);
+	return;
+}
+
+static void var_stack_pop(VariableStack* vars, size_t index) {
+	operand_deinit(vars->opnds[index]);
+	vars->len--;
+}
+
 Compiler compiler_init() {
 	Compiler comp;
 	comp.label_count = 0;
 	comp.var_count = 0;
 	comp.tmp_count = 0;
+	comp.vars.len = 0;
+	comp.vars.cap = 32;
+	comp.vars.opnds = malloc(sizeof(Operand) * comp.vars.cap);
+	comp.env = env_init();
 	return comp;
 }
 
+static void comp_env_push(Compiler* comp) { env_push(&comp->env); }
+
+static void comp_env_pop(Compiler* comp) {
+	env_pop(&comp->env, (void (*)(void*, size_t))var_stack_pop, &comp->vars);
+}
+
+static Operand* comp_env_get_new(Compiler* comp, size_t sym_index) {
+	size_t idx = env_get_new(&comp->env, sym_index);
+	comp->vars.len++;
+	return &comp->vars.opnds[idx];
+}
+
+static Operand* comp_env_find(Compiler* comp, size_t sym_index) {
+	bool found = true;
+	size_t idx = env_find(&comp->env, sym_index, &found);
+	if (!found) return NULL;
+	return &comp->vars.opnds[idx];
+}
+
 void compiler_deinit(Compiler* comp) {
+	env_deinit(&comp->env, (void (*)(void*, size_t))var_stack_pop, &comp->vars);
 	(void)comp;
 	return;
 }
@@ -175,10 +210,10 @@ static Operand compile_node(
 		}
 		case AST_NUM: return (Operand) {.type = OPND_NUM, .num = node.num};
 		case AST_BLK: {
-			size_t old_var_count = comp->var_count;
+			comp_env_push(comp);
 			for (size_t i = 0; i < node.children_count; i++)
 				compile_node(comp, node.children[i], syms, chunk);
-			comp->var_count = old_var_count;
+			comp_env_pop(comp);
 			return OPERAND_NIL();
 		}
 		case AST_IF: {

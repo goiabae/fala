@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "ast.h"
+#include "env.h"
 
 typedef enum InstructionOp {
 	OP_PRINTF,
@@ -67,10 +68,18 @@ typedef struct Chunk {
 	Instruction* insts;
 } Chunk;
 
+typedef struct VariableStack {
+	size_t len;
+	size_t cap;
+	Operand* opnds;
+} VariableStack;
+
 typedef struct Compiler {
 	size_t label_count;
 	size_t var_count;
 	size_t tmp_count;
+	Environment env;
+	VariableStack vars;
 } Compiler;
 
 void chunk_deinit(Chunk*);
