@@ -43,17 +43,12 @@ typedef struct Operand {
 		OPND_LAB, // label
 		OPND_STR, // immediate string
 		OPND_NUM, // immediate number
-		OPND_OFF, // offset from base register
 	} type;
 	union {
 		void* nil;
 		size_t index; // temporaries, registers and labels
 		String str;
 		Number num;
-		struct {
-			size_t base;
-			size_t offset;
-		};
 	};
 } Operand;
 
@@ -77,6 +72,7 @@ typedef struct VariableStack {
 typedef struct Compiler {
 	size_t label_count;
 	size_t tmp_count;
+	size_t reg_count;
 	Environment env;
 	VariableStack vars;
 } Compiler;

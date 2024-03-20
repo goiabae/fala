@@ -29,6 +29,7 @@ Compiler compiler_init() {
 	Compiler comp;
 	comp.label_count = 0;
 	comp.tmp_count = 0;
+	comp.reg_count = 0;
 	comp.vars.len = 0;
 	comp.vars.cap = 32;
 	comp.vars.opnds = malloc(sizeof(Operand) * comp.vars.cap);
@@ -45,7 +46,23 @@ static void comp_env_pop(Compiler* comp) {
 static Operand* comp_env_get_new(Compiler* comp, size_t sym_index) {
 	size_t idx = env_get_new(&comp->env, sym_index);
 	comp->vars.len++;
-	return &comp->vars.opnds[idx];
+	Operand* op = &comp->vars.opnds[idx];
+	op->type = OPND_REG;
+	op->index = comp->reg_count++;
+	return op;
+}
+
+static Operand* comp_env_get_new_offset(
+	Compiler* comp, size_t sym_index, size_t size
+) {
+	// one for base and another for offset
+	size_t idx = env_get_new(&comp->env, sym_index);
+	comp->vars.len++;
+	Operand* op = &comp->vars.opnds[idx];
+	op->type = OPND_REG;
+	op->index = comp->reg_count;
+	comp->reg_count += size;
+	return op;
 }
 
 static Operand* comp_env_find(Compiler* comp, size_t sym_index) {
@@ -98,7 +115,6 @@ static void print_operand(FILE* fd, Operand opnd) {
 		case OPND_LAB: fprintf(fd, "L%03zu", opnd.index); break;
 		case OPND_STR: fprintf(fd, "\"%s\"", opnd.str); break;
 		case OPND_NUM: fprintf(fd, "%d", opnd.num); break;
-		case OPND_OFF: assert(false && "PRINT_ERR: offset not implemented"); break;
 	}
 }
 
@@ -122,18 +138,28 @@ static const int opcode_opnd_count[] = {
 	[OP_ADD] = 3,     [OP_SUB] = 3,        [OP_MUL] = 3,       [OP_DIV] = 3,
 	[OP_MOD] = 3,     [OP_NOT] = 2,        [OP_OR] = 3,        [OP_AND] = 3,
 	[OP_EQ] = 3,      [OP_DIFF] = 3,       [OP_LESS] = 3,      [OP_LESS_EQ] = 3,
-	[OP_GREATER] = 3, [OP_GREATER_EQ] = 3, [OP_LOAD] = 2,      [OP_STORE] = 2,
+	[OP_GREATER] = 3, [OP_GREATER_EQ] = 3, [OP_LOAD] = 3,      [OP_STORE] = 3,
 	[OP_LABEL] = 1,   [OP_JMP] = 1,        [OP_JMP_FALSE] = 2, [OP_JMP_TRUE] = 2,
 };
 
 void print_chunk(FILE* fd, Chunk chunk) {
 	for (size_t i = 0; i < chunk.len; i++) {
 		Instruction inst = chunk.insts[i];
+
 		if (inst.opcode != OP_LABEL) fprintf(fd, "  ");
 		fprintf(fd, "%s", opcode_repr[inst.opcode]);
 		if (opcode_opnd_count[inst.opcode] >= 1) {
 			fprintf(fd, " ");
 			print_operand(fd, inst.operands[0]);
+		}
+		if (inst.opcode == OP_LOAD || inst.opcode == OP_STORE) {
+			fprintf(fd, ", ");
+			print_operand(fd, inst.operands[1]);
+			fprintf(fd, "(");
+			print_operand(fd, inst.operands[2]);
+			fprintf(fd, ")");
+			fprintf(fd, "\n");
+			continue;
 		}
 		if (opcode_opnd_count[inst.opcode] >= 2) {
 			fprintf(fd, ", ");
@@ -348,7 +374,6 @@ static Operand compile_node(
 			Operand from_opnd = compile_node(comp, from, syms, chunk);
 			Operand to_opnd = compile_node(comp, to, syms, chunk);
 			Operand* var_opnd = comp_env_get_new(comp, id.index);
-			*var_opnd = (Operand) {OPND_REG, .index = comp->vars.len - 1};
 
 			chunk_append(
 				chunk,
@@ -467,10 +492,20 @@ static Operand compile_node(
 			Operand tmp = compile_node(comp, exp, syms, chunk);
 			Operand* reg = comp_env_find(comp, id.index);
 
-			assert( // TODO
-				var.children_count == 1
-				&& "COMPILER_ERR: array assignment not implemented"
-			);
+			if (var.children_count == 2) {
+				Operand idx = compile_node(comp, var.children[1], syms, chunk);
+				chunk_append(
+					chunk,
+					(Instruction) {
+						.opcode = OP_STORE,
+						.operands[0] = tmp,
+						.operands[1] = idx,
+						.operands[2] = (Operand) {OPND_NUM, .num = reg->index},
+					}
+				);
+
+				return tmp;
+			}
 
 			chunk_append(
 				chunk,
@@ -481,7 +516,7 @@ static Operand compile_node(
 				}
 			);
 
-			return *reg;
+			return tmp;
 		}
 
 #define BINARY_ARITH(OPCODE)                                                \
@@ -529,12 +564,12 @@ static Operand compile_node(
 		case AST_DECL: {
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Operand* opnd = comp_env_get_new(comp, id.index);
+			Operand* opnd;
 
 			// var id = exp
 			if (node.children_count == 2) {
+				opnd = comp_env_get_new(comp, id.index);
 				Operand tmp = compile_node(comp, node.children[1], syms, chunk);
-				*opnd = (Operand) {OPND_REG, .index = comp->vars.len - 1};
 				chunk_append(
 					chunk,
 					(Instruction) {
@@ -546,13 +581,20 @@ static Operand compile_node(
 				return OPERAND_NIL();
 			}
 
-			// TODO var arr [size]
-			assert(
-				var.children_count == 1
-				&& "COMPILER_ERR: Array variable declaration not implemented"
-			);
+			// var id [idx]
+			if (var.children_count == 2) {
+				Node size = var.children[1];
+				assert(
+					size.type == AST_NUM
+					&& "COMPILER_ERR: Only array declarations with constant size are supported for compilation"
+				);
+				Operand size_opnd = compile_node(comp, size, syms, chunk);
 
-			*opnd = (Operand) {OPND_REG, .index = comp->vars.len - 1};
+				opnd = comp_env_get_new_offset(comp, id.index, size_opnd.num);
+				return OPERAND_NIL();
+			}
+
+			opnd = comp_env_get_new(comp, id.index);
 			chunk_append(
 				chunk,
 				(Instruction) {
@@ -567,11 +609,27 @@ static Operand compile_node(
 			Node id = node.children[0];
 			Operand* reg = comp_env_find(comp, id.index);
 			assert(reg && "Variable not previously declared");
-			assert( // TODO
-				node.children_count == 1
-				&& "COMPILER_ERR: Array indexing not implemented"
+
+			// id
+			if (node.children_count == 1) return *reg;
+
+			// id [idx]
+			Operand off = compile_node(comp, node.children[1], syms, chunk);
+			Operand base = *reg;
+
+			Operand res = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+
+			chunk_append(
+				chunk,
+				(Instruction) {
+					.opcode = OP_LOAD,
+					.operands[0] = res,
+					.operands[1] = off,
+					.operands[2] = (Operand) {OPND_NUM, .num = base.index},
+				}
 			);
-			return *reg;
+
+			return res;
 		}
 		case AST_NIL: return (Operand) {.type = OPND_NUM, .num = 0};
 		case AST_TRUE: return (Operand) {.type = OPND_NUM, .num = 1};
