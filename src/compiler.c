@@ -58,7 +58,7 @@ static void chunk_append(Chunk* chunk, Instruction inst) {
 
 static void print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
-		case OPND_NIL: break;
+		case OPND_NIL: fprintf(fd, "0"); break;
 		case OPND_TMP: fprintf(fd, "%%t%zu", opnd.index); break;
 		case OPND_REG: fprintf(fd, "%%r%zu", opnd.index); break;
 		case OPND_LAB: fprintf(fd, "L%03zu", opnd.index); break;
