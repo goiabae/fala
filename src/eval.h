@@ -6,7 +6,17 @@
 
 struct Value;
 
-typedef struct Value (*Funktion)(size_t, struct Value*);
+typedef struct Function {
+	bool is_builtin;
+	union {
+		struct Value (*builtin)(size_t, struct Value*);
+		struct {
+			size_t argc;
+			Node* args;
+			Node root;
+		};
+	};
+} Function;
 
 typedef struct Value {
 	enum {
@@ -23,7 +33,7 @@ typedef struct Value {
 			size_t len;
 			struct Value* data;
 		} arr;
-		Funktion func;
+		Function func;
 		String str;
 		void* nil;
 	};

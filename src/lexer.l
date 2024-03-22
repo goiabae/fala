@@ -59,6 +59,7 @@
 "var"   return VAR;
 "let"   return LET;
 "in"    return IN;
+"fun"      return FUN;
 "or"    return OR;
 "and"   return AND;
 "not"   return NOT;

@@ -288,8 +288,7 @@ static Operand compile_builtin_array(
 static Operand compile_node(
 	Compiler* comp, Node node, SymbolTable* syms, Chunk* chunk
 ) {
-	(void)syms;
-	switch (node.type) { // TODO
+	switch (node.type) {
 		case AST_APP: {
 			Node func = node.children[0];
 			String func_name = sym_table_get(syms, func.index);
@@ -605,6 +604,11 @@ static Operand compile_node(
 			return (Operand) {
 				.type = OPND_STR, .str = sym_table_get(syms, node.index)};
 		case AST_DECL: {
+			assert(
+				node.children_count != 3
+				&& "COMPILE_ERR: Function declaration not yet supported"
+			);
+
 			Node var = node.children[0];
 			Node id = var.children[0];
 			Operand* opnd;

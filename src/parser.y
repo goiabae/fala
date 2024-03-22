@@ -45,7 +45,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token <str> STRING
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO WHILE VAR LET IN
+%token DO END IF THEN ELSE WHEN FOR FROM TO WHILE VAR LET IN FUN
 %token NIL TRUE
 
 /* pontuation */
@@ -69,7 +69,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %nonassoc NOT
 
 /* non-terminals */
-%type <node> exp exps infix term id decl decls var args func
+%type <node> exp exps infix term id decl decls var args func params
 
 %%
 
@@ -101,9 +101,14 @@ args : term      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
      | args term { $$ = list_append_node($$, $2); }
      ;
 
-decl : VAR var         { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
-     | VAR var "=" exp { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
+decl : VAR var               { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
+     | VAR var "=" exp       { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
+     | FUN id params "=" exp { $$ = new_node(AST_DECL, 3, (Node[3]) {$2, $3, $5}); }
      ;
+
+params : %empty    { $$ = new_list_node(); }
+       | params id { $$ = list_append_node($$, $2);}
+       ;
 
 decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
       | decls "," decl { $$ = list_append_node($$, $3); }

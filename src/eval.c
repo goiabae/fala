@@ -222,6 +222,21 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			break;
 		}
 		case AST_DECL: {
+			if (node.children_count == 3) {
+				Node id = node.children[0];
+				Node params = node.children[1];
+				Node body = node.children[2];
+				Value* cell = inter_env_get_new(inter, id.index);
+				val = *cell = (Value) {
+					.tag = VALUE_FUN,
+					.func = (Function) {
+						.is_builtin = false,
+						.argc = params.children_count,
+						.args = params.children,
+						.root = body}};
+				break;
+			}
+
 			Node var = node.children[0];
 			Node id = var.children[0];
 			Value* cell = inter_env_get_new(inter, id.index);
@@ -316,14 +331,32 @@ static Value apply_function(
 
 	Value* func_ptr = inter_env_find(inter, func_node.index);
 	assert(func_ptr && "For now, only read and write builtins are implemented");
-	Funktion func = (Funktion)func_ptr->func;
+	Function func = func_ptr->func;
 
-	Value* args = malloc(sizeof(Value) * args_node.children_count);
-	for (size_t i = 0; i < args_node.children_count; i++)
+	size_t argc = args_node.children_count;
+	Value* args = malloc(sizeof(Value) * argc);
+	for (size_t i = 0; i < argc; i++)
 		args[i] = ast_node_eval(inter, args_node.children[i]);
 
-	Value val = func(args_node.children_count, args);
-	free(args);
+	if (func.is_builtin) {
+		Value val = func.builtin(argc, args);
+		free(args);
+		return val;
+	}
+
+	inter_env_push(inter);
+
+	for (size_t i = 0; i < argc; i++) {
+		Node arg = func.args[i];
+		assert(arg.type == AST_ID);
+		Value* val = inter_env_get_new(inter, arg.index);
+		*val = args[i];
+	}
+
+	Value val = ast_node_eval(inter, func.root);
+
+	inter_env_pop(inter);
+
 	return val;
 }
 
@@ -367,9 +400,9 @@ Interpreter interpreter_init() {
 	inter.env = env_init();
 	inter_env_push(&inter);
 	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "read")) =
-		(Value) {VALUE_FUN, .func = builtin_read};
+		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_read}};
 	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "write")) =
-		(Value) {VALUE_FUN, .func = builtin_write};
+		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_write}};
 	return inter;
 }
 
