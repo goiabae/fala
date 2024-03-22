@@ -107,13 +107,27 @@ static void chunk_append(Chunk* chunk, Instruction inst) {
 	chunk->insts[chunk->len++] = inst;
 }
 
+static void print_str(FILE* fd, String str) {
+	fputc('"', fd);
+	char c;
+	while ((c = *(str++))) {
+		if (c == '\n')
+			fprintf(fd, "\\n");
+		else if (c == '\t')
+			fprintf(fd, "\\t");
+		else
+			fputc(c, fd);
+	}
+	fputc('"', fd);
+}
+
 static void print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
 		case OPND_NIL: fprintf(fd, "0"); break;
 		case OPND_TMP: fprintf(fd, "%%t%zu", opnd.index); break;
 		case OPND_REG: fprintf(fd, "%%r%zu", opnd.index); break;
 		case OPND_LAB: fprintf(fd, "L%03zu", opnd.index); break;
-		case OPND_STR: fprintf(fd, "\"%s\"", opnd.str); break;
+		case OPND_STR: print_str(fd, opnd.str); break;
 		case OPND_NUM: fprintf(fd, "%d", opnd.num); break;
 	}
 }
