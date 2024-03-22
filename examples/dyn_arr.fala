@@ -1,0 +1,10 @@
+let
+	var x = read nil,
+	var sz = x * 3
+in do
+	var xs = array sz;
+	for var i from 0 to sz-1 then do
+		xs[i] = i*2;
+		write xs[i] "\n";
+	end;
+end
