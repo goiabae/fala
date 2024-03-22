@@ -18,10 +18,10 @@
     table))
 
 (defconst fala-builtins
-  '("read" "write"))
+  '("array" "read" "write"))
 
 (defconst fala-keywords
-  '("if" "then" "else" "when" "while" "for" "from" "to" "var" "do" "end" "let" "in" "and" "or" "not"))
+  '("if" "then" "else" "when" "while" "for" "from" "to" "var" "do" "end" "let" "in" "and" "or" "not" "fun"))
 
 (defconst fala-constants
   '("nil" "true"))
