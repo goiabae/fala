@@ -12,6 +12,17 @@
 #define OPERAND_NIL() \
 	(Operand) { .type = OPND_NIL, .nil = NULL }
 
+#define OPERAND_TMP(IDX)                                      \
+	(Operand) {                                                 \
+		.type = OPND_TMP, .reg = {.type = VAL_NUM, .index = IDX } \
+	}
+
+#define OPERAND_LAB(IDX) \
+	(Operand) { .type = OPND_LAB, .lab = IDX }
+
+#define REG_NUM(IDX) \
+	(Register) { .type = VAL_NUM, .index = IDX }
+
 static Chunk chunk_init();
 static void chunk_append(Chunk* chunk, Instruction inst);
 
@@ -48,7 +59,8 @@ static Operand* comp_env_get_new(Compiler* comp, size_t sym_index) {
 	comp->vars.len++;
 	Operand* op = &comp->vars.opnds[idx];
 	op->type = OPND_REG;
-	op->index = comp->reg_count++;
+	op->reg.index = comp->reg_count++;
+	op->reg.type = VAL_NUM;
 	return op;
 }
 
@@ -60,7 +72,8 @@ static Operand* comp_env_get_new_offset(
 	comp->vars.len++;
 	Operand* op = &comp->vars.opnds[idx];
 	op->type = OPND_REG;
-	op->index = comp->reg_count;
+	op->reg.index = comp->reg_count;
+	op->reg.type = VAL_NUM;
 	comp->reg_count += size;
 	return op;
 }
@@ -84,7 +97,7 @@ static Operand compile_node(
 
 static Operand compile_builtin_write(Chunk* chunk, size_t argc, Operand* args);
 static Operand compile_builtin_read(
-	Chunk* chunk, size_t argc, Operand* args, size_t* temps
+	Compiler* comp, Chunk* chunk, size_t argc, Operand* args
 );
 
 static void print_operand(FILE*, Operand);
@@ -124,9 +137,9 @@ static void print_str(FILE* fd, String str) {
 static void print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
 		case OPND_NIL: fprintf(fd, "0"); break;
-		case OPND_TMP: fprintf(fd, "%%t%zu", opnd.index); break;
-		case OPND_REG: fprintf(fd, "%%r%zu", opnd.index); break;
-		case OPND_LAB: fprintf(fd, "L%03zu", opnd.index); break;
+		case OPND_TMP: fprintf(fd, "%%t%zu", opnd.reg.index); break;
+		case OPND_REG: fprintf(fd, "%%r%zu", opnd.reg.index); break;
+		case OPND_LAB: fprintf(fd, "L%03zu", opnd.lab); break;
 		case OPND_STR: print_str(fd, opnd.str); break;
 		case OPND_NUM: fprintf(fd, "%d", opnd.num); break;
 	}
@@ -170,7 +183,13 @@ void print_chunk(FILE* fd, Chunk chunk) {
 			fprintf(fd, ", ");
 			print_operand(fd, inst.operands[1]);
 			fprintf(fd, "(");
-			print_operand(fd, inst.operands[2]);
+
+			Operand opnd = inst.operands[2];
+			if (opnd.reg.type == VAL_NUM)
+				fprintf(fd, "%zu", opnd.reg.index);
+			else
+				fprintf(fd, "%%r%zu", opnd.reg.index);
+
 			fprintf(fd, ")");
 			fprintf(fd, "\n");
 			continue;
@@ -189,6 +208,17 @@ void print_chunk(FILE* fd, Chunk chunk) {
 
 Chunk compile_ast(Compiler* comp, AST ast, SymbolTable* syms) {
 	Chunk chunk = chunk_init();
+
+	// heap start
+	chunk_append(
+		&chunk,
+		(Instruction) {
+			.opcode = OP_MOV,
+			.operands[0] = (Operand) {OPND_REG, .reg = REG_NUM(comp->reg_count++)},
+			.operands[1] = (Operand) {OPND_NUM, .num = 1024 - 1},
+		}
+	);
+
 	Operand op = compile_node(comp, ast.root, syms, &chunk);
 	(void)op;
 	return chunk;
@@ -208,16 +238,50 @@ static Operand compile_builtin_write(Chunk* chunk, size_t argc, Operand* args) {
 }
 
 static Operand compile_builtin_read(
-	Chunk* chunk, size_t argc, Operand* args, size_t* temps
+	Compiler* comp, Chunk* chunk, size_t argc, Operand* args
 ) {
 	(void)args;
 	(void)argc;
 	Instruction inst;
 	inst.opcode = OP_READ;
-	Operand tmp = (Operand) {.type = OPND_TMP, .index = (*temps)++};
+	Operand tmp = OPERAND_TMP(comp->tmp_count++);
 	inst.operands[0] = tmp;
 	chunk_append(chunk, inst);
 	return tmp;
+}
+
+// create array with runtime-known size
+static Operand compile_builtin_array(
+	Compiler* comp, Chunk* chunk, size_t argc, Operand* args
+) {
+	assert(
+		argc == 1
+		&& "The `array' builtin expects a size as the first and only argument."
+	);
+	Operand addr = (Operand) {
+		OPND_TMP, .reg = (Register) {VAL_ADDR, .index = comp->tmp_count++}};
+	Operand heap_start = (Operand) {OPND_REG, .reg = REG_NUM(0)};
+
+	chunk_append(
+		chunk,
+		(Instruction) {
+			.opcode = OP_MOV,
+			.operands[0] = addr,
+			.operands[1] = heap_start,
+		}
+	);
+
+	chunk_append(
+		chunk,
+		(Instruction) {
+			.opcode = OP_ADD,
+			.operands[0] = heap_start,
+			.operands[1] = heap_start,
+			.operands[2] = args[0],
+		}
+	);
+
+	return addr;
 }
 
 // returns the result register or immediate value
@@ -238,9 +302,9 @@ static Operand compile_node(
 			if (strcmp(func_name, "write") == 0)
 				res = compile_builtin_write(chunk, args.children_count, args_op);
 			else if (strcmp(func_name, "read") == 0)
-				res = compile_builtin_read(
-					chunk, args.children_count, args_op, &comp->tmp_count
-				);
+				res = compile_builtin_read(comp, chunk, args.children_count, args_op);
+			else if (strcmp(func_name, "array") == 0)
+				res = compile_builtin_array(comp, chunk, args.children_count, args_op);
 			else
 				assert(false && "COMPILER_ERR: Function application outside of builtins not implemented");
 
@@ -271,16 +335,16 @@ static Operand compile_node(
 			Node yes = node.children[1];
 			Node no = node.children[2];
 
-			size_t l1 = comp->label_count++;
-			size_t l2 = comp->label_count++;
-			Operand tmp = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+			Operand l1 = OPERAND_LAB(comp->label_count++);
+			Operand l2 = OPERAND_LAB(comp->label_count++);
+			Operand tmp = OPERAND_TMP(comp->tmp_count++);
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
 
 			Instruction jfalse;
 			jfalse.opcode = OP_JMP_FALSE;
 			jfalse.operands[0] = cond_opnd;
-			jfalse.operands[1] = (Operand) {OPND_LAB, .index = l1};
+			jfalse.operands[1] = l1;
 			chunk_append(chunk, jfalse);
 
 			Operand yes_opnd = compile_node(comp, yes, syms, chunk);
@@ -293,15 +357,9 @@ static Operand compile_node(
 					.operands[1] = yes_opnd,
 				}
 			);
+			chunk_append(chunk, (Instruction) {.opcode = OP_JMP, .operands[0] = l2});
 			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_JMP, .operands[0] = (Operand) {OPND_LAB, .index = l2}}
-			);
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l1}}
+				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l1}
 			);
 
 			Operand no_opnd = compile_node(comp, no, syms, chunk);
@@ -316,9 +374,7 @@ static Operand compile_node(
 			);
 
 			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l2}}
+				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l2}
 			);
 
 			return tmp;
@@ -334,8 +390,8 @@ static Operand compile_node(
 			Node cond = node.children[0];
 			Node yes = node.children[1];
 
-			size_t l1 = comp->label_count++;
-			Operand res = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+			Operand l1 = OPERAND_LAB(comp->label_count++);
+			Operand res = OPERAND_TMP(comp->tmp_count++);
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
 
@@ -350,9 +406,7 @@ static Operand compile_node(
 			chunk_append(
 				chunk,
 				(Instruction) {
-					.opcode = OP_JMP_FALSE,
-					.operands[0] = cond_opnd,
-					.operands[1] = (Operand) {OPND_LAB, .index = l1}}
+					.opcode = OP_JMP_FALSE, .operands[0] = cond_opnd, .operands[1] = l1}
 			);
 
 			Operand yes_opnd = compile_node(comp, yes, syms, chunk);
@@ -366,9 +420,7 @@ static Operand compile_node(
 				}
 			);
 			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l1}}
+				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l1}
 			);
 
 			return res;
@@ -380,8 +432,8 @@ static Operand compile_node(
 			Node to = node.children[2];
 			Node exp = node.children[3];
 
-			size_t l1 = comp->label_count++;
-			size_t l2 = comp->label_count++;
+			Operand l1 = OPERAND_LAB(comp->label_count++);
+			Operand l2 = OPERAND_LAB(comp->label_count++);
 
 			comp_env_push(comp);
 
@@ -402,13 +454,13 @@ static Operand compile_node(
 				chunk,
 				(Instruction) {
 					.opcode = OP_LABEL,
-					.operands[0] = (Operand) {OPND_LAB, .index = l1},
+					.operands[0] = l1,
 				}
 			);
 
 			// FIXME hardcode comparison
 			// comparison cannot be determined at compile-time
-			Operand cmp = (Operand) {OPND_TMP, .index = comp->tmp_count++};
+			Operand cmp = OPERAND_TMP(comp->tmp_count++);
 			chunk_append(
 				chunk,
 				(Instruction) {
@@ -422,9 +474,7 @@ static Operand compile_node(
 			chunk_append(
 				chunk,
 				(Instruction) {
-					.opcode = OP_JMP_FALSE,
-					.operands[0] = cmp,
-					.operands[1] = (Operand) {OPND_LAB, .index = l2}}
+					.opcode = OP_JMP_FALSE, .operands[0] = cmp, .operands[1] = l2}
 			);
 
 			Operand exp_opnd = compile_node(comp, exp, syms, chunk);
@@ -443,7 +493,7 @@ static Operand compile_node(
 				chunk,
 				(Instruction) {
 					.opcode = OP_JMP,
-					.operands[0] = (Operand) {OPND_LAB, .index = l1},
+					.operands[0] = l1,
 				}
 			);
 
@@ -451,7 +501,7 @@ static Operand compile_node(
 				chunk,
 				(Instruction) {
 					.opcode = OP_LABEL,
-					.operands[0] = (Operand) {OPND_LAB, .index = l2},
+					.operands[0] = l2,
 				}
 			);
 
@@ -463,13 +513,11 @@ static Operand compile_node(
 			Node cond = node.children[0];
 			Node exp = node.children[1];
 
-			size_t l1 = comp->label_count++;
-			size_t l2 = comp->label_count++;
+			Operand l1 = OPERAND_LAB(comp->label_count++);
+			Operand l2 = OPERAND_LAB(comp->label_count++);
 
 			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l1}}
+				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l1}
 			);
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
@@ -477,23 +525,15 @@ static Operand compile_node(
 			chunk_append(
 				chunk,
 				(Instruction) {
-					.opcode = OP_JMP_FALSE,
-					.operands[0] = cond_opnd,
-					.operands[1] = (Operand) {OPND_LAB, .index = l2}}
+					.opcode = OP_JMP_FALSE, .operands[0] = cond_opnd, .operands[1] = l2}
 			);
 
 			Operand exp_opnd = compile_node(comp, exp, syms, chunk);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_JMP, .operands[0] = (Operand) {OPND_LAB, .index = l1}}
-			);
+			chunk_append(chunk, (Instruction) {.opcode = OP_JMP, .operands[0] = l1});
 
 			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL, .operands[0] = (Operand) {OPND_LAB, .index = l2}}
+				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l2}
 			);
 
 			return exp_opnd;
@@ -505,49 +545,38 @@ static Operand compile_node(
 
 			Operand tmp = compile_node(comp, exp, syms, chunk);
 			Operand* reg = comp_env_find(comp, id.index);
+			assert(reg);
 
 			if (var.children_count == 2) {
+				// if register is the start of the array then say so, otherwise it is a
+				// address to the register that contains the beggining of the array
+				Operand base = (reg->reg.type == VAL_NUM)
+				               ? (Operand) {OPND_NUM, .num = reg->reg.index}
+				               : *reg;
 				Operand idx = compile_node(comp, var.children[1], syms, chunk);
-				chunk_append(
-					chunk,
-					(Instruction) {
-						.opcode = OP_STORE,
-						.operands[0] = tmp,
-						.operands[1] = idx,
-						.operands[2] = (Operand) {OPND_NUM, .num = reg->index},
-					}
-				);
-
+				chunk_append(chunk, (Instruction) {OP_STORE, {tmp, idx, base}});
 				return tmp;
 			}
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = *reg,
-					.operands[1] = tmp,
-				}
-			);
-
+			chunk_append(chunk, (Instruction) {OP_MOV, {*reg, tmp}});
 			return tmp;
 		}
 
-#define BINARY_ARITH(OPCODE)                                                \
-	{                                                                         \
-		Node left = node.children[0];                                           \
-		Node right = node.children[1];                                          \
-		Operand left_op = compile_node(comp, left, syms, chunk);                \
-		Operand right_op = compile_node(comp, right, syms, chunk);              \
-		Operand res = (Operand) {.type = OPND_TMP, .index = comp->tmp_count++}; \
-                                                                            \
-		Instruction inst;                                                       \
-		inst.opcode = OPCODE;                                                   \
-		inst.operands[0] = res;                                                 \
-		inst.operands[1] = left_op;                                             \
-		inst.operands[2] = right_op;                                            \
-		chunk_append(chunk, inst);                                              \
-		return res;                                                             \
+#define BINARY_ARITH(OPCODE)                                   \
+	{                                                            \
+		Node left = node.children[0];                              \
+		Node right = node.children[1];                             \
+		Operand left_op = compile_node(comp, left, syms, chunk);   \
+		Operand right_op = compile_node(comp, right, syms, chunk); \
+		Operand res = OPERAND_TMP(comp->tmp_count++);              \
+                                                               \
+		Instruction inst;                                          \
+		inst.opcode = OPCODE;                                      \
+		inst.operands[0] = res;                                    \
+		inst.operands[1] = left_op;                                \
+		inst.operands[2] = right_op;                               \
+		chunk_append(chunk, inst);                                 \
+		return res;                                                \
 	}
 
 		case AST_OR: BINARY_ARITH(OP_OR);
@@ -563,7 +592,7 @@ static Operand compile_node(
 		case AST_DIV: BINARY_ARITH(OP_DIV);
 		case AST_MOD: BINARY_ARITH(OP_MOD);
 		case AST_NOT: {
-			Operand res = (Operand) {.type = OPND_TMP, .index = comp->tmp_count++};
+			Operand res = OPERAND_TMP(comp->tmp_count++);
 			Instruction inst;
 			inst.opcode = OP_NOT;
 			inst.operands[0] = res;
@@ -584,6 +613,7 @@ static Operand compile_node(
 			if (node.children_count == 2) {
 				opnd = comp_env_get_new(comp, id.index);
 				Operand tmp = compile_node(comp, node.children[1], syms, chunk);
+				if (tmp.type == OPND_TMP) opnd->reg.type = tmp.reg.type;
 				chunk_append(
 					chunk,
 					(Instruction) {
@@ -600,7 +630,7 @@ static Operand compile_node(
 				Node size = var.children[1];
 				assert(
 					size.type == AST_NUM
-					&& "COMPILER_ERR: Only array declarations with constant size are supported for compilation"
+					&& "COMPILER_ERR: Bracket declarations requires the size to be constant. Use the `array' built-in, instead."
 				);
 				Operand size_opnd = compile_node(comp, size, syms, chunk);
 
@@ -628,21 +658,13 @@ static Operand compile_node(
 			if (node.children_count == 1) return *reg;
 
 			// id [idx]
+			Operand res = OPERAND_TMP(comp->tmp_count++);
 			Operand off = compile_node(comp, node.children[1], syms, chunk);
-			Operand base = *reg;
+			Operand base = (reg->reg.type == VAL_NUM)
+			               ? (Operand) {OPND_NUM, .num = reg->reg.index}
+			               : *reg;
 
-			Operand res = (Operand) {OPND_TMP, .index = comp->tmp_count++};
-
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LOAD,
-					.operands[0] = res,
-					.operands[1] = off,
-					.operands[2] = (Operand) {OPND_NUM, .num = base.index},
-				}
-			);
-
+			chunk_append(chunk, (Instruction) {OP_LOAD, {res, off, base}});
 			return res;
 		}
 		case AST_NIL: return (Operand) {.type = OPND_NUM, .num = 0};

@@ -34,6 +34,14 @@ typedef enum InstructionOp {
 	OP_JMP_TRUE,
 } InstructionOp;
 
+typedef struct Register {
+	enum {
+		VAL_NUM,
+		VAL_ADDR,
+	} type;
+	size_t index;
+} Register;
+
 typedef struct Operand {
 	enum {
 		OPND_NIL, // no operand
@@ -46,7 +54,8 @@ typedef struct Operand {
 	} type;
 	union {
 		void* nil;
-		size_t index; // temporaries, registers and labels
+		Register reg;
+		size_t lab;
 		String str;
 		Number num;
 	};
