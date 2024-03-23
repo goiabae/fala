@@ -9,26 +9,21 @@
 #include "ast.h"
 #include "env.h"
 
-#define OPERAND_NIL() \
-	(Operand) { .type = OPND_NIL, .nil = NULL }
+#define OPERAND_NIL() ((Operand) {OPND_NIL, .nil = NULL})
+#define OPERAND_TMP(IDX) ((Operand) {OPND_TMP, .reg = {VAL_NUM, IDX}})
+#define OPERAND_LAB(IDX) ((Operand) {OPND_LAB, .lab = IDX})
 
-#define OPERAND_TMP(IDX)                                      \
-	(Operand) {                                                 \
-		.type = OPND_TMP, .reg = {.type = VAL_NUM, .index = IDX } \
-	}
-
-#define OPERAND_LAB(IDX) \
-	(Operand) { .type = OPND_LAB, .lab = IDX }
-
-#define REG_NUM(IDX) \
-	(Register) { .type = VAL_NUM, .index = IDX }
+#define emit(C, OP, ...) chunk_append(C, (Instruction) {OP, {__VA_ARGS__}})
 
 static Chunk chunk_init();
 static void chunk_append(Chunk* chunk, Instruction inst);
+static Operand compile_node(Compiler*, Node, SymbolTable*, Chunk*);
+static Operand compile_builtin_write(Compiler*, Chunk*, size_t, Operand*);
+static Operand compile_builtin_read(Compiler*, Chunk*, size_t, Operand*);
+static void print_operand(FILE*, Operand);
 
 static void operand_deinit(Operand opnd) {
 	if (opnd.type == OPND_STR) free(opnd.str);
-	return;
 }
 
 static void var_stack_pop(VariableStack* vars, size_t index) {
@@ -46,6 +41,12 @@ Compiler compiler_init() {
 	comp.vars.opnds = malloc(sizeof(Operand) * comp.vars.cap);
 	comp.env = env_init();
 	return comp;
+}
+
+void compiler_deinit(Compiler* comp) {
+	env_deinit(&comp->env, (void (*)(void*, size_t))var_stack_pop, &comp->vars);
+	(void)comp;
+	return;
 }
 
 static void comp_env_push(Compiler* comp) { env_push(&comp->env); }
@@ -84,23 +85,6 @@ static Operand* comp_env_find(Compiler* comp, size_t sym_index) {
 	if (!found) return NULL;
 	return &comp->vars.opnds[idx];
 }
-
-void compiler_deinit(Compiler* comp) {
-	env_deinit(&comp->env, (void (*)(void*, size_t))var_stack_pop, &comp->vars);
-	(void)comp;
-	return;
-}
-
-static Operand compile_node(
-	Compiler* comp, Node node, SymbolTable* syms, Chunk* chunk
-);
-
-static Operand compile_builtin_write(Chunk* chunk, size_t argc, Operand* args);
-static Operand compile_builtin_read(
-	Compiler* comp, Chunk* chunk, size_t argc, Operand* args
-);
-
-static void print_operand(FILE*, Operand);
 
 static Chunk chunk_init() {
 	Chunk chunk;
@@ -208,32 +192,20 @@ void print_chunk(FILE* fd, Chunk chunk) {
 
 Chunk compile_ast(Compiler* comp, AST ast, SymbolTable* syms) {
 	Chunk chunk = chunk_init();
+	Operand heap = {OPND_REG, .reg = {VAL_NUM, comp->reg_count++}};
+	Operand start = {OPND_NUM, .num = 1024 - 1};
 
-	// heap start
-	chunk_append(
-		&chunk,
-		(Instruction) {
-			.opcode = OP_MOV,
-			.operands[0] = (Operand) {OPND_REG, .reg = REG_NUM(comp->reg_count++)},
-			.operands[1] = (Operand) {OPND_NUM, .num = 1024 - 1},
-		}
-	);
-
-	Operand op = compile_node(comp, ast.root, syms, &chunk);
-	(void)op;
+	emit(&chunk, OP_MOV, heap, start);
+	(void)compile_node(comp, ast.root, syms, &chunk);
 	return chunk;
 }
 
-static Operand compile_builtin_write(Chunk* chunk, size_t argc, Operand* args) {
-	for (size_t i = 0; i < argc; i++) {
-		Instruction inst;
-		if (args[i].type == OPND_STR)
-			inst.opcode = OP_PRINTF;
-		else
-			inst.opcode = OP_PRINTV;
-		inst.operands[0] = args[i];
-		chunk_append(chunk, inst);
-	}
+static Operand compile_builtin_write(
+	Compiler* comp, Chunk* chunk, size_t argc, Operand* args
+) {
+	(void)comp;
+	for (size_t i = 0; i < argc; i++)
+		emit(chunk, ((args[i].type == OPND_STR) ? OP_PRINTF : OP_PRINTV), args[i]);
 	return OPERAND_NIL();
 }
 
@@ -242,11 +214,8 @@ static Operand compile_builtin_read(
 ) {
 	(void)args;
 	(void)argc;
-	Instruction inst;
-	inst.opcode = OP_READ;
 	Operand tmp = OPERAND_TMP(comp->tmp_count++);
-	inst.operands[0] = tmp;
-	chunk_append(chunk, inst);
+	emit(chunk, OP_READ, tmp);
 	return tmp;
 }
 
@@ -258,28 +227,11 @@ static Operand compile_builtin_array(
 		argc == 1
 		&& "The `array' builtin expects a size as the first and only argument."
 	);
-	Operand addr = (Operand) {
-		OPND_TMP, .reg = (Register) {VAL_ADDR, .index = comp->tmp_count++}};
-	Operand heap_start = (Operand) {OPND_REG, .reg = REG_NUM(0)};
+	Operand addr = {OPND_TMP, .reg = (Register) {VAL_ADDR, comp->tmp_count++}};
+	Operand heap = {OPND_REG, .reg = {VAL_NUM, 0}};
 
-	chunk_append(
-		chunk,
-		(Instruction) {
-			.opcode = OP_MOV,
-			.operands[0] = addr,
-			.operands[1] = heap_start,
-		}
-	);
-
-	chunk_append(
-		chunk,
-		(Instruction) {
-			.opcode = OP_ADD,
-			.operands[0] = heap_start,
-			.operands[1] = heap_start,
-			.operands[2] = args[0],
-		}
-	);
+	emit(chunk, OP_MOV, addr, heap);
+	emit(chunk, OP_ADD, heap, heap, args[0]);
 
 	return addr;
 }
@@ -292,100 +244,63 @@ static Operand compile_node(
 		case AST_APP: {
 			Node func = node.children[0];
 			String func_name = sym_table_get(syms, func.index);
-			Node args = node.children[1];
-			Operand res;
-			Operand* args_op = malloc(sizeof(Operand) * args.children_count);
-			for (size_t i = 0; i < args.children_count; i++)
-				args_op[i] = compile_node(comp, args.children[i], syms, chunk);
+			Node args_node = node.children[1];
 
+			Operand* args = malloc(sizeof(Operand) * args_node.children_count);
+			for (size_t i = 0; i < args_node.children_count; i++)
+				args[i] = compile_node(comp, args_node.children[i], syms, chunk);
+
+			Operand res;
 			if (strcmp(func_name, "write") == 0)
-				res = compile_builtin_write(chunk, args.children_count, args_op);
+				res =
+					compile_builtin_write(comp, chunk, args_node.children_count, args);
 			else if (strcmp(func_name, "read") == 0)
-				res = compile_builtin_read(comp, chunk, args.children_count, args_op);
+				res = compile_builtin_read(comp, chunk, args_node.children_count, args);
 			else if (strcmp(func_name, "array") == 0)
-				res = compile_builtin_array(comp, chunk, args.children_count, args_op);
+				res =
+					compile_builtin_array(comp, chunk, args_node.children_count, args);
 			else
 				assert(false && "COMPILER_ERR: Function application outside of builtins not implemented");
 
-			free(args_op);
+			free(args);
 			return res;
 		}
-		case AST_NUM: return (Operand) {.type = OPND_NUM, .num = node.num};
+		case AST_NUM: return (Operand) {OPND_NUM, .num = node.num};
 		case AST_BLK: {
 			comp_env_push(comp);
-			Operand opnd;
+			Operand opnd = OPERAND_NIL();
 			for (size_t i = 0; i < node.children_count; i++)
 				opnd = compile_node(comp, node.children[i], syms, chunk);
 			comp_env_pop(comp);
 			return opnd;
 		}
 		case AST_IF: {
-			// code for condition
-			// if condition false jump to label 1
-			// code for true branch
-			// move result value to tmp
-			// jump to label 2
-			// label 1
-			// code for false branch
-			// move result value to tmp
-			// label 2
-
 			Node cond = node.children[0];
 			Node yes = node.children[1];
 			Node no = node.children[2];
 
 			Operand l1 = OPERAND_LAB(comp->label_count++);
 			Operand l2 = OPERAND_LAB(comp->label_count++);
-			Operand tmp = OPERAND_TMP(comp->tmp_count++);
+			Operand res = OPERAND_TMP(comp->tmp_count++);
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
 
-			Instruction jfalse;
-			jfalse.opcode = OP_JMP_FALSE;
-			jfalse.operands[0] = cond_opnd;
-			jfalse.operands[1] = l1;
-			chunk_append(chunk, jfalse);
+			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
 
 			Operand yes_opnd = compile_node(comp, yes, syms, chunk);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = tmp,
-					.operands[1] = yes_opnd,
-				}
-			);
-			chunk_append(chunk, (Instruction) {.opcode = OP_JMP, .operands[0] = l2});
-			chunk_append(
-				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l1}
-			);
+			emit(chunk, OP_MOV, res, yes_opnd);
+			emit(chunk, OP_JMP, l2);
+			emit(chunk, OP_LABEL, l1);
 
 			Operand no_opnd = compile_node(comp, no, syms, chunk);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = tmp,
-					.operands[1] = no_opnd,
-				}
-			);
+			emit(chunk, OP_MOV, res, no_opnd);
+			emit(chunk, OP_LABEL, l2);
 
-			chunk_append(
-				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l2}
-			);
-
-			return tmp;
+			return res;
 		}
 		case AST_WHEN: {
-			// cond code
-			// mov nil to result reg
-			// if cond is false jmp to label l1
-			// yes code
-			// mov yes result to result reg
-			// label l1
-
 			Node cond = node.children[0];
 			Node yes = node.children[1];
 
@@ -394,119 +309,51 @@ static Operand compile_node(
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = res,
-					.operands[1] = (Operand) {OPND_NIL, .nil = NULL}}
-			);
-
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_JMP_FALSE, .operands[0] = cond_opnd, .operands[1] = l1}
-			);
+			emit(chunk, OP_MOV, res, OPERAND_NIL());
+			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
 
 			Operand yes_opnd = compile_node(comp, yes, syms, chunk);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = res,
-					.operands[1] = yes_opnd,
-				}
-			);
-			chunk_append(
-				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l1}
-			);
+			emit(chunk, OP_MOV, res, yes_opnd);
+			emit(chunk, OP_LABEL, l1);
 
 			return res;
 		}
 		case AST_FOR: {
-			Node var = node.children[0];
-			Node id = var.children[0];
-			Node from = node.children[1];
-			Node to = node.children[2];
-			Node exp = node.children[3];
+			// FIXME hardcode comparison
+			// comparison cannot be determined at compile-time
+
+			Node var_node = node.children[0];
+			Node id = var_node.children[0];
+			Node from_node = node.children[1];
+			Node to_node = node.children[2];
+			Node exp_node = node.children[3];
 
 			Operand l1 = OPERAND_LAB(comp->label_count++);
 			Operand l2 = OPERAND_LAB(comp->label_count++);
+			Operand cmp = OPERAND_TMP(comp->tmp_count++);
+			Operand one = {OPND_NUM, .num = 1};
 
 			comp_env_push(comp);
 
-			Operand from_opnd = compile_node(comp, from, syms, chunk);
-			Operand to_opnd = compile_node(comp, to, syms, chunk);
-			Operand* var_opnd = comp_env_get_new(comp, id.index);
+			Operand from = compile_node(comp, from_node, syms, chunk);
+			Operand to = compile_node(comp, to_node, syms, chunk);
+			Operand* var = comp_env_get_new(comp, id.index);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = *var_opnd,
-					.operands[1] = from_opnd,
-				}
-			);
+			emit(chunk, OP_MOV, *var, from);
+			emit(chunk, OP_LABEL, l1);
+			emit(chunk, OP_LESS_EQ, cmp, *var, to);
+			emit(chunk, OP_JMP_FALSE, cmp, l2);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL,
-					.operands[0] = l1,
-				}
-			);
+			Operand exp = compile_node(comp, exp_node, syms, chunk);
 
-			// FIXME hardcode comparison
-			// comparison cannot be determined at compile-time
-			Operand cmp = OPERAND_TMP(comp->tmp_count++);
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LESS_EQ,
-					.operands[0] = cmp,
-					.operands[1] = *var_opnd,
-					.operands[2] = to_opnd,
-				}
-			);
-
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_JMP_FALSE, .operands[0] = cmp, .operands[1] = l2}
-			);
-
-			Operand exp_opnd = compile_node(comp, exp, syms, chunk);
-
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_ADD,
-					.operands[0] = *var_opnd,
-					.operands[1] = *var_opnd,
-					.operands[2] = (Operand) {OPND_NUM, .num = 1},
-				}
-			);
-
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_JMP,
-					.operands[0] = l1,
-				}
-			);
-
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_LABEL,
-					.operands[0] = l2,
-				}
-			);
+			emit(chunk, OP_ADD, *var, *var, one);
+			emit(chunk, OP_JMP, l1);
+			emit(chunk, OP_LABEL, l2);
 
 			comp_env_pop(comp);
 
-			return exp_opnd;
+			return exp;
 		}
 		case AST_WHILE: {
 			Node cond = node.children[0];
@@ -515,25 +362,16 @@ static Operand compile_node(
 			Operand l1 = OPERAND_LAB(comp->label_count++);
 			Operand l2 = OPERAND_LAB(comp->label_count++);
 
-			chunk_append(
-				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l1}
-			);
+			emit(chunk, OP_LABEL, l1);
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
 
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_JMP_FALSE, .operands[0] = cond_opnd, .operands[1] = l2}
-			);
+			emit(chunk, OP_JMP_FALSE, cond_opnd, l2);
 
 			Operand exp_opnd = compile_node(comp, exp, syms, chunk);
 
-			chunk_append(chunk, (Instruction) {.opcode = OP_JMP, .operands[0] = l1});
-
-			chunk_append(
-				chunk, (Instruction) {.opcode = OP_LABEL, .operands[0] = l2}
-			);
+			emit(chunk, OP_JMP, l1);
+			emit(chunk, OP_LABEL, l2);
 
 			return exp_opnd;
 		}
@@ -544,7 +382,7 @@ static Operand compile_node(
 
 			Operand tmp = compile_node(comp, exp, syms, chunk);
 			Operand* reg = comp_env_find(comp, id.index);
-			assert(reg);
+			assert(reg && "COMPILE_ERR: Variable not found");
 
 			if (var.children_count == 2) {
 				// if register is the start of the array then say so, otherwise it is a
@@ -553,29 +391,25 @@ static Operand compile_node(
 				               ? (Operand) {OPND_NUM, .num = reg->reg.index}
 				               : *reg;
 				Operand idx = compile_node(comp, var.children[1], syms, chunk);
-				chunk_append(chunk, (Instruction) {OP_STORE, {tmp, idx, base}});
+				emit(chunk, OP_STORE, tmp, idx, base);
 				return tmp;
 			}
 
-			chunk_append(chunk, (Instruction) {OP_MOV, {*reg, tmp}});
+			emit(chunk, OP_MOV, *reg, tmp);
 			return tmp;
 		}
 
-#define BINARY_ARITH(OPCODE)                                   \
-	{                                                            \
-		Node left = node.children[0];                              \
-		Node right = node.children[1];                             \
-		Operand left_op = compile_node(comp, left, syms, chunk);   \
-		Operand right_op = compile_node(comp, right, syms, chunk); \
-		Operand res = OPERAND_TMP(comp->tmp_count++);              \
-                                                               \
-		Instruction inst;                                          \
-		inst.opcode = OPCODE;                                      \
-		inst.operands[0] = res;                                    \
-		inst.operands[1] = left_op;                                \
-		inst.operands[2] = right_op;                               \
-		chunk_append(chunk, inst);                                 \
-		return res;                                                \
+#define BINARY_ARITH(OPCODE)                                     \
+	{                                                              \
+		Node left_node = node.children[0];                           \
+		Node right_node = node.children[1];                          \
+                                                                 \
+		Operand left = compile_node(comp, left_node, syms, chunk);   \
+		Operand right = compile_node(comp, right_node, syms, chunk); \
+		Operand res = OPERAND_TMP(comp->tmp_count++);                \
+                                                                 \
+		emit(chunk, OPCODE, res, left, right);                       \
+		return res;                                                  \
 	}
 
 		case AST_OR: BINARY_ARITH(OP_OR);
@@ -592,17 +426,13 @@ static Operand compile_node(
 		case AST_MOD: BINARY_ARITH(OP_MOD);
 		case AST_NOT: {
 			Operand res = OPERAND_TMP(comp->tmp_count++);
-			Instruction inst;
-			inst.opcode = OP_NOT;
-			inst.operands[0] = res;
-			inst.operands[1] = compile_node(comp, node.children[0], syms, chunk);
-			chunk_append(chunk, inst);
+			Operand inverse = compile_node(comp, node.children[0], syms, chunk);
+			emit(chunk, OP_NOT, res, inverse);
 			return res;
 		}
-		case AST_ID: assert(false && "unreachable"); return OPERAND_NIL();
+		case AST_ID: assert(false && "unreachable");
 		case AST_STR:
-			return (Operand) {
-				.type = OPND_STR, .str = sym_table_get(syms, node.index)};
+			return (Operand) {OPND_STR, .str = sym_table_get(syms, node.index)};
 		case AST_DECL: {
 			assert(
 				node.children_count != 3
@@ -611,21 +441,13 @@ static Operand compile_node(
 
 			Node var = node.children[0];
 			Node id = var.children[0];
-			Operand* opnd;
 
 			// var id = exp
 			if (node.children_count == 2) {
-				opnd = comp_env_get_new(comp, id.index);
+				Operand* opnd = comp_env_get_new(comp, id.index);
 				Operand tmp = compile_node(comp, node.children[1], syms, chunk);
 				if (tmp.type == OPND_TMP) opnd->reg.type = tmp.reg.type;
-				chunk_append(
-					chunk,
-					(Instruction) {
-						.opcode = OP_MOV,
-						.operands[0] = *opnd,
-						.operands[1] = tmp,
-					}
-				);
+				emit(chunk, OP_MOV, *opnd, tmp);
 				return OPERAND_NIL();
 			}
 
@@ -637,20 +459,13 @@ static Operand compile_node(
 					&& "COMPILER_ERR: Bracket declarations requires the size to be constant. Use the `array' built-in, instead."
 				);
 				Operand size_opnd = compile_node(comp, size, syms, chunk);
-
-				opnd = comp_env_get_new_offset(comp, id.index, size_opnd.num);
+				(void)comp_env_get_new_offset(comp, id.index, size_opnd.num);
 				return OPERAND_NIL();
 			}
 
-			opnd = comp_env_get_new(comp, id.index);
-			chunk_append(
-				chunk,
-				(Instruction) {
-					.opcode = OP_MOV,
-					.operands[0] = *opnd,
-					.operands[1] = OPERAND_NIL(),
-				}
-			);
+			// var id
+			Operand* opnd = comp_env_get_new(comp, id.index);
+			emit(chunk, OP_MOV, *opnd, OPERAND_NIL());
 			return OPERAND_NIL();
 		}
 		case AST_VAR: {
@@ -668,18 +483,18 @@ static Operand compile_node(
 			               ? (Operand) {OPND_NUM, .num = reg->reg.index}
 			               : *reg;
 
-			chunk_append(chunk, (Instruction) {OP_LOAD, {res, off, base}});
+			emit(chunk, OP_LOAD, res, off, base);
 			return res;
 		}
-		case AST_NIL: return (Operand) {.type = OPND_NUM, .num = 0};
-		case AST_TRUE: return (Operand) {.type = OPND_NUM, .num = 1};
+		case AST_NIL: return (Operand) {OPND_NUM, .num = 0};
+		case AST_TRUE: return (Operand) {OPND_NUM, .num = 1};
 		case AST_LET: {
 			Node decls = node.children[0];
 			Node exp = node.children[1];
 			comp_env_push(comp);
 
 			for (size_t i = 0; i < decls.children_count; i++)
-				compile_node(comp, decls.children[i], syms, chunk);
+				(void)compile_node(comp, decls.children[i], syms, chunk);
 
 			Operand res = compile_node(comp, exp, syms, chunk);
 
