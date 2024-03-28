@@ -51,7 +51,7 @@ static void usage() {
 		"\n"
 		"Filepath:\n"
 		"\tif <filepath> is \"-\", then stdin is used and a REPL session is "
-	  "started\n"
+		"started\n"
 		"\n"
 		"Options:\n"
 		"\t-V          verbose output\n"
