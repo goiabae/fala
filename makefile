@@ -11,17 +11,20 @@ all: prepare fala
 fala: build/parser.o build/main.o build/lexer.o build/ast.o build/eval.o build/compiler.o build/env.o
 	$(CC) $(CFLAGS) $(LIBS) -o build/$@ $^
 
-build/main.o: src/main.c src/lexer.h
+build/main.o: src/main.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 build/%.o: src/%.c src/%.h
 	$(CC) $(CFLAGS)  -c -o $@ $<
 
-src/parser.c src/parser.h: src/parser.y src/lexer.h
+build/%.o: src/%.c
+	$(CC) $(CFLAGS)  -c -o $@ $<
+
+src/parser.c src/parser.h: src/parser.y
 	bison --header=src/parser.h --output=$@ $<
 
-src/lexer.c src/lexer.h: src/lexer.l
-	flex --header-file=src/lexer.h --outfile=src/lexer.c $<
+src/lexer.c: src/lexer.l
+	flex --outfile=src/lexer.c $<
 
 prepare:
 	mkdir -p build
@@ -29,7 +32,6 @@ prepare:
 clean:
 	rm -rf build
 	rm -f src/lexer.c
-	rm -f src/lexer.h
 	rm -f src/parser.c
 	rm -f src/parser.h
 

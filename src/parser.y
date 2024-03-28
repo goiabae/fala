@@ -11,13 +11,9 @@
 /* necessary for node functions */
 %code requires {
 #include "ast.h"
+#include "lexer.h"
 
-typedef struct Location {
-  int first_line;
-  int first_column;
-  int last_line;
-  int last_column;
-} Location;
+#define yylex lexer_lex
 }
 
 %{
@@ -25,9 +21,7 @@ typedef struct Location {
 #include <stdbool.h>
 
 #include "parser.h"
-#include "lexer.h"
 
-bool is_interactive(void* scanner);
 void error_report(FILE* fd, Location* yyloc, const char* msg);
 #define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
 %}

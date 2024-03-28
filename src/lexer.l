@@ -11,10 +11,10 @@
   char* strdup(const char* s);
 
   #include "main.h"
+  #include "lexer.h"
   #include "parser.h"
 
   static char* parse_string(char* str);
-  bool is_interactive(void* scanner);
 
   #ifdef FALA_WITH_REPL
   static int get_input(FILE* fd, char* buf, int size);
@@ -149,4 +149,15 @@ static int get_input(FILE* fd, char *buf, int size) {
 bool is_interactive(void* scanner) {
   struct yyguts_t* yyg = (struct yyguts_t*)scanner;
 	return yyg->yyin_r == stdin;
+}
+
+LEXER lexer_init_from_file(FILE *fd) {
+	LEXER lexer;
+	yylex_init(&lexer);
+	yyset_in(fd, lexer);
+	return lexer;
+}
+
+void lexer_deinit(LEXER lexer) {
+	(void)yylex_destroy(lexer);
 }

@@ -31,16 +31,10 @@ typedef struct Options {
 } Options;
 
 static AST parse(FILE* fd, SymbolTable* syms) {
-	yyscan_t scanner = NULL;
-	yylex_init(&scanner);
-	yyset_in(fd, scanner);
-
+	LEXER lexer = lexer_init_from_file(fd);
 	AST ast = ast_init();
-	if (yyparse(scanner, &ast, syms)) {
-		exit(1); // FIXME propagate error up
-	}
-
-	yylex_destroy(scanner);
+	if (yyparse(lexer, &ast, syms)) exit(1); // FIXME propagate error up
+	lexer_deinit(lexer);
 	return ast;
 }
 
