@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 
-set -eu
+set -u
 
 purple='\e[0;35m'
-reset='\e[0;30m'
+reset='\e[0m'
 
 for f in ./examples/*.fala; do
 	f="${f##*/}"
