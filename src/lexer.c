@@ -120,6 +120,13 @@ static char advance(Lexer* lexer, Location* loc) {
 	return c;
 }
 
+// advances a character if it matches, otherwise do nothing
+static bool match(Lexer* lexer, Location* loc, char c) {
+	char ch = ring_peek(&lexer->ring);
+	if (ch == c) advance(lexer, loc);
+	return ch == c;
+}
+
 static bool is_valid_id_char(char c) { return isalnum(c) || c == '_'; }
 
 static char* string_dup(char* str) {
@@ -145,27 +152,9 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 		case ']': return BRACKET_CLOSE;
 		case ';': return SEMICOL;
 		case ',': return COMMA;
-		case '=': {
-			if (peek(lexer) == '=') {
-				advance(lexer, loc);
-				return EQ_EQ;
-			} else
-				return EQ;
-		}
-		case '>': {
-			if (peek(lexer) == '=') {
-				advance(lexer, loc);
-				return GREATER_EQ;
-			} else
-				return GREATER;
-		}
-		case '<': {
-			if (peek(lexer) == '=') {
-				advance(lexer, loc);
-				return LESSER_EQ;
-			} else
-				return LESSER;
-		}
+		case '=': return match(lexer, loc, '=') ? EQ_EQ : EQ;
+		case '>': return match(lexer, loc, '=') ? GREATER_EQ : GREATER;
+		case '<': return match(lexer, loc, '=') ? LESSER_EQ : LESSER;
 		case '+': return PLUS;
 		case '-': return MINUS;
 		case '*': return ASTER;
@@ -195,17 +184,12 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 			size_t len = 0;
 			while ((c = advance(lexer, loc)) != '"') {
 				if (c == '\\') {
-					c = peek(lexer);
-					if (c == 'n') {
-						advance(lexer, loc);
+					if (match(lexer, loc, 'n'))
 						buf[len++] = '\n';
-					} else if (c == 't') {
-						advance(lexer, loc);
+					else if (match(lexer, loc, 't'))
 						buf[len++] = '\t';
-					} else if (c == 'r') {
-						advance(lexer, loc);
+					else if (match(lexer, loc, 'r'))
 						buf[len++] = '\r';
-					}
 				} else {
 					buf[len++] = c;
 				}
@@ -224,8 +208,7 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 				value->num = num;
 				return NUMBER;
 			} else if (isalpha(c) || c == '_') {
-				char buf[256];
-				buf[0] = c;
+				char buf[256] = {[0] = c};
 				size_t len = 1;
 				while (is_valid_id_char(c = peek(lexer))) {
 					buf[len++] = c;
@@ -234,11 +217,8 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 				buf[len] = '\0';
 
 				// could be a reserved keyword
-				for (size_t i = 0; i < KW_COUNT; i++) {
-					if (strcmp(buf, keywords[i]) == 0) {
-						return keyword_parser_map[i];
-					}
-				}
+				for (size_t i = 0; i < KW_COUNT; i++)
+					if (strcmp(buf, keywords[i]) == 0) return keyword_parser_map[i];
 
 				value->str = string_dup(buf);
 				return ID;
@@ -246,7 +226,7 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 			assert(false && "LEX_ERR: Unrecognized character");
 		}
 	};
-	assert(false);
+	assert(false && "unreachable");
 }
 
 LEXER lexer_init_from_file(FILE* fd) {
