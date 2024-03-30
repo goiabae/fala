@@ -45,7 +45,7 @@ Compiler compiler_init() {
 
 void compiler_deinit(Compiler* comp) {
 	env_deinit(&comp->env, (void (*)(void*, size_t))var_stack_pop, &comp->vars);
-	(void)comp;
+	free(comp->vars.opnds);
 	return;
 }
 

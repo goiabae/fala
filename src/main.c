@@ -144,6 +144,7 @@ static int compile(Options opts) {
 
 	compiler_deinit(&comp);
 	chunk_deinit(&chunk);
+	ast_deinit(ast);
 	sym_table_deinit(&syms);
 	fclose(fd);
 	return 0;

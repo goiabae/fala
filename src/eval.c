@@ -416,21 +416,21 @@ Interpreter interpreter_init() {
 	inter.syms = sym_table_init();
 	inter.env = env_init();
 	inter_env_push(&inter);
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "read")) =
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("read"))) =
 		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_read}};
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "write")) =
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("write"))) =
 		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_write}};
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "array")) =
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("array"))) =
 		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_array}};
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "exit")) =
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("exit"))) =
 		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_exit}};
 	return inter;
 }
 
 void interpreter_deinit(Interpreter* inter) {
-	free(inter->values.values);
 	sym_table_deinit(&inter->syms);
 	env_deinit(
 		&inter->env, (void (*)(void*, size_t))value_stack_pop, &inter->values
 	);
+	free(inter->values.values);
 }

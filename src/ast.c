@@ -134,7 +134,10 @@ SymbolTable sym_table_init() {
 	return syms;
 }
 
-void sym_table_deinit(SymbolTable* tab) { free(tab->arr); }
+void sym_table_deinit(SymbolTable* tab) {
+	for (size_t i = 0; i < tab->len; i++) free(tab->arr[i]);
+	free(tab->arr);
+}
 
 size_t sym_table_insert(SymbolTable* tab, String str) {
 	for (size_t i = 0; i < tab->len; i++) {
