@@ -1,0 +1,9 @@
+# reads a integer n followed by n integers. outputs max
+do
+	var max = 0;
+	for var i from 1 to (read nil) then
+		let var x = read nil in
+		when x > max then
+			max = x;
+	write max;
+end

@@ -1,0 +1,5 @@
+let var n = read nil
+in while not (n == 1) then do
+	n = if n%2 == 0 then n / 2 else 3*n + 1;
+	write n "\n";
+end
