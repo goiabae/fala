@@ -386,6 +386,16 @@ static Value builtin_write(size_t len, Value args[len]) {
 	return (Value) {VALUE_NIL, .nil = NULL};
 }
 
+static Value builtin_array(size_t argc, Value args[argc]) {
+	assert(argc == 1 && "INTEPRET_ERR: array takes a single numeric argument");
+	Number arr_len = args[0].num;
+	Value val;
+	val.tag = VALUE_ARR;
+	val.arr.data = malloc(sizeof(Value) * arr_len);
+	val.arr.len = arr_len;
+	return val;
+}
+
 static void value_stack_pop(ValueStack* stack, size_t index) {
 	value_deinit(stack->values[index]);
 	stack->len--;
@@ -403,6 +413,8 @@ Interpreter interpreter_init() {
 		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_read}};
 	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "write")) =
 		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_write}};
+	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, "array")) =
+		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_array}};
 	return inter;
 }
 
