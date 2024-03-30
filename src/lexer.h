@@ -4,13 +4,15 @@
 #include <stdio.h>
 
 #include "ast.h"
+#include "ring.h"
 
-typedef void *LEXER;
+// necessary for lval of GNU bison rule values
+#define YYSTYPE union TokenValue
 
-LEXER lexer_init_from_file(FILE *fd);
-void lexer_deinit(LEXER lexer);
-
-bool is_interactive(LEXER scanner);
+typedef struct Lexer {
+	FILE *fd;
+	Ring ring;
+} Lexer;
 
 typedef struct Location {
 	int first_line;
@@ -25,9 +27,12 @@ union TokenValue {
 	Node node;
 };
 
-// necessary for lval of GNU bison rule values
-#define YYSTYPE union TokenValue
+typedef void *LEXER;
 
+LEXER lexer_init_from_file(FILE *fd);
+void lexer_deinit(LEXER lexer);
 int lexer_lex(union TokenValue *lval, Location *location, LEXER scanner);
+
+bool is_interactive(LEXER scanner);
 
 #endif

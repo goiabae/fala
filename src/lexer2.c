@@ -5,23 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef FALA_WITH_REPL
+#	include <readline/history.h>
+#	include <readline/readline.h>
+#endif
+
 #include "lexer.h"
 #include "parser.h"
 
-typedef struct Lexer {
-	FILE *fd;
-	char *buf;
-	char *next;
-	size_t len;
-} Lexer;
-
-LEXER lexer_init_from_file(FILE *fd) {
-	Lexer *lexer = malloc(sizeof(Lexer));
-	lexer->fd = fd;
-	return (LEXER)lexer;
-}
-
-void lexer_deinit(LEXER lexer) { free(lexer); }
+#define FALA_RING_IMPL
+#include "ring.h"
 
 enum {
 	KW_DO,
@@ -46,15 +39,7 @@ enum {
 	KW_COUNT,
 };
 
-static const int keyword_parser_map[KW_COUNT] = {
-	[KW_DO] = DO,     [KW_END] = END,     [KW_IF] = IF,     [KW_THEN] = THEN,
-	[KW_ELSE] = ELSE, [KW_WHEN] = WHEN,   [KW_FOR] = FOR,   [KW_FROM] = FROM,
-	[KW_TO] = TO,     [KW_WHILE] = WHILE, [KW_VAR] = VAR,   [KW_LET] = LET,
-	[KW_IN] = IN,     [KW_FUN] = FUN,     [KW_OR] = OR,     [KW_AND] = AND,
-	[KW_NOT] = NOT,   [KW_NIL] = NIL,     [KW_TRUE] = TRUE,
-};
-
-static const char *keywords[KW_COUNT] = {
+static const char* keywords[KW_COUNT] = {
 	[KW_DO] = "do",       [KW_END] = "end",   [KW_IF] = "if",
 	[KW_THEN] = "then",   [KW_ELSE] = "else", [KW_WHEN] = "when",
 	[KW_FOR] = "for",     [KW_FROM] = "from", [KW_TO] = "to",
@@ -64,34 +49,95 @@ static const char *keywords[KW_COUNT] = {
 	[KW_TRUE] = "true",
 };
 
-static char *read_whole_file(FILE *fd, size_t *len) {
-	fseek(fd, 0, SEEK_END);
-	*len = ftell(fd);
-	fseek(fd, 0, SEEK_SET);
-	char *str = malloc(sizeof(char) * (*len));
-	fread(str, sizeof(char), *len, fd);
-	return str;
-}
+static const int keyword_parser_map[KW_COUNT] = {
+	[KW_DO] = DO,     [KW_END] = END,     [KW_IF] = IF,     [KW_THEN] = THEN,
+	[KW_ELSE] = ELSE, [KW_WHEN] = WHEN,   [KW_FOR] = FOR,   [KW_FROM] = FROM,
+	[KW_TO] = TO,     [KW_WHILE] = WHILE, [KW_VAR] = VAR,   [KW_LET] = LET,
+	[KW_IN] = IN,     [KW_FUN] = FUN,     [KW_OR] = OR,     [KW_AND] = AND,
+	[KW_NOT] = NOT,   [KW_NIL] = NIL,     [KW_TRUE] = TRUE,
+};
 
-static int advance(Lexer *lexer) {
-	if (lexer->next >= &lexer->buf[lexer->len - 1]) return 0;
-	char res = lexer->next[0];
-	lexer->next++;
-	return res;
-}
-
-static bool is_valid_id_char(char c) { return c == '_' || isalnum(c); }
-
-int lexer_lex(union TokenValue *lval, Location *location, LEXER interface) {
-	Lexer *lexer = (Lexer *)interface;
-
-	if (lexer->buf == NULL) {
-		lexer->buf = read_whole_file(lexer->fd, &lexer->len);
-		lexer->next = lexer->buf;
+#ifndef FALA_WITH_REPL
+static size_t read_line(char* buf, size_t size, size_t count, FILE* fd) {
+	(void)size;
+	size_t i = 0;
+	while (i < count) {
+		char c = getc(fd);
+		if (c == EOF) return i;
+		buf[i] = c;
+		i++;
 	}
+	return i;
+}
+#endif
 
-	char c = advance(lexer);
-	if (!c) return YYEOF;
+// ensures that there are elements to read in the ring buffer
+static void ensure(Lexer* lexer) {
+	if (lexer->ring.len == 0) {
+		char* buf;
+		size_t read = 0;
+
+#ifdef FALA_WITH_REPL
+		if (lexer->fd == stdin) {
+			buf = readline("fala> ");
+			if (!buf) return;
+			add_history(buf);
+			read = strlen(buf);
+		} else {
+			buf = malloc(sizeof(char) * lexer->ring.cap);
+			read = fread(buf, sizeof(char), lexer->ring.cap, lexer->fd);
+		}
+#else
+		buf = malloc(sizeof(char) * lexer->ring.cap);
+		if (lexer->fd == stdin)
+			read = read_line(buf, sizeof(char), lexer->ring.cap, lexer->fd);
+		else
+			read = fread(buf, sizeof(char), lexer->ring.cap, lexer->fd);
+#endif
+
+		if (read > 0) ring_write_many(&lexer->ring, buf, read);
+#ifdef FALA_WITH_REPL
+		if (lexer->fd == stdin) ring_write(&lexer->ring, '\n');
+#endif
+		free(buf);
+	}
+}
+
+static char peek(Lexer* lexer) {
+	ensure(lexer);
+	return ring_peek(&lexer->ring);
+}
+
+static char advance(Lexer* lexer, Location* loc) {
+	ensure(lexer);
+	char c = ring_read(&lexer->ring);
+	if (c == '\n') {
+		loc->last_line++;
+		loc->last_column = 0;
+	} else {
+		loc->last_column++;
+	}
+	return c;
+}
+
+static bool is_valid_id_char(char c) { return isalnum(c) || c == '_'; }
+
+static char* string_dup(char* str) {
+	const size_t len = strlen(str);
+	char* copy = malloc(sizeof(char) * (len + 1));
+	for (size_t i = 0; i < len; i++) copy[i] = str[i];
+	copy[len] = '\0';
+	return copy;
+}
+
+int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
+	loc->first_line = loc->last_line;
+	loc->first_column = loc->last_column;
+
+	Lexer* lexer = (Lexer*)_lexer;
+	(void)loc;
+	char c = advance(lexer, loc);
+	if (c < 0) return YYEOF;
 	switch (c) {
 		case '(': return PAREN_OPEN;
 		case ')': return PAREN_CLOSE;
@@ -99,60 +145,121 @@ int lexer_lex(union TokenValue *lval, Location *location, LEXER interface) {
 		case ']': return BRACKET_CLOSE;
 		case ';': return SEMICOL;
 		case ',': return COMMA;
-		case '=': return (advance(lexer) == '=') ? EQ_EQ : EQ;
-		case '>': return (advance(lexer) == '=') ? GREATER_EQ : GREATER;
-		case '<': return (advance(lexer) == '=') ? LESSER_EQ : LESSER;
+		case '=': {
+			if (peek(lexer) == '=') {
+				advance(lexer, loc);
+				return EQ_EQ;
+			} else
+				return EQ;
+		}
+		case '>': {
+			if (peek(lexer) == '=') {
+				advance(lexer, loc);
+				return GREATER_EQ;
+			} else
+				return GREATER;
+		}
+		case '<': {
+			if (peek(lexer) == '=') {
+				advance(lexer, loc);
+				return LESSER_EQ;
+			} else
+				return LESSER;
+		}
 		case '+': return PLUS;
 		case '-': return MINUS;
 		case '*': return ASTER;
 		case '/': return SLASH;
-		case '%': return PERCT;
+		case '%':
+			return PERCT;
 
-		case ' ': return lexer_lex(lval, location, interface);
-		case '\t': return lexer_lex(lval, location, interface);
-		case '\n': return lexer_lex(lval, location, interface);
+			// just skip whitespace
+		case ' ':
+		case '\t': return lexer_lex(value, loc, lexer);
+		case '\n': {
+#ifdef FALA_WITH_REPL
+			if (is_interactive(lexer))
+				return EOF;
+			else
+#endif
+				return lexer_lex(value, loc, lexer);
+		}
+
+		case '#': {
+			while ((c = peek(lexer)) != '\n') advance(lexer, loc);
+			return lexer_lex(value, loc, lexer);
+		}
 
 		case '"': {
-			const char *beg = lexer->next;
+			char buf[256];
 			size_t len = 0;
-			while (advance(lexer) != '"') len++;
-			char *str = malloc(sizeof(char) * (len + 1));
-			strncpy(str, beg, len); // TODO parse string
-			str[len] = '\0';
-			lval->str = str;
+			while ((c = advance(lexer, loc)) != '"') {
+				if (c == '\\') {
+					c = peek(lexer);
+					if (c == 'n') {
+						advance(lexer, loc);
+						buf[len++] = '\n';
+					} else if (c == 't') {
+						advance(lexer, loc);
+						buf[len++] = '\t';
+					} else if (c == 'r') {
+						advance(lexer, loc);
+						buf[len++] = '\r';
+					}
+				} else {
+					buf[len++] = c;
+				}
+			}
+			buf[len] = '\0';
+			value->str = string_dup(buf);
 			return STRING;
 		}
 		default: {
-			for (size_t i = 0; i < KW_COUNT; i++) {
-				size_t kw_len = strlen(keywords[i]);
-				if (strncmp(lexer->next, keywords[i], kw_len) == 0) {
-					lexer->next += kw_len;
-					return keyword_parser_map[i];
-				}
-			}
 			if (isdigit(c)) {
 				long num = c - '0';
-				while (isdigit(c = advance(lexer))) num = num * 10 + (c - '0');
-				lval->num = num;
+				while (isdigit(c = peek(lexer))) {
+					num = num * 10 + (c - '0');
+					advance(lexer, loc);
+				}
+				value->num = num;
 				return NUMBER;
 			} else if (isalpha(c) || c == '_') {
-				const char *beg = lexer->next - 1;
+				char buf[256];
+				buf[0] = c;
 				size_t len = 1;
-				while (is_valid_id_char(c = advance(lexer))) len++;
-				char *id = malloc(sizeof(char) * (len + 1));
-				strncpy(id, beg, len);
-				id[len] = '\0';
-				lval->str = id;
+				while (is_valid_id_char(c = peek(lexer))) {
+					buf[len++] = c;
+					advance(lexer, loc);
+				}
+				buf[len] = '\0';
+
+				// could be a reserved keyword
+				for (size_t i = 0; i < KW_COUNT; i++) {
+					if (strcmp(buf, keywords[i]) == 0) {
+						return keyword_parser_map[i];
+					}
+				}
+
+				value->str = string_dup(buf);
 				return ID;
-			} else {
-				assert(false && "LEXICAL_ERR: Unrecognized character");
 			}
+			assert(false && "LEX_ERR: Unrecognized character");
 		}
-	}
-	return 0;
+	};
+	assert(false);
 }
 
-bool is_interactive(void *interface) {
-	Lexer *scanner = (Lexer *)interface;
-	return scanner->fd == stdin;
+LEXER lexer_init_from_file(FILE* fd) {
+	Lexer* lexer = malloc(sizeof(Lexer));
+	lexer->fd = fd;
+	lexer->ring = ring_init();
+	return lexer;
 }
+
+void lexer_deinit(LEXER _lexer) {
+	Lexer* lexer = (Lexer*)_lexer;
+	ring_deinit(&lexer->ring);
+	free(lexer);
+}
+
+bool is_interactive(LEXER lexer) { return ((Lexer*)lexer)->fd == stdin; }
