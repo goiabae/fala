@@ -4,21 +4,17 @@ Toy programming language similar to Lua with a AST-walking interpreter, REPL and
 
 # Dependencies
 
-- GNU bison
+- GNU bison (If you're on Windows, use [this](https://github.com/lexxmark/winflexbison))
 - C11 compiler
+- CMake
 
 Optional REPL line editting requires GNU `readline`.
 
 # How to build
 
-Change the flags you want in the `makefile` and:
+To build with GNU readline support, use the `WITH_READLINE` option.
 
 ``` console
-$ make all
-```
-
-Or with nix shell:
-
-``` console
-$ nix-shell --run 'make all'
+$ cmake -S . -B build
+$ cmake --build build
 ```
