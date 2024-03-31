@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef FALA_WITH_REPL
+#ifdef FALA_WITH_READLINE
 #	include <readline/history.h>
 #	include <readline/readline.h>
 #endif
@@ -57,16 +57,12 @@ static const int keyword_parser_map[KW_COUNT] = {
 	[KW_NOT] = NOT,   [KW_NIL] = NIL,     [KW_TRUE] = TRUE,
 };
 
-#ifndef FALA_WITH_REPL
-static size_t read_line(char* buf, size_t size, size_t count, FILE* fd) {
-	(void)size;
+#ifndef FALA_WITH_READLINE
+static size_t read_line(char* buf, size_t count, FILE* fd) {
 	size_t i = 0;
-	while (i < count) {
-		char c = getc(fd);
-		if (c == EOF) return i;
-		buf[i] = c;
-		i++;
-	}
+	char c = '\0';
+	while (i < count && c != EOF)
+		buf[i++] = c = ((c = getc(fd)) == '\n') ? EOF : c;
 	return i;
 }
 #endif
@@ -77,7 +73,7 @@ static void ensure(Lexer* lexer) {
 		char* buf;
 		size_t read = 0;
 
-#ifdef FALA_WITH_REPL
+#ifdef FALA_WITH_READLINE
 		if (lexer->fd == stdin) {
 			buf = readline("fala> ");
 			if (!buf) return;
@@ -89,14 +85,15 @@ static void ensure(Lexer* lexer) {
 		}
 #else
 		buf = malloc(sizeof(char) * lexer->ring.cap);
-		if (lexer->fd == stdin)
-			read = read_line(buf, sizeof(char), lexer->ring.cap, lexer->fd);
-		else
+		if (lexer->fd == stdin) {
+			printf("fala> ");
+			read = read_line(buf, lexer->ring.cap, lexer->fd);
+		} else
 			read = fread(buf, sizeof(char), lexer->ring.cap, lexer->fd);
 #endif
 
 		if (read > 0) ring_write_many(&lexer->ring, buf, read);
-#ifdef FALA_WITH_REPL
+#ifdef FALA_WITH_READLINE
 		if (lexer->fd == stdin) ring_write(&lexer->ring, '\n');
 #endif
 		free(buf);
@@ -166,7 +163,7 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 		case ' ':
 		case '\t': return lexer_lex(value, loc, lexer);
 		case '\n': {
-#ifdef FALA_WITH_REPL
+#ifdef FALA_WITH_READLINE
 			if (is_interactive(lexer))
 				return EOF;
 			else

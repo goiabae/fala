@@ -2,7 +2,7 @@ CC = cc
 CFLAGS += -std=c11
 CFLAGS += -O0 -ggdb
 CFLAGS += -Wall -Wextra -pedantic -Wmissing-declarations
-# CFLAGS += -D FALA_WITH_REPL
+# CFLAGS += -D FALA_WITH_READLINE
 LIBS =
 # LIBS += -lreadline -lhistory
 
