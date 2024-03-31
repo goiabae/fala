@@ -68,20 +68,32 @@ static Options parse_args(int argc, char* argv[]) {
 
 	// getopt comes from POSIX which is not available on Windows
 #ifndef _WIN32
-	for (char c = 0; (c = getopt(argc, argv, "Vo:ci")) != -1;) switch (c) {
+	for (char c = 0; (c = (char)getopt(argc, argv, "Vo:ci")) != -1;) switch (c) {
 			case 'V': opts.verbose = true; break;
 			case 'o': opts.output_path = optarg; break;
 			case 'c': opts.compile = true; break;
 			case 'i': opts.interpret = true; break;
 			default: break;
 		}
+#else
+	size_t optind = 1;
 
+	for (size_t i = 1; i < argc; i++) {
+		if (argv[i][0] == '-' && argv[i][1] != '\0') {
+			switch (argv[i][1]) {
+				// FIXME parser -o output file
+				case 'V': opts.verbose = true; break;
+				case 'c': opts.compile = true; break;
+				case 'i': opts.interpret = true; break;
+			}
+			optind++;
+		} else
+			break;
+	}
+
+#endif
 	opts.argv = &argv[optind];
 	opts.argc = argc - optind;
-#else
-	opts.argv = &argv[1];
-	opts.argc = argc - 1;
-#endif
 
 	if (opts.argc < 1) {
 		opts.is_invalid = true;
