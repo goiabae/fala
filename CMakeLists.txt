@@ -5,14 +5,18 @@ project(fala)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(CMAKE_C_FLAGS_DEBUG "-ggdb -O0")
-
-add_compile_options(-Wall -Wextra -Wpedantic -Wconversion)
+if(WIN32)
+	add_compile_options(/W4)
+	set(CMAKE_C_FLAGS_DEBUG "/Zi /Od")
+else()
+	add_compile_options(-Wall -Wextra -Wpedantic -Wconversion)
+	set(CMAKE_C_FLAGS_DEBUG "-ggdb -O0")
+endif()
 
 option(WITH_READLINE "Enable readline line editting" OFF)
 
 if(WITH_READLINE)
-	add_compile_options(-D FALA_WITH_REPL)
+	add_compile_options(-D FALA_WITH_READLINE)
 endif()
 
 find_package(BISON REQUIRED)
