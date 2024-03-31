@@ -5,5 +5,6 @@ with pkgs; mkShell {
     bison
     flex
     readline
+    cmake
   ];
 }
