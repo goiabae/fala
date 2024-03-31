@@ -18,7 +18,7 @@ static Value* inter_env_get_new(Interpreter* inter, size_t sym_index);
 static Value* inter_env_find(Interpreter* inter, size_t sym_index);
 
 static Value builtin_read(size_t len, Value* args);
-static Value builtin_write(size_t len, Value args[len]);
+static Value builtin_write(size_t len, Value* args);
 
 static Value ast_node_eval(Interpreter* inter, Node node);
 static Value apply_function(Interpreter* inter, Node func_node, Node args_node);
@@ -381,12 +381,12 @@ static Value builtin_read(size_t _1, Value* _2) {
 	return val;
 }
 
-static Value builtin_write(size_t len, Value args[len]) {
+static Value builtin_write(size_t len, Value* args) {
 	for (size_t i = 0; i < len; i++) print_value(args[i]);
 	return (Value) {VALUE_NIL, .nil = NULL};
 }
 
-static Value builtin_array(size_t argc, Value args[argc]) {
+static Value builtin_array(size_t argc, Value* args) {
 	assert(argc == 1 && "INTEPRET_ERR: array takes a single numeric argument");
 	Number arr_len = args[0].num;
 	Value val;
@@ -396,7 +396,7 @@ static Value builtin_array(size_t argc, Value args[argc]) {
 	return val;
 }
 
-static Value builtin_exit(size_t argc, Value args[argc]) {
+static Value builtin_exit(size_t argc, Value* args) {
 	assert(argc == 1 && "INTEPRET_ERR: exit takes exit code as a argument");
 	Number exit_code = args[0].num;
 	exit(exit_code);

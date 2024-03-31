@@ -76,7 +76,7 @@ void ast_print(AST ast, SymbolTable* syms) {
 	ast_node_print(syms, ast.root, 0);
 }
 
-Node new_node(Type type, size_t len, Node children[len]) {
+Node new_node(Type type, size_t len, Node* children) {
 	Node node;
 	node.type = type;
 	node.children_count = len;

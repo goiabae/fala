@@ -65,7 +65,7 @@ void ast_deinit(AST ast);
 void ast_print(AST ast, SymbolTable* syms);
 
 // nodes
-Node new_node(Type type, size_t len, Node children[len]);
+Node new_node(Type type, size_t len, Node* children);
 Node new_list_node();
 Node new_string_node(Type type, SymbolTable* tab, String str);
 Node new_number_node(Number num);
