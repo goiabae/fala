@@ -26,6 +26,7 @@ enum {
 	KW_FOR,
 	KW_FROM,
 	KW_TO,
+	KW_STEP,
 	KW_WHILE,
 	KW_VAR,
 	KW_LET,
@@ -40,21 +41,21 @@ enum {
 };
 
 static const char* keywords[KW_COUNT] = {
-	[KW_DO] = "do",       [KW_END] = "end",   [KW_IF] = "if",
-	[KW_THEN] = "then",   [KW_ELSE] = "else", [KW_WHEN] = "when",
-	[KW_FOR] = "for",     [KW_FROM] = "from", [KW_TO] = "to",
-	[KW_WHILE] = "while", [KW_VAR] = "var",   [KW_LET] = "let",
-	[KW_IN] = "in",       [KW_FUN] = "fun",   [KW_OR] = "or",
-	[KW_AND] = "and",     [KW_NOT] = "not",   [KW_NIL] = "nil",
-	[KW_TRUE] = "true",
+	[KW_DO] = "do",     [KW_END] = "end",     [KW_IF] = "if",
+	[KW_THEN] = "then", [KW_ELSE] = "else",   [KW_WHEN] = "when",
+	[KW_FOR] = "for",   [KW_FROM] = "from",   [KW_TO] = "to",
+	[KW_STEP] = "step", [KW_WHILE] = "while", [KW_VAR] = "var",
+	[KW_LET] = "let",   [KW_IN] = "in",       [KW_FUN] = "fun",
+	[KW_OR] = "or",     [KW_AND] = "and",     [KW_NOT] = "not",
+	[KW_NIL] = "nil",   [KW_TRUE] = "true",
 };
 
 static const int keyword_parser_map[KW_COUNT] = {
-	[KW_DO] = DO,     [KW_END] = END,     [KW_IF] = IF,     [KW_THEN] = THEN,
-	[KW_ELSE] = ELSE, [KW_WHEN] = WHEN,   [KW_FOR] = FOR,   [KW_FROM] = FROM,
-	[KW_TO] = TO,     [KW_WHILE] = WHILE, [KW_VAR] = VAR,   [KW_LET] = LET,
-	[KW_IN] = IN,     [KW_FUN] = FUN,     [KW_OR] = OR,     [KW_AND] = AND,
-	[KW_NOT] = NOT,   [KW_NIL] = NIL,     [KW_TRUE] = TRUE,
+	[KW_DO] = DO,     [KW_END] = END,   [KW_IF] = IF,       [KW_THEN] = THEN,
+	[KW_ELSE] = ELSE, [KW_WHEN] = WHEN, [KW_FOR] = FOR,     [KW_FROM] = FROM,
+	[KW_TO] = TO,     [KW_STEP] = STEP, [KW_WHILE] = WHILE, [KW_VAR] = VAR,
+	[KW_LET] = LET,   [KW_IN] = IN,     [KW_FUN] = FUN,     [KW_OR] = OR,
+	[KW_AND] = AND,   [KW_NOT] = NOT,   [KW_NIL] = NIL,     [KW_TRUE] = TRUE,
 };
 
 #ifndef FALA_WITH_READLINE

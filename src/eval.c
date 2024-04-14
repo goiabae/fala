@@ -89,21 +89,30 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			break;
 		}
 		case AST_FOR: {
+			bool with_step = node.children_count == 5;
+
+			Node var_node = node.children[0].children[0];
+			Node from_node = node.children[1];
+			Node to_node = node.children[2];
+			Node step_node = node.children[3];
+			Node exp_node = node.children[3 + with_step];
+
 			inter_env_push(inter);
 
-			Node var = node.children[0];
-			Node id = var.children[0];
-			Value from = ast_node_eval(inter, node.children[1]);
-			Value to = ast_node_eval(inter, node.children[2]);
-			assert(from.tag == VALUE_NUM && to.tag == VALUE_NUM);
-			Node exp = node.children[3];
+			Value from = ast_node_eval(inter, from_node);
+			Value to = ast_node_eval(inter, to_node);
+			Value inc = (with_step) ? ast_node_eval(inter, step_node)
+			                        : (Value) {VALUE_NUM, .num = 1};
 
-			int inc = (from.num <= to.num) ? 1 : -1;
+			assert(
+				from.tag == VALUE_NUM && to.tag == VALUE_NUM && inc.tag == VALUE_NUM
+			);
 
-			Value* addr = inter_env_get_new(inter, id.index);
-			for (Number i = from.num; (i - inc) != to.num; i += inc) {
-				*addr = (Value) {VALUE_NUM, .num = i};
-				val = ast_node_eval(inter, exp);
+			Value* var = inter_env_get_new(inter, var_node.index);
+
+			for (Number i = from.num; i != to.num; i += inc.num) {
+				*var = (Value) {VALUE_NUM, .num = i};
+				val = ast_node_eval(inter, exp_node);
 			}
 
 			inter_env_pop(inter);

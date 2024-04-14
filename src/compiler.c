@@ -334,19 +334,20 @@ static Operand compile_node(
 			return res;
 		}
 		case AST_FOR: {
-			// FIXME hardcode comparison
-			// comparison cannot be determined at compile-time
+			bool with_step = node.children_count == 5;
 
 			Node var_node = node.children[0];
 			Node id = var_node.children[0];
 			Node from_node = node.children[1];
 			Node to_node = node.children[2];
-			Node exp_node = node.children[3];
+			Node exp_node = node.children[3 + with_step];
 
 			Operand l1 = OPERAND_LAB(comp->label_count++);
 			Operand l2 = OPERAND_LAB(comp->label_count++);
 			Operand cmp = OPERAND_TMP(comp->tmp_count++);
-			Operand one = {OPND_NUM, .num = 1};
+			Operand step = (with_step)
+			               ? compile_node(comp, node.children[3], syms, chunk)
+			               : (Operand) {OPND_NUM, .num = 1};
 
 			comp_env_push(comp);
 
@@ -356,12 +357,12 @@ static Operand compile_node(
 
 			emit(chunk, OP_MOV, *var, from);
 			emit(chunk, OP_LABEL, l1);
-			emit(chunk, OP_LESS_EQ, cmp, *var, to);
-			emit(chunk, OP_JMP_FALSE, cmp, l2);
+			emit(chunk, OP_EQ, cmp, *var, to);
+			emit(chunk, OP_JMP_TRUE, cmp, l2);
 
 			Operand exp = compile_node(comp, exp_node, syms, chunk);
 
-			emit(chunk, OP_ADD, *var, *var, one);
+			emit(chunk, OP_ADD, *var, *var, step);
 			emit(chunk, OP_JMP, l1);
 			emit(chunk, OP_LABEL, l2);
 

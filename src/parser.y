@@ -39,7 +39,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token <str> STRING
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO WHILE VAR LET IN FUN
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE VAR LET IN FUN
 %token NIL TRUE
 
 /* pontuation */
@@ -81,6 +81,7 @@ exp : DO exps END                          { $$ = $2; }
     | IF exp THEN exp ELSE exp             { $$ = new_node(AST_IF,    3, (Node[3]){$2, $4, $6}); }
     | WHEN exp THEN exp                    { $$ = new_node(AST_WHEN,  2, (Node[2]){$2, $4}); }
     | FOR VAR var FROM exp TO exp THEN exp { $$ = new_node(AST_FOR,   4, (Node[4]){$3, $5, $7, $9}); }
+    | FOR VAR var FROM exp TO exp STEP exp THEN exp { $$ = new_node(AST_FOR,   5, (Node[5]){$3, $5, $7, $9, $11}); }
     | WHILE exp THEN exp                   { $$ = new_node(AST_WHILE, 2, (Node[2]){$2, $4}); }
     | LET decls IN exp                     { $$ = new_node(AST_LET,   2, (Node[2]){$2, $4}); }
     | decl
