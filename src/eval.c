@@ -123,6 +123,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			if (var.children_count == 2) { // array indexing
 				Value idx = ast_node_eval(inter, var.children[1]);
 				assert(idx.tag == VALUE_NUM);
+				assert((size_t)idx.num < addr->arr.len);
 				val = (addr->arr.data[idx.num] = value);
 			} else { // plain
 				val = (*addr = value);
@@ -364,6 +365,9 @@ static Value builtin_read(size_t _1, Value* _2) {
 	(void)_1;
 	(void)_2;
 	char* buf = malloc(sizeof(char) * 100);
+	assert(
+		buf && "INTEPRET_ERR: couldn't allocate input buffer for `read' builtin"
+	);
 	if (fgets(buf, 100, stdin) == NULL) {
 		free(buf);
 		return (Value) {VALUE_NIL, .nil = NULL};
@@ -389,10 +393,12 @@ static Value builtin_write(size_t len, Value* args) {
 static Value builtin_array(size_t argc, Value* args) {
 	assert(argc == 1 && "INTEPRET_ERR: array takes a single numeric argument");
 	Number arr_len = args[0].num;
+	assert(arr_len >= 0 && "INTERPRET_ERR: array length must be positive");
 	Value val;
 	val.tag = VALUE_ARR;
-	val.arr.data = malloc(sizeof(Value) * arr_len);
-	val.arr.len = arr_len;
+	val.arr.data = malloc(sizeof(Value) * (size_t)arr_len);
+	assert(val.arr.data && "INTERPRET_ERR: dynamic memory allocation error");
+	val.arr.len = (size_t)arr_len;
 	return val;
 }
 
