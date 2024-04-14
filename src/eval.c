@@ -381,9 +381,9 @@ static Value builtin_read(size_t _1, Value* _2) {
 	}
 	const size_t len = strlen(buf);
 	buf[len - 1] = '\0';
-	long num = 0;
+	Number num = 0;
 	Value val;
-	if (sscanf(buf, "%ld", &num) == 0)
+	if (sscanf(buf, "%d", &num) == 0)
 		val = (Value) {VALUE_STR, .str = buf};
 	else {
 		free(buf);
