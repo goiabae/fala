@@ -201,12 +201,13 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				break;
 			}
 
-			assert(
-				left.tag == VALUE_NUM && right.tag == VALUE_NUM
-				&& "Only nil, true and number comparison are implemented"
-			);
-			val = (left.num == right.num) ? (Value) {VALUE_TRUE, .num = 1}
-			                              : (Value) {VALUE_NIL, .nil = NULL};
+			if (left.tag == VALUE_NUM && right.tag == VALUE_NUM) {
+				val = (left.num == right.num) ? (Value) {VALUE_TRUE, .num = 1}
+				                              : (Value) {VALUE_NIL, .nil = NULL};
+				break;
+			}
+
+			val = (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
 		case AST_NOT: {
