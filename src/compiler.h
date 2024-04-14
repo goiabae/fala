@@ -42,6 +42,12 @@ typedef struct Register {
 	size_t index;
 } Register;
 
+typedef struct Funktion {
+	size_t argc;
+	Node* args;
+	Node root;
+} Funktion;
+
 typedef struct Operand {
 	enum {
 		OPND_NIL, // no operand
@@ -51,6 +57,8 @@ typedef struct Operand {
 		OPND_LAB, // label
 		OPND_STR, // immediate string
 		OPND_NUM, // immediate number
+
+		OPND_FUN,
 	} type;
 	union {
 		void* nil;
@@ -58,6 +66,7 @@ typedef struct Operand {
 		size_t lab;
 		String str;
 		Number num;
+		Funktion fun;
 	};
 } Operand;
 

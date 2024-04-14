@@ -242,8 +242,8 @@ static Operand compile_node(
 ) {
 	switch (node.type) {
 		case AST_APP: {
-			Node func = node.children[0];
-			String func_name = sym_table_get(syms, func.index);
+			Node func_node = node.children[0];
+			String func_name = sym_table_get(syms, func_node.index);
 			Node args_node = node.children[1];
 
 			Operand* args = malloc(sizeof(Operand) * args_node.children_count);
@@ -259,8 +259,22 @@ static Operand compile_node(
 			else if (strcmp(func_name, "array") == 0)
 				res =
 					compile_builtin_array(comp, chunk, args_node.children_count, args);
-			else
-				assert(false && "COMPILER_ERR: Function application outside of builtins not implemented");
+			else {
+				Operand* func_opnd = comp_env_find(comp, func_node.index);
+				assert(func_opnd);
+				assert(func_opnd->type == OPND_FUN);
+				Funktion func = func_opnd->fun;
+				comp_env_push(comp);
+				for (size_t i = 0; i < func.argc; i++) {
+					Node arg = func.args[i];
+					assert(arg.type == AST_ID);
+					Operand* arg_opnd = comp_env_get_new(comp, arg.index);
+					*arg_opnd = args[i];
+				}
+
+				res = compile_node(comp, func.root, syms, chunk);
+				comp_env_pop(comp);
+			}
 
 			free(args);
 			return res;
@@ -434,10 +448,23 @@ static Operand compile_node(
 		case AST_STR:
 			return (Operand) {OPND_STR, .str = sym_table_get(syms, node.index)};
 		case AST_DECL: {
-			assert(
-				node.children_count != 3
-				&& "COMPILE_ERR: Function declaration not yet supported"
-			);
+			// fun f args = exp
+			if (node.children_count == 3) {
+				Node id = node.children[0];
+				Node args = node.children[1];
+				Node body = node.children[2];
+
+				Operand* opnd = comp_env_get_new(comp, id.index);
+				opnd->type = OPND_FUN;
+				opnd->fun = (Funktion) {
+					.root = body,
+					.argc = args.children_count,
+					.args =
+						args.children, // TODO investigate this might cause a double free
+				};
+
+				return OPERAND_NIL();
+			}
 
 			Node var = node.children[0];
 			Node id = var.children[0];
