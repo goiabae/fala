@@ -9,6 +9,12 @@
 #include "ast.h"
 #include "env.h"
 
+#define PUSH_BUILTIN(INTER, STR, FUNC)                                       \
+	*inter_env_get_new(&INTER, sym_table_insert(&(INTER).syms, strdup(STR))) = \
+		(Value) {                                                                \
+		VALUE_FUN, .func = {.is_builtin = true, .builtin = FUNC }                \
+	}
+
 static void value_deinit(Value val);
 static void value_stack_pop(ValueStack* stack, size_t index);
 
@@ -417,20 +423,17 @@ static void value_stack_pop(ValueStack* stack, size_t index) {
 
 Interpreter interpreter_init() {
 	Interpreter inter;
-	inter.values.values = malloc(sizeof(Value) * 32);
-	inter.values.cap = 32;
-	inter.values.len = 0;
+	inter.values = (ValueStack) {0, 32, malloc(sizeof(Value) * 32)};
 	inter.syms = sym_table_init();
 	inter.env = env_init();
+
 	inter_env_push(&inter);
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("read"))) =
-		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_read}};
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("write"))) =
-		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_write}};
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("array"))) =
-		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_array}};
-	*inter_env_get_new(&inter, sym_table_insert(&inter.syms, strdup("exit"))) =
-		(Value) {VALUE_FUN, .func = {.is_builtin = true, .builtin = builtin_exit}};
+
+	PUSH_BUILTIN(inter, "read", builtin_read);
+	PUSH_BUILTIN(inter, "write", builtin_write);
+	PUSH_BUILTIN(inter, "array", builtin_array);
+	PUSH_BUILTIN(inter, "exit", builtin_exit);
+
 	return inter;
 }
 
