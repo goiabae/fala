@@ -63,7 +63,7 @@ static size_t read_line(char* buf, size_t count, FILE* fd) {
 	size_t i = 0;
 	char c = '\0';
 	while (i < count && c != EOF)
-		buf[i++] = c = ((c = getc(fd)) == '\n') ? EOF : c;
+		buf[i++] = c = ((c = (char)getc(fd)) == '\n') ? EOF : c;
 	return i;
 }
 #endif
@@ -203,7 +203,7 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 					num = num * 10 + (c - '0');
 					advance(lexer, loc);
 				}
-				value->num = num;
+				value->num = (Number)num;
 				return NUMBER;
 			} else if (isalpha(c) || c == '_') {
 				char buf[256] = {[0] = c};
