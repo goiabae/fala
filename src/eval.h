@@ -49,6 +49,10 @@ typedef struct Interpreter {
 	SymbolTable syms;
 	ValueStack values;
 	Environment env;
+
+	bool in_loop;
+	bool should_break;
+	bool should_continue;
 } Interpreter;
 
 Interpreter interpreter_init();

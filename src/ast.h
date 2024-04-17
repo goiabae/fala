@@ -14,6 +14,8 @@ typedef enum Type {
 	AST_WHEN,
 	AST_FOR,
 	AST_WHILE,
+	AST_BREAK,
+	AST_CONTINUE,
 	AST_ASS,
 	AST_OR,
 	AST_AND,

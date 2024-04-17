@@ -12,15 +12,16 @@ static void node_deinit(Node node);
 // clang-format can't format this properly
 // relevant issue https://github.com/llvm/llvm-project/issues/61560
 static const char* node_repr[] = {
-	[AST_APP] = "app",     [AST_NUM] = NULL,    [AST_BLK] = "block",
-	[AST_IF] = "if",       [AST_WHEN] = "when", [AST_FOR] = "for",
-	[AST_WHILE] = "while", [AST_ASS] = "=",     [AST_OR] = "or",
-	[AST_AND] = "and",     [AST_GTN] = ">",     [AST_LTN] = "<",
-	[AST_GTE] = ">=",      [AST_LTE] = "<=",    [AST_EQ] = "==",
-	[AST_ADD] = "+",       [AST_SUB] = "-",     [AST_MUL] = "*",
-	[AST_DIV] = "/",       [AST_MOD] = "%",     [AST_NOT] = "not",
-	[AST_ID] = NULL,       [AST_STR] = NULL,    [AST_DECL] = "decl",
-	[AST_VAR] = "var",     [AST_LET] = "let",
+	[AST_APP] = "app",     [AST_NUM] = NULL,      [AST_BLK] = "block",
+	[AST_IF] = "if",       [AST_WHEN] = "when",   [AST_FOR] = "for",
+	[AST_WHILE] = "while", [AST_BREAK] = "break", [AST_CONTINUE] = "continue",
+	[AST_ASS] = "=",       [AST_OR] = "or",       [AST_AND] = "and",
+	[AST_GTN] = ">",       [AST_LTN] = "<",       [AST_GTE] = ">=",
+	[AST_LTE] = "<=",      [AST_EQ] = "==",       [AST_ADD] = "+",
+	[AST_SUB] = "-",       [AST_MUL] = "*",       [AST_DIV] = "/",
+	[AST_MOD] = "%",       [AST_NOT] = "not",     [AST_ID] = NULL,
+	[AST_STR] = NULL,      [AST_DECL] = "decl",   [AST_VAR] = "var",
+	[AST_LET] = "let",
 };
 
 AST ast_init(void) {

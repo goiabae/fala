@@ -93,6 +93,16 @@ typedef struct Compiler {
 	size_t reg_count;
 	Environment env;
 	VariableStack vars;
+
+	bool in_loop;
+	Operand cnt_lab; // jump to on continue
+	Operand brk_lab; // jump to on break
+
+	// MOVs to backpatch the operands
+	size_t back_patch_stack_len;
+	size_t* back_patch_stack;
+	size_t back_patch_len;
+	size_t* back_patch;
 } Compiler;
 
 void chunk_deinit(Chunk*);

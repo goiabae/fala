@@ -110,10 +110,14 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 
 			Value* var = inter_env_get_new(inter, var_node.index);
 
+			inter->in_loop = true;
 			for (Number i = from.num; i != to.num; i += inc.num) {
 				*var = (Value) {VALUE_NUM, .num = i};
 				val = ast_node_eval(inter, exp_node);
+				if (inter->should_break) break;
+				if (inter->should_continue) continue;
 			}
+			inter->in_loop = false;
 
 			inter_env_pop(inter);
 			break;
@@ -122,8 +126,35 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			assert(node.children_count == 2);
 			Node cond = node.children[0];
 			Node exp = node.children[1];
-			while (ast_node_eval(inter, cond).tag != VALUE_NIL)
+			inter->in_loop = true;
+			while (ast_node_eval(inter, cond).tag != VALUE_NIL) {
 				val = ast_node_eval(inter, exp);
+				if (inter->should_break) break;
+				if (inter->should_continue) continue;
+			}
+			inter->in_loop = false;
+			break;
+		}
+		case AST_BREAK: {
+			assert(inter->in_loop && "INTERPRET_ERR: can't break outside of loops");
+			inter->should_break = true;
+			assert(
+				node.children_count == 1
+				&& "INTERPRET_ERR: break requires a expression to evaluate the loop to"
+			);
+			val = ast_node_eval(inter, node.children[0]);
+			break;
+		}
+		case AST_CONTINUE: {
+			assert(
+				inter->in_loop && "INTERPRET_ERR: can't continue outside of loops"
+			);
+			inter->should_continue = true;
+			assert(
+				node.children_count == 1
+				&& "INTERPRET_ERR: break requires a expression to evaluate the loop to"
+			);
+			val = ast_node_eval(inter, node.children[0]);
 			break;
 		}
 		case AST_ASS: {
@@ -435,6 +466,10 @@ Interpreter interpreter_init() {
 	inter.values = (ValueStack) {0, 32, malloc(sizeof(Value) * 32)};
 	inter.syms = sym_table_init();
 	inter.env = env_init();
+
+	inter.in_loop = false;
+	inter.should_break = false;
+	inter.should_continue = false;
 
 	inter_env_push(&inter);
 

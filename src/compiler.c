@@ -40,12 +40,21 @@ Compiler compiler_init() {
 	comp.vars.cap = 32;
 	comp.vars.opnds = malloc(sizeof(Operand) * comp.vars.cap);
 	comp.env = env_init();
+	comp.in_loop = false;
+	comp.cnt_lab = OPERAND_NIL();
+	comp.brk_lab = OPERAND_NIL();
+	comp.back_patch_stack_len = 0;
+	comp.back_patch_stack = malloc(sizeof(size_t) * 32);
+	comp.back_patch_len = 0;
+	comp.back_patch = malloc(sizeof(size_t) * 32);
 	return comp;
 }
 
 void compiler_deinit(Compiler* comp) {
 	env_deinit(&comp->env, (void (*)(void*, size_t))var_stack_pop, &comp->vars);
 	free(comp->vars.opnds);
+	free(comp->back_patch);
+	free(comp->back_patch_stack);
 	return;
 }
 
@@ -102,6 +111,15 @@ static void chunk_append(Chunk* chunk, Instruction inst) {
 		&& "COMPILER_ERR: Max number of instructions exceeded"
 	);
 	chunk->insts[chunk->len++] = inst;
+}
+
+// backpatch MOVs destination operand
+static void chunk_backpatch(Compiler* comp, Chunk* chunk, Operand dest) {
+	size_t to_patch = comp->back_patch_stack[comp->back_patch_stack_len - 1];
+	for (size_t i = 0; i < to_patch; i++) {
+		size_t idx = comp->back_patch[comp->back_patch_len-- - 1];
+		chunk->insts[idx].operands[0] = dest;
+	}
 }
 
 static void print_str(FILE* fd, String str) {
@@ -342,8 +360,9 @@ static Operand compile_node(
 			Node to_node = node.children[2];
 			Node exp_node = node.children[3 + with_step];
 
-			Operand l1 = OPERAND_LAB(comp->label_count++);
-			Operand l2 = OPERAND_LAB(comp->label_count++);
+			Operand beg = OPERAND_LAB(comp->label_count++);
+			Operand inc = comp->cnt_lab = OPERAND_LAB(comp->label_count++);
+			Operand end = comp->brk_lab = OPERAND_LAB(comp->label_count++);
 			Operand cmp = OPERAND_TMP(comp->tmp_count++);
 			Operand step = (with_step)
 			               ? compile_node(comp, node.children[3], syms, chunk)
@@ -355,16 +374,24 @@ static Operand compile_node(
 			Operand to = compile_node(comp, to_node, syms, chunk);
 			Operand* var = comp_env_get_new(comp, id.index);
 
+			comp->back_patch_stack[comp->back_patch_stack_len++] = 0;
+			comp->in_loop = true;
+
 			emit(chunk, OP_MOV, *var, from);
-			emit(chunk, OP_LABEL, l1);
+			emit(chunk, OP_LABEL, beg);
 			emit(chunk, OP_EQ, cmp, *var, to);
-			emit(chunk, OP_JMP_TRUE, cmp, l2);
+			emit(chunk, OP_JMP_TRUE, cmp, end);
 
 			Operand exp = compile_node(comp, exp_node, syms, chunk);
+			chunk_backpatch(comp, chunk, exp);
 
+			emit(chunk, OP_LABEL, inc);
 			emit(chunk, OP_ADD, *var, *var, step);
-			emit(chunk, OP_JMP, l1);
-			emit(chunk, OP_LABEL, l2);
+			emit(chunk, OP_JMP, beg);
+			emit(chunk, OP_LABEL, end);
+
+			comp->back_patch_stack_len--;
+			comp->in_loop = false;
 
 			comp_env_pop(comp);
 
@@ -374,21 +401,54 @@ static Operand compile_node(
 			Node cond = node.children[0];
 			Node exp = node.children[1];
 
-			Operand l1 = OPERAND_LAB(comp->label_count++);
-			Operand l2 = OPERAND_LAB(comp->label_count++);
+			Operand beg = comp->cnt_lab = OPERAND_LAB(comp->label_count++);
+			Operand end = comp->brk_lab = OPERAND_LAB(comp->label_count++);
 
-			emit(chunk, OP_LABEL, l1);
+			comp->back_patch_stack[comp->back_patch_stack_len++] = 0;
+			comp->in_loop = true;
+
+			emit(chunk, OP_LABEL, beg);
 
 			Operand cond_opnd = compile_node(comp, cond, syms, chunk);
 
-			emit(chunk, OP_JMP_FALSE, cond_opnd, l2);
+			emit(chunk, OP_JMP_FALSE, cond_opnd, end);
 
 			Operand exp_opnd = compile_node(comp, exp, syms, chunk);
+			chunk_backpatch(comp, chunk, exp_opnd);
 
-			emit(chunk, OP_JMP, l1);
-			emit(chunk, OP_LABEL, l2);
+			emit(chunk, OP_JMP, beg);
+			emit(chunk, OP_LABEL, end);
+
+			comp->back_patch_stack_len--;
+			comp->in_loop = false;
 
 			return exp_opnd;
+		}
+		case AST_BREAK: {
+			assert(comp->in_loop && "INTERPRET_ERR: can't break outside of loops");
+			assert(
+				node.children_count == 1
+				&& "COMPILE_ERR: break requires a expression to evaluate the loop to"
+			);
+			Operand res = compile_node(comp, node.children[0], syms, chunk);
+			emit(chunk, OP_MOV, OPERAND_NIL(), res);
+			comp->back_patch_stack[comp->back_patch_stack_len - 1]++;
+			comp->back_patch[comp->back_patch_len++] = chunk->len - 1;
+			emit(chunk, OP_JMP, comp->brk_lab);
+			return OPERAND_NIL();
+		}
+		case AST_CONTINUE: {
+			assert(comp->in_loop && "INTERPRET_ERR: can't continue outside of loops");
+			assert(
+				node.children_count == 1
+				&& "COMPILE_ERR: continue requires a expression to evaluate the loop to"
+			);
+			Operand res = compile_node(comp, node.children[0], syms, chunk);
+			emit(chunk, OP_MOV, OPERAND_NIL(), res);
+			comp->back_patch_stack[comp->back_patch_stack_len - 1]++;
+			comp->back_patch[comp->back_patch_len++] = chunk->len - 1;
+			emit(chunk, OP_JMP, comp->cnt_lab);
+			return OPERAND_NIL();
 		}
 		case AST_ASS: {
 			Node var = node.children[0];

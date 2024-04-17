@@ -39,7 +39,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token <str> STRING
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE VAR LET IN FUN
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN
 %token NIL TRUE
 
 /* pontuation */
@@ -88,6 +88,8 @@ exp : DO exps END                          { $$ = $2; }
     | var "=" exp                          { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
     | infix
     | func args                            { $$ = new_node(AST_APP,   2, (Node[2]){$1, $2}); }
+    | BREAK exp     { $$ = new_node(AST_BREAK,    1, (Node[1]) {$2}); }
+    | CONTINUE exp  { $$ = new_node(AST_CONTINUE, 1, (Node[1]) {$2}); }
     ;
 
 func : id | "(" exp ")" { $$ = $2; } ;
