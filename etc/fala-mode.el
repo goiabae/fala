@@ -21,7 +21,11 @@
   '("array" "read" "write"))
 
 (defconst fala-keywords
-  '("if" "then" "else" "when" "while" "for" "from" "to" "step" "var" "do" "end" "let" "in" "and" "or" "not" "fun"))
+  '("if" "then" "else" "when"
+    "while" "for" "from" "to" "step" "break" "continue"
+    "let" "in" "do" "end"
+    "and" "or" "not"
+    "var" "fun"))
 
 (defconst fala-constants
   '("nil" "true"))
