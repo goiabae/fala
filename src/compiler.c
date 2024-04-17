@@ -144,6 +144,7 @@ static void print_operand(FILE* fd, Operand opnd) {
 		case OPND_LAB: fprintf(fd, "L%03zu", opnd.lab); break;
 		case OPND_STR: print_str(fd, opnd.str); break;
 		case OPND_NUM: fprintf(fd, "%d", opnd.num); break;
+		case OPND_FUN: assert(false);
 	}
 }
 
@@ -463,7 +464,7 @@ static Operand compile_node(
 				// if register is the start of the array then say so, otherwise it is a
 				// address to the register that contains the beggining of the array
 				Operand base = (reg->reg.type == VAL_NUM)
-				               ? (Operand) {OPND_NUM, .num = reg->reg.index}
+				               ? (Operand) {OPND_NUM, .num = (Number)reg->reg.index}
 				               : *reg;
 				Operand idx = compile_node(comp, var.children[1], syms, chunk);
 				emit(chunk, OP_STORE, tmp, idx, base);
@@ -547,7 +548,7 @@ static Operand compile_node(
 					&& "COMPILER_ERR: Bracket declarations requires the size to be constant. Use the `array' built-in, instead."
 				);
 				Operand size_opnd = compile_node(comp, size, syms, chunk);
-				(void)comp_env_get_new_offset(comp, id.index, size_opnd.num);
+				(void)comp_env_get_new_offset(comp, id.index, (size_t)size_opnd.num);
 				return OPERAND_NIL();
 			}
 
@@ -568,7 +569,7 @@ static Operand compile_node(
 			Operand res = OPERAND_TMP(comp->tmp_count++);
 			Operand off = compile_node(comp, node.children[1], syms, chunk);
 			Operand base = (reg->reg.type == VAL_NUM)
-			               ? (Operand) {OPND_NUM, .num = reg->reg.index}
+			               ? (Operand) {OPND_NUM, .num = (Number)reg->reg.index}
 			               : *reg;
 
 			emit(chunk, OP_LOAD, res, off, base);

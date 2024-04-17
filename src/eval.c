@@ -300,9 +300,9 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				Value size = ast_node_eval(inter, var.children[1]);
 				*cell = (Value) {
 					VALUE_ARR,
-					.arr.data = malloc(sizeof(Value) * size.num),
-					.arr.len = size.num};
-				memset(cell->arr.data, 0, sizeof(Value) * size.num);
+					.arr.data = malloc(sizeof(Value) * (size_t)size.num),
+					.arr.len = (size_t)size.num};
+				memset(cell->arr.data, 0, sizeof(Value) * (size_t)size.num);
 			}
 
 			// var id and var arr [size]
