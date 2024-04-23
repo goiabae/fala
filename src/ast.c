@@ -119,6 +119,15 @@ Node list_append_node(Node list, Node next) {
 	return list;
 }
 
+Node list_prepend_node(Node list, Node next) {
+	if (list.children_count != 0)
+		for (size_t i = list.children_count; i > 0; i--)
+			list.children[i] = list.children[i - 1];
+	list.children_count++;
+	list.children[0] = next;
+	return list;
+}
+
 static void node_deinit(Node node) {
 	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR)
 		return;

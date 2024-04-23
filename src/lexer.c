@@ -191,6 +191,7 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 		case '-': return MINUS;
 		case '*': return ASTER;
 		case '/': return SLASH;
+		case '.': return DOT;
 		case '%':
 			return PERCT;
 

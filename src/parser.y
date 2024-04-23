@@ -47,6 +47,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token BRACKET_OPEN "[" BRACKET_CLOSE "]"
 %token SEMICOL ";"
 %token COMMA ","
+%token DOT "."
 
 /* binary operators */
 %token EQ "="
@@ -56,6 +57,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token ASTER "*" SLASH "/" PERCT "%"
 %token NOT
 
+%left DOT
 %left OR AND
 %left GREATER_EQ LESSER_EQ EQ_EQ GREATER LESSER
 %left PLUS MINUS
@@ -63,7 +65,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %nonassoc NOT
 
 /* non-terminals */
-%type <node> exp exps infix term id decl decls var args func params
+%type <node> exp exps infix term id decl decls var more-args params
 
 %%
 
@@ -87,16 +89,9 @@ exp : DO exps END                          { $$ = $2; }
     | decl
     | var "=" exp                          { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
     | infix
-    | func args                            { $$ = new_node(AST_APP,   2, (Node[2]){$1, $2}); }
     | BREAK exp     { $$ = new_node(AST_BREAK,    1, (Node[1]) {$2}); }
     | CONTINUE exp  { $$ = new_node(AST_CONTINUE, 1, (Node[1]) {$2}); }
     ;
-
-func : id | "(" exp ")" { $$ = $2; } ;
-
-args : term      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-     | args term { $$ = list_append_node($$, $2); }
-     ;
 
 decl : VAR var               { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
      | VAR var "=" exp       { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
@@ -118,6 +113,8 @@ var : id             { $$ = new_node(AST_VAR, 1, (Node[1]){$1}); }
 id : ID { $$ = new_string_node(AST_ID, syms, $1); }
 
 infix : term
+      | id term more-args      { $$ = new_node(AST_APP, 2, (Node[2]){$1, list_prepend_node($3, $2)}); }
+      | infix "." id more-args { $$ = new_node(AST_APP, 2, (Node[2]){$3, list_prepend_node($4, $1)}); }
       | infix OR   infix { $$ = new_node(AST_OR,  2, (Node[2]){$1, $3}); }
       | infix AND  infix { $$ = new_node(AST_AND, 2, (Node[2]){$1, $3}); }
       | infix ">"  infix { $$ = new_node(AST_GTN, 2, (Node[2]){$1, $3}); }
@@ -132,6 +129,10 @@ infix : term
       | infix "%"  infix { $$ = new_node(AST_MOD, 2, (Node[2]){$1, $3}); }
       | NOT infix        { $$ = new_node(AST_NOT, 1, (Node[1]){$2}); }
       ;
+
+more-args : %empty         { $$ = new_list_node(); }
+          | more-args term { $$ = list_append_node($$, $2); }
+          ;
 
 term : "(" exp ")" { $$ = $2; }
      | NUMBER      { $$ = new_number_node($1); };

@@ -74,6 +74,7 @@ Node new_number_node(Number num);
 Node new_nil_node();
 Node new_true_node();
 Node list_append_node(Node list, Node next);
+Node list_prepend_node(Node list, Node next);
 
 // symbol table
 SymbolTable sym_table_init();
