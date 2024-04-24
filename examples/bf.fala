@@ -69,4 +69,5 @@ in do
 		else nil;
 		ip = next;
 	end;
+	0;
 end
