@@ -82,10 +82,13 @@ Node new_node(Type type, size_t len, Node* children) {
 	node.type = type;
 	node.children_count = len;
 	node.children = NULL;
-	if (len > 0) {
-		node.children = malloc(sizeof(Node) * len);
-		memcpy(node.children, children, sizeof(Node) * len);
-	}
+	node.loc.first_column = children[0].loc.first_column;
+	node.loc.first_line = children[0].loc.first_line;
+	node.loc.last_column = children[len - 1].loc.last_column;
+	node.loc.last_line = children[len - 1].loc.last_line;
+	assert(len > 0);
+	node.children = malloc(sizeof(Node) * len);
+	memcpy(node.children, children, sizeof(Node) * len);
 	return node;
 }
 
@@ -97,24 +100,31 @@ Node new_list_node() {
 	return node;
 }
 
-Node new_string_node(Type type, SymbolTable* tab, String str) {
+Node new_string_node(Type type, Location loc, SymbolTable* tab, String str) {
 	Node node;
+	node.loc = loc;
 	node.index = sym_table_insert(tab, str);
 	node.type = type;
 	return node;
 }
 
-Node new_number_node(Number num) {
+Node new_number_node(Location loc, Number num) {
 	Node node;
 	node.type = AST_NUM;
+	node.loc = loc;
 	node.num = num;
 	return node;
 }
 
-Node new_nil_node() { return (Node) {.type = AST_NIL}; }
-Node new_true_node() { return (Node) {.type = AST_TRUE}; }
+Node new_nil_node(Location loc) { return (Node) {.type = AST_NIL, .loc = loc}; }
+Node new_true_node(Location loc) {
+	return (Node) {.type = AST_TRUE, .loc = loc};
+}
 
 Node list_append_node(Node list, Node next) {
+	if (list.children_count == 0) list.loc = next.loc;
+	list.loc.last_column = next.loc.last_column;
+	list.loc.last_line = next.loc.last_line;
 	list.children[list.children_count++] = next;
 	return list;
 }
@@ -123,6 +133,11 @@ Node list_prepend_node(Node list, Node next) {
 	if (list.children_count != 0)
 		for (size_t i = list.children_count; i > 0; i--)
 			list.children[i] = list.children[i - 1];
+	else
+		list.loc = next.loc;
+	// FIXME might be out of order
+	list.loc.first_column = next.loc.last_column;
+	list.loc.first_line = next.loc.last_line;
 	list.children_count++;
 	list.children[0] = next;
 	return list;

@@ -39,8 +39,16 @@ typedef enum Type {
 	AST_LET,
 } Type;
 
+typedef struct Location {
+	int first_line;
+	int first_column;
+	int last_line;
+	int last_column;
+} Location;
+
 typedef struct Node {
 	Type type;
+	Location loc;
 	union {
 		Number num;
 		size_t index;
@@ -69,10 +77,10 @@ void ast_print(AST ast, SymbolTable* syms);
 // nodes
 Node new_node(Type type, size_t len, Node* children);
 Node new_list_node();
-Node new_string_node(Type type, SymbolTable* tab, String str);
-Node new_number_node(Number num);
-Node new_nil_node();
-Node new_true_node();
+Node new_string_node(Type type, Location loc, SymbolTable* tab, String str);
+Node new_number_node(Location loc, Number num);
+Node new_nil_node(Location loc);
+Node new_true_node(Location loc);
 Node list_append_node(Node list, Node next);
 Node list_prepend_node(Node list, Node next);
 

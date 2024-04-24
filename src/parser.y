@@ -71,7 +71,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 
 %start program ;
 
-program : %empty { ast->root = new_number_node(0); if (is_interactive(scanner)) YYACCEPT; }
+program : %empty { ast->root = new_number_node(yyloc, 0); if (is_interactive(scanner)) YYACCEPT; }
         | exp    { ast->root = $1; if (is_interactive(scanner)) YYACCEPT; }
         ;
 
@@ -110,7 +110,7 @@ var : id             { $$ = new_node(AST_VAR, 1, (Node[1]){$1}); }
     | id "[" exp "]" { $$ = new_node(AST_VAR, 2, (Node[2]){$1, $3}); }
     ;
 
-id : ID { $$ = new_string_node(AST_ID, syms, $1); }
+id : ID { $$ = new_string_node(AST_ID, yyloc, syms, $1); }
 
 infix : term
       | id term more-args      { $$ = new_node(AST_APP, 2, (Node[2]){$1, list_prepend_node($3, $2)}); }
@@ -135,11 +135,11 @@ more-args : %empty         { $$ = new_list_node(); }
           ;
 
 term : "(" exp ")" { $$ = $2; }
-     | NUMBER      { $$ = new_number_node($1); };
      | var
-     | STRING      { $$ = new_string_node(AST_STR, syms, $1); }
-     | NIL         { $$ = new_nil_node(); }
-     | TRUE        { $$ = new_true_node(); }
+     | NUMBER      { $$ = new_number_node(yyloc, $1); };
+     | STRING      { $$ = new_string_node(AST_STR, yyloc, syms, $1); }
+     | NIL         { $$ = new_nil_node(yyloc); }
+     | TRUE        { $$ = new_true_node(yyloc); }
      ;
 
 %%
