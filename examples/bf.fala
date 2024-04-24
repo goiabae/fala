@@ -10,12 +10,19 @@ let
 	var OPEN  = 6, # [
 	var CLOSE = 7 # ]
 in let
-	var data [256],
-	var inst [512],
+	var data = array 256,
+	var inst = array 512,
 	var dp = 0,
 	var ip = 0,
 	var op
 in do
+	# clear inst and data tapes
+	for var i from 0 to 512 then
+		inst[i] = 0-69;
+	for var i from 0 to 256 then
+		data[i] = 0;
+
+	# read instructions
 	var len = 0;
 	op = read nil;
   while op >= 0 and op <= 7 then do
@@ -23,12 +30,18 @@ in do
 		len = len + 1;
 		op = read nil;
 	end;
+
 	write "brainfuck program:\n\t";
-	for var i from 0 to len-1 then
+	for var i from 0 to len then
 		write inst[i];
 	write "\n";
-	while ip >= 0 and ip < len then let var next = ip + 1 in do
-		op = inst [ip];
+
+	# run program
+	let fun is_inst op =
+		op >= 0 and op <= 7
+	in
+	while is_inst (op = inst[ip]) then
+	let var next = (ip + 1) % 256 in do
 		if op == GREAT then
 			dp = dp + 1
 		else if op == LESS then
@@ -40,18 +53,18 @@ in do
 		else if op == DOT then
 			write data[dp] "\n"
 		else if op == COMMA then
-			data [dp] = read nil
+			write (data [dp] = read nil) "\n"
 		else if op == OPEN then
 			when data [dp] == 0 then do
 				while not inst [next] == CLOSE then
-					next = next + 1;
-				next = next + 1;
+					next = (next + 1) % 256;
+				next = (next + 1) % 256;
 			end
 		else if op == CLOSE then
 			when not data [dp] == 0 then do
 				while not inst [next] == OPEN then
-					next = next - 1;
-				next = next + 1;
+					next = (next - 1) % 256;
+				next = (next + 1) % 256;
 			end
 		else nil;
 		ip = next;
