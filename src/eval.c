@@ -29,6 +29,8 @@ static Value builtin_write(size_t len, Value* args);
 static Value ast_node_eval(Interpreter* inter, Node node);
 static Value apply_function(Interpreter* inter, Node func_node, Node args_node);
 
+static Value rvalue(Value val);
+
 static void inter_env_push(Interpreter* inter) { env_push(&inter->env); }
 
 static void inter_env_pop(Interpreter* inter) {
@@ -91,7 +93,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		case AST_FOR: {
 			bool with_step = node.children_count == 5;
 
-			Node var_node = node.children[0].children[0];
+			Node decl_node = node.children[0];
 			Node from_node = node.children[1];
 			Node to_node = node.children[2];
 			Node step_node = node.children[3];
@@ -99,20 +101,21 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 
 			inter_env_push(inter);
 
-			Value from = ast_node_eval(inter, from_node);
-			Value to = ast_node_eval(inter, to_node);
-			Value inc = (with_step) ? ast_node_eval(inter, step_node)
+			assert(decl_node.type == AST_DECL);
+			Value lval = ast_node_eval(inter, decl_node);
+
+			Value from = rvalue(ast_node_eval(inter, from_node));
+			Value to = rvalue(ast_node_eval(inter, to_node));
+			Value inc = (with_step) ? rvalue(ast_node_eval(inter, step_node))
 			                        : (Value) {VALUE_NUM, .num = 1};
 
 			assert(
 				from.tag == VALUE_NUM && to.tag == VALUE_NUM && inc.tag == VALUE_NUM
 			);
 
-			Value* var = inter_env_get_new(inter, var_node.index);
-
 			inter->in_loop = true;
 			for (Number i = from.num; i != to.num; i += inc.num) {
-				*var = (Value) {VALUE_NUM, .num = i};
+				*(lval.addr) = (Value) {VALUE_NUM, .num = i};
 				val = ast_node_eval(inter, exp_node);
 				if (inter->should_break) break;
 				if (inter->should_continue) continue;
@@ -159,21 +162,12 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		}
 		case AST_ASS: {
 			assert(node.children_count == 2);
-			Node var = node.children[0];
-			assert(var.type == AST_VAR);
-			Node id = var.children[0];
-			Value value = ast_node_eval(inter, node.children[1]);
-			Value* addr = inter_env_find(inter, id.index);
-			assert(addr && "Variable not found. Address is 0x0");
-
-			if (var.children_count == 2) { // array indexing
-				Value idx = ast_node_eval(inter, var.children[1]);
-				assert(idx.tag == VALUE_NUM);
-				assert((size_t)idx.num < addr->arr.len);
-				val = (addr->arr.data[idx.num] = value);
-			} else { // plain
-				val = (*addr = value);
-			}
+			Node lval_node = node.children[0];
+			Value value = rvalue(ast_node_eval(inter, node.children[1]));
+			Value lval = ast_node_eval(inter, lval_node);
+			assert(lval.tag == VALUE_LVAL);
+			assert(lval.addr && "Variable not found. Address is 0x0");
+			val = (*(lval.addr) = value);
 			break;
 		}
 		case AST_OR: {
@@ -200,14 +194,22 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			                               : (Value) {VALUE_TRUE, .num = 1};
 			break;
 		}
-#define ARITH_OP(OP)                                         \
-	{                                                          \
-		assert(node.children_count == 2);                        \
-		Value left = ast_node_eval(inter, node.children[0]);     \
-		Value right = ast_node_eval(inter, node.children[1]);    \
-		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM); \
-		val = (Value) {VALUE_NUM, .num = left.num OP right.num}; \
-		break;                                                   \
+#define ARITH_OP(OP)                                              \
+	{                                                               \
+		assert(node.children_count == 2);                             \
+		Node left_node = node.children[0];                            \
+		Value left = rvalue(ast_node_eval(inter, node.children[0]));  \
+		Value right = rvalue(ast_node_eval(inter, node.children[1])); \
+		if (!(left.tag == VALUE_NUM && right.tag == VALUE_NUM)) {     \
+			printf(                                                     \
+				"INTERPRET_ERR(%d, %d): arith op only between numbers",   \
+				left_node.loc.first_line,                                 \
+				left_node.loc.first_column                                \
+			);                                                          \
+			exit(1);                                                    \
+		}                                                             \
+		val = (Value) {VALUE_NUM, .num = left.num OP right.num};      \
+		break;                                                        \
 	}
 		case AST_ADD: ARITH_OP(+);
 		case AST_SUB: ARITH_OP(-);
@@ -218,8 +220,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 #define CMP_OP(OP)                                                    \
 	{                                                                   \
 		assert(node.children_count == 2);                                 \
-		Value left = ast_node_eval(inter, node.children[0]);              \
-		Value right = ast_node_eval(inter, node.children[1]);             \
+		Value left = rvalue(ast_node_eval(inter, node.children[0]));      \
+		Value right = rvalue(ast_node_eval(inter, node.children[1]));     \
 		assert(                                                           \
 			left.tag == VALUE_NUM && right.tag == VALUE_NUM                 \
 			&& "Arithmetic comparison is allowed only between numbers"      \
@@ -235,8 +237,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 #undef CMP_OP
 		case AST_EQ: {
 			assert(node.children_count == 2);
-			Value left = ast_node_eval(inter, node.children[0]);
-			Value right = ast_node_eval(inter, node.children[1]);
+			Value left = rvalue(ast_node_eval(inter, node.children[0]));
+			Value right = rvalue(ast_node_eval(inter, node.children[1]));
 			if (left.tag == VALUE_NIL && right.tag == VALUE_NIL) {
 				val = (Value) {VALUE_TRUE, .num = 1};
 				break;
@@ -259,12 +261,29 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		case AST_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
-			Value v = ast_node_eval(inter, op);
+			Value v = rvalue(ast_node_eval(inter, op));
 			val = (v.tag == VALUE_NIL) ? (Value) {VALUE_TRUE, .num = 1}
 			                           : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
-		case AST_ID: assert(false);
+		case AST_ID: {
+			Value* addr = inter_env_find(inter, node.index);
+			if (!addr) {
+				String name = sym_table_get(&inter->syms, node.index);
+				AST sub_ast = {node};
+				ast_print(sub_ast, &inter->syms);
+				printf(
+					"INTERPRET_ERR(%d, %d): Variable \"%s\" was not previously declared.",
+					node.loc.first_line,
+					node.loc.first_column,
+					name
+				);
+				exit(1);
+			}
+
+			val = (Value) {.tag = VALUE_LVAL, .addr = addr};
+			break;
+		}
 		case AST_STR: {
 			val = (Value) {VALUE_STR, .str = sym_table_get(&inter->syms, node.index)};
 			break;
@@ -285,47 +304,23 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				break;
 			}
 
-			Node var = node.children[0];
-			Node id = var.children[0];
+			Node id = node.children[0];
 			Value* cell = inter_env_get_new(inter, id.index);
 
 			// var id = exp
-			if (node.children_count == 2) {
-				val = *cell = ast_node_eval(inter, node.children[1]);
-				break;
-			}
+			if (node.children_count == 2)
+				*cell = ast_node_eval(inter, node.children[1]);
 
-			// var arr [size]
-			if (var.children_count == 2) {
-				Value size = ast_node_eval(inter, var.children[1]);
-				*cell = (Value) {
-					VALUE_ARR,
-					.arr.data = malloc(sizeof(Value) * (size_t)size.num),
-					.arr.len = (size_t)size.num};
-				memset(cell->arr.data, 0, sizeof(Value) * (size_t)size.num);
-			}
-
-			// var id and var arr [size]
-			// no value to return
-			val = (Value) {VALUE_NIL, .nil = NULL};
+			val = (Value) {.tag = VALUE_LVAL, .addr = cell};
 			break;
 		}
-		case AST_VAR: {
-			Node id = node.children[0];
-			Value* addr = inter_env_find(inter, id.index);
-			assert(addr && "Variable not previously declared.");
-
-			if (node.children_count == 1) { // id
-				val = *addr;
-			} else { // id[idx]
-				Value idx = ast_node_eval(inter, node.children[1]);
-				assert(
-					addr->tag == VALUE_ARR
-					&& "Variable does not correspond to a previously declared array"
-				);
-				assert(idx.tag == VALUE_NUM && "Index is not a number");
-				val = (Value) {VALUE_NUM, .num = addr->arr.data[idx.num].num};
-			}
+		case AST_AT: {
+			Node left_node = node.children[0];
+			Node right_node = node.children[1];
+			Value arr = rvalue(ast_node_eval(inter, left_node));
+			Value idx = rvalue(ast_node_eval(inter, right_node));
+			assert(idx.tag == VALUE_NUM);
+			val = (Value) {.tag = VALUE_LVAL, .addr = arr.arr.data + idx.num};
 			break;
 		}
 		case AST_NIL: {
@@ -355,6 +350,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 }
 
 void print_value(Value val) {
+	val = rvalue(val);
 	if (val.tag == VALUE_NUM)
 		printf("%d", val.num);
 	else if (val.tag == VALUE_STR)
@@ -372,6 +368,13 @@ static void value_deinit(Value val) {
 		free(val.arr.data);
 }
 
+static Value rvalue(Value val) {
+	if (val.tag == VALUE_LVAL)
+		return *(val.addr);
+	else
+		return val;
+}
+
 static Value apply_function(
 	Interpreter* inter, Node func_node, Node args_node
 ) {
@@ -384,7 +387,7 @@ static Value apply_function(
 	size_t argc = args_node.children_count;
 	Value* args = malloc(sizeof(Value) * argc);
 	for (size_t i = 0; i < argc; i++)
-		args[i] = ast_node_eval(inter, args_node.children[i]);
+		args[i] = rvalue(ast_node_eval(inter, args_node.children[i]));
 
 	if (func.is_builtin) {
 		Value val = func.builtin(argc, args);

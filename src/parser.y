@@ -65,7 +65,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %nonassoc NOT
 
 /* non-terminals */
-%type <node> exp exps infix term id decl decls var more-args params
+%type <node> exp exps infix term id decl decls more-args params
 
 %%
 
@@ -82,19 +82,19 @@ exps : exp ";"      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
 exp : DO exps END                          { $$ = $2; }
     | IF exp THEN exp ELSE exp             { $$ = new_node(AST_IF,    3, (Node[3]){$2, $4, $6}); }
     | WHEN exp THEN exp                    { $$ = new_node(AST_WHEN,  2, (Node[2]){$2, $4}); }
-    | FOR VAR var FROM exp TO exp THEN exp { $$ = new_node(AST_FOR,   4, (Node[4]){$3, $5, $7, $9}); }
-    | FOR VAR var FROM exp TO exp STEP exp THEN exp { $$ = new_node(AST_FOR,   5, (Node[5]){$3, $5, $7, $9, $11}); }
+    | FOR decl FROM exp TO exp THEN exp { $$ = new_node(AST_FOR,   4, (Node[4]){$2, $4, $6, $8}); }
+    | FOR decl FROM exp TO exp STEP exp THEN exp { $$ = new_node(AST_FOR,   5, (Node[5]){$2, $4, $6, $8, $10}); }
     | WHILE exp THEN exp                   { $$ = new_node(AST_WHILE, 2, (Node[2]){$2, $4}); }
     | LET decls IN exp                     { $$ = new_node(AST_LET,   2, (Node[2]){$2, $4}); }
     | decl
-    | var "=" exp                          { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
+    | infix "=" exp                          { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
     | infix
     | BREAK exp     { $$ = new_node(AST_BREAK,    1, (Node[1]) {$2}); }
     | CONTINUE exp  { $$ = new_node(AST_CONTINUE, 1, (Node[1]) {$2}); }
     ;
 
-decl : VAR var               { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
-     | VAR var "=" exp       { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
+decl : VAR id               { $$ = new_node(AST_DECL, 1, (Node[1]) {$2}); }
+     | VAR id "=" exp       { $$ = new_node(AST_DECL, 2, (Node[2]) {$2, $4}); }
      | FUN id params "=" exp { $$ = new_node(AST_DECL, 3, (Node[3]) {$2, $3, $5}); }
      ;
 
@@ -105,10 +105,6 @@ params : %empty    { $$ = new_list_node(); }
 decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
       | decls "," decl { $$ = list_append_node($$, $3); }
       ;
-
-var : id             { $$ = new_node(AST_VAR, 1, (Node[1]){$1}); }
-    | id "[" exp "]" { $$ = new_node(AST_VAR, 2, (Node[2]){$1, $3}); }
-    ;
 
 id : ID { $$ = new_string_node(AST_ID, yyloc, syms, $1); }
 
@@ -135,8 +131,9 @@ more-args : %empty         { $$ = new_list_node(); }
           ;
 
 term : "(" exp ")" { $$ = $2; }
-     | var
      | NUMBER      { $$ = new_number_node(yyloc, $1); };
+     | id
+     | term "[" exp "]" { $$ = new_node(AST_AT, 2, (Node[2]){$1, $3}); }
      | STRING      { $$ = new_string_node(AST_STR, yyloc, syms, $1); }
      | NIL         { $$ = new_nil_node(yyloc); }
      | TRUE        { $$ = new_true_node(yyloc); }
