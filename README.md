@@ -5,7 +5,7 @@ Toy programming language similar to Lua with a AST-walking interpreter, REPL and
 # Dependencies
 
 - GNU bison (If you're on Windows, use [this](https://github.com/lexxmark/winflexbison))
-- C11 compiler
+- C/++ 11 compiler
 - CMake
 
 Optional REPL line editting requires GNU `readline`.

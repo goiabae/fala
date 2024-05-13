@@ -11,12 +11,14 @@
 
 // clang-format off
 // need to be included in this order
+extern "C" {
 #include "parser.h"
+}
 #include "lexer.h"
 // clang-format on
 
 #include "ast.h"
-#include "compiler.h"
+#include "compiler.hpp"
 #include "eval.h"
 
 typedef struct Options {

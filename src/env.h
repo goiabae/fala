@@ -1,6 +1,10 @@
 #ifndef FALA_ENV_H
 #define FALA_ENV_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -23,5 +27,9 @@ size_t env_find(Environment* env, size_t sym_idx, bool* found);
 size_t env_get_new(Environment* env, size_t sym_idx);
 void env_push(Environment* env);
 void env_pop(Environment* env, void (*cb)(void*, size_t), void* cb_data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,6 +1,10 @@
 #ifndef FALA_AST_H
 #define FALA_AST_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 
 typedef int Number;
@@ -89,5 +93,9 @@ SymbolTable sym_table_init();
 void sym_table_deinit(SymbolTable* tab);
 size_t sym_table_insert(SymbolTable* tab, String str);
 String sym_table_get(SymbolTable* tab, size_t index);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

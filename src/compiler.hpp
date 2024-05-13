@@ -1,5 +1,5 @@
-#ifndef FALA_COMPILER_H
-#define FALA_COMPILER_H
+#ifndef FALA_COMPILER_HPP
+#define FALA_COMPILER_HPP
 
 #include <stddef.h>
 #include <stdio.h>
@@ -48,8 +48,8 @@ typedef struct Funktion {
 	Node root;
 } Funktion;
 
-typedef struct Operand {
-	enum {
+struct Operand {
+	enum Type {
 		OPND_NIL, // no operand
 
 		OPND_TMP, // temporary register
@@ -59,16 +59,28 @@ typedef struct Operand {
 		OPND_NUM, // immediate number
 
 		OPND_FUN,
-	} type;
-	union {
+	};
+
+	union Value {
 		void* nil;
 		Register reg;
 		size_t lab;
 		String str;
 		Number num;
 		Funktion fun;
+
+		Value(void*) : nil {nullptr} {}
+		Value(Register reg) : reg {reg} {}
+		Value(size_t lab) : lab {lab} {}
+		Value(String str) : str {str} {}
+		Value(Number num) : num {num} {}
+		Value(Funktion fun) : fun {fun} {}
+		Value() {};
 	};
-} Operand;
+
+	Type type;
+	Value value;
+};
 
 typedef struct Instruction {
 	InstructionOp opcode;
@@ -87,7 +99,7 @@ typedef struct VariableStack {
 	Operand* opnds;
 } VariableStack;
 
-typedef struct Compiler {
+struct Compiler {
 	size_t label_count;
 	size_t tmp_count;
 	size_t reg_count;
@@ -103,7 +115,9 @@ typedef struct Compiler {
 	size_t* back_patch_stack;
 	size_t back_patch_len;
 	size_t* back_patch;
-} Compiler;
+
+	Compiler() {};
+};
 
 void chunk_deinit(Chunk*);
 void print_chunk(FILE*, Chunk);

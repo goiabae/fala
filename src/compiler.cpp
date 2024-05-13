@@ -1,4 +1,4 @@
-#include "compiler.h"
+#include "compiler.hpp"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -9,11 +9,12 @@
 #include "ast.h"
 #include "env.h"
 
-#define OPERAND_NIL() ((Operand) {OPND_NIL, .nil = NULL})
-#define OPERAND_TMP(IDX) ((Operand) {OPND_TMP, .reg = {VAL_NUM, IDX}})
-#define OPERAND_LAB(IDX) ((Operand) {OPND_LAB, .lab = IDX})
+#define OPERAND_NIL() (Operand {Operand::OPND_NIL, {(void*)nullptr}})
+#define OPERAND_TMP(IDX) \
+	(Operand {Operand::OPND_TMP, Register {Register::VAL_NUM, IDX}})
+#define OPERAND_LAB(IDX) (Operand {Operand::OPND_LAB, IDX})
 
-#define emit(C, OP, ...) chunk_append(C, (Instruction) {OP, {__VA_ARGS__}})
+#define emit(C, OP, ...) chunk_append(C, Instruction {OP, {__VA_ARGS__}})
 
 static Chunk chunk_init();
 static void chunk_append(Chunk* chunk, Instruction inst);
@@ -23,7 +24,7 @@ static Operand compile_builtin_read(Compiler*, Chunk*, size_t, Operand*);
 static void print_operand(FILE*, Operand);
 
 static void operand_deinit(Operand opnd) {
-	if (opnd.type == OPND_STR) free(opnd.str);
+	if (opnd.type == Operand::OPND_STR) free(opnd.value.str);
 }
 
 static void var_stack_pop(VariableStack* vars, size_t index) {
@@ -38,15 +39,15 @@ Compiler compiler_init() {
 	comp.reg_count = 0;
 	comp.vars.len = 0;
 	comp.vars.cap = 32;
-	comp.vars.opnds = malloc(sizeof(Operand) * comp.vars.cap);
+	comp.vars.opnds = (Operand*)malloc(sizeof(Operand) * comp.vars.cap);
 	comp.env = env_init();
 	comp.in_loop = false;
 	comp.cnt_lab = OPERAND_NIL();
 	comp.brk_lab = OPERAND_NIL();
 	comp.back_patch_stack_len = 0;
-	comp.back_patch_stack = malloc(sizeof(size_t) * 32);
+	comp.back_patch_stack = (size_t*)malloc(sizeof(size_t) * 32);
 	comp.back_patch_len = 0;
-	comp.back_patch = malloc(sizeof(size_t) * 32);
+	comp.back_patch = (size_t*)malloc(sizeof(size_t) * 32);
 	return comp;
 }
 
@@ -68,9 +69,8 @@ static Operand* comp_env_get_new(Compiler* comp, size_t sym_index) {
 	size_t idx = env_get_new(&comp->env, sym_index);
 	comp->vars.len++;
 	Operand* op = &comp->vars.opnds[idx];
-	op->type = OPND_REG;
-	op->reg.index = comp->reg_count++;
-	op->reg.type = VAL_NUM;
+	op->type = Operand::OPND_REG;
+	op->value.reg = Register {Register::VAL_NUM, comp->reg_count++};
 	return op;
 }
 
@@ -81,9 +81,8 @@ static Operand* comp_env_get_new_offset(
 	size_t idx = env_get_new(&comp->env, sym_index);
 	comp->vars.len++;
 	Operand* op = &comp->vars.opnds[idx];
-	op->type = OPND_REG;
-	op->reg.index = comp->reg_count;
-	op->reg.type = VAL_NUM;
+	op->type = Operand::OPND_REG;
+	op->value.reg = Register {Register::VAL_NUM, comp->reg_count};
 	comp->reg_count += size;
 	return op;
 }
@@ -99,7 +98,7 @@ static Chunk chunk_init() {
 	Chunk chunk;
 	chunk.cap = 1024;
 	chunk.len = 0;
-	chunk.insts = malloc(sizeof(Instruction) * chunk.cap);
+	chunk.insts = (Instruction*)malloc(sizeof(Instruction) * chunk.cap);
 	return chunk;
 }
 
@@ -138,13 +137,13 @@ static void print_str(FILE* fd, String str) {
 
 static void print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
-		case OPND_NIL: fprintf(fd, "0"); break;
-		case OPND_TMP: fprintf(fd, "%%t%zu", opnd.reg.index); break;
-		case OPND_REG: fprintf(fd, "%%r%zu", opnd.reg.index); break;
-		case OPND_LAB: fprintf(fd, "L%03zu", opnd.lab); break;
-		case OPND_STR: print_str(fd, opnd.str); break;
-		case OPND_NUM: fprintf(fd, "%d", opnd.num); break;
-		case OPND_FUN: assert(false);
+		case Operand::OPND_NIL: fprintf(fd, "0"); break;
+		case Operand::OPND_TMP: fprintf(fd, "%%t%zu", opnd.value.reg.index); break;
+		case Operand::OPND_REG: fprintf(fd, "%%r%zu", opnd.value.reg.index); break;
+		case Operand::OPND_LAB: fprintf(fd, "L%03zu", opnd.value.lab); break;
+		case Operand::OPND_STR: print_str(fd, opnd.value.str); break;
+		case Operand::OPND_NUM: fprintf(fd, "%d", opnd.value.num); break;
+		case Operand::OPND_FUN: assert(false);
 	}
 }
 
@@ -188,10 +187,10 @@ void print_chunk(FILE* fd, Chunk chunk) {
 			fprintf(fd, "(");
 
 			Operand opnd = inst.operands[2];
-			if (opnd.reg.type == VAL_NUM)
-				fprintf(fd, "%zu", opnd.reg.index);
+			if (opnd.value.reg.type == Register::VAL_NUM)
+				fprintf(fd, "%zu", opnd.value.reg.index);
 			else
-				fprintf(fd, "%%r%zu", opnd.reg.index);
+				fprintf(fd, "%%r%zu", opnd.value.reg.index);
 
 			fprintf(fd, ")");
 			fprintf(fd, "\n");
@@ -211,8 +210,8 @@ void print_chunk(FILE* fd, Chunk chunk) {
 
 Chunk compile_ast(Compiler* comp, AST ast, SymbolTable* syms) {
 	Chunk chunk = chunk_init();
-	Operand heap = {OPND_REG, .reg = {VAL_NUM, comp->reg_count++}};
-	Operand start = {OPND_NUM, .num = 1024 - 1};
+	Operand heap = {Operand::OPND_REG, {{Register::VAL_NUM, comp->reg_count++}}};
+	Operand start = {Operand::OPND_NUM, {1024 - 1}};
 
 	emit(&chunk, OP_MOV, heap, start);
 	(void)compile_node(comp, ast.root, syms, &chunk);
@@ -224,7 +223,11 @@ static Operand compile_builtin_write(
 ) {
 	(void)comp;
 	for (size_t i = 0; i < argc; i++)
-		emit(chunk, ((args[i].type == OPND_STR) ? OP_PRINTF : OP_PRINTV), args[i]);
+		emit(
+			chunk,
+			((args[i].type == Operand::OPND_STR) ? OP_PRINTF : OP_PRINTV),
+			args[i]
+		);
 	return OPERAND_NIL();
 }
 
@@ -246,8 +249,9 @@ static Operand compile_builtin_array(
 		argc == 1
 		&& "The `array' builtin expects a size as the first and only argument."
 	);
-	Operand addr = {OPND_TMP, .reg = (Register) {VAL_ADDR, comp->tmp_count++}};
-	Operand heap = {OPND_REG, .reg = {VAL_NUM, 0}};
+	Operand addr {
+		Operand::OPND_TMP, Register {Register::VAL_ADDR, comp->tmp_count++}};
+	Operand heap {Operand::OPND_REG, Register {Register::VAL_NUM, 0}};
 
 	emit(chunk, OP_MOV, addr, heap);
 	emit(chunk, OP_ADD, heap, heap, args[0]);
@@ -265,7 +269,8 @@ static Operand compile_node(
 			String func_name = sym_table_get(syms, func_node.index);
 			Node args_node = node.children[1];
 
-			Operand* args = malloc(sizeof(Operand) * args_node.children_count);
+			Operand* args =
+				(Operand*)malloc(sizeof(Operand) * args_node.children_count);
 			for (size_t i = 0; i < args_node.children_count; i++)
 				args[i] = compile_node(comp, args_node.children[i], syms, chunk);
 
@@ -281,8 +286,8 @@ static Operand compile_node(
 			else {
 				Operand* func_opnd = comp_env_find(comp, func_node.index);
 				assert(func_opnd);
-				assert(func_opnd->type == OPND_FUN);
-				Funktion func = func_opnd->fun;
+				assert(func_opnd->type == Operand::OPND_FUN);
+				Funktion func = func_opnd->value.fun;
 				comp_env_push(comp);
 				for (size_t i = 0; i < func.argc; i++) {
 					Node arg = func.args[i];
@@ -298,7 +303,7 @@ static Operand compile_node(
 			free(args);
 			return res;
 		}
-		case AST_NUM: return (Operand) {OPND_NUM, .num = node.num};
+		case AST_NUM: return Operand {Operand::OPND_NUM, node.num};
 		case AST_BLK: {
 			comp_env_push(comp);
 			Operand opnd = OPERAND_NIL();
@@ -367,7 +372,7 @@ static Operand compile_node(
 			Operand cmp = OPERAND_TMP(comp->tmp_count++);
 			Operand step = (with_step)
 			               ? compile_node(comp, node.children[3], syms, chunk)
-			               : (Operand) {OPND_NUM, .num = 1};
+			               : Operand {Operand::OPND_NUM, 1};
 
 			comp_env_push(comp);
 
@@ -463,9 +468,10 @@ static Operand compile_node(
 			if (var.children_count == 2) {
 				// if register is the start of the array then say so, otherwise it is a
 				// address to the register that contains the beggining of the array
-				Operand base = (reg->reg.type == VAL_NUM)
-				               ? (Operand) {OPND_NUM, .num = (Number)reg->reg.index}
-				               : *reg;
+				Operand base =
+					(reg->value.reg.type == Register::VAL_NUM)
+						? Operand {Operand::OPND_NUM, (Number)reg->value.reg.index}
+						: *reg;
 				Operand idx = compile_node(comp, var.children[1], syms, chunk);
 				emit(chunk, OP_STORE, tmp, idx, base);
 				return tmp;
@@ -508,7 +514,7 @@ static Operand compile_node(
 		}
 		case AST_ID: assert(false && "unreachable");
 		case AST_STR:
-			return (Operand) {OPND_STR, .str = sym_table_get(syms, node.index)};
+			return Operand {Operand::OPND_STR, sym_table_get(syms, node.index)};
 		case AST_DECL: {
 			// fun f args = exp
 			if (node.children_count == 3) {
@@ -517,13 +523,8 @@ static Operand compile_node(
 				Node body = node.children[2];
 
 				Operand* opnd = comp_env_get_new(comp, id.index);
-				opnd->type = OPND_FUN;
-				opnd->fun = (Funktion) {
-					.root = body,
-					.argc = args.children_count,
-					.args =
-						args.children, // TODO investigate this might cause a double free
-				};
+				opnd->type = Operand::OPND_FUN;
+				opnd->value.fun = Funktion {args.children_count, args.children, body};
 
 				return OPERAND_NIL();
 			}
@@ -535,7 +536,8 @@ static Operand compile_node(
 			if (node.children_count == 2) {
 				Operand* opnd = comp_env_get_new(comp, id.index);
 				Operand tmp = compile_node(comp, node.children[1], syms, chunk);
-				if (tmp.type == OPND_TMP) opnd->reg.type = tmp.reg.type;
+				if (tmp.type == Operand::OPND_TMP)
+					opnd->value.reg.type = tmp.value.reg.type;
 				emit(chunk, OP_MOV, *opnd, tmp);
 				return OPERAND_NIL();
 			}
@@ -548,7 +550,8 @@ static Operand compile_node(
 					&& "COMPILER_ERR: Bracket declarations requires the size to be constant. Use the `array' built-in, instead."
 				);
 				Operand size_opnd = compile_node(comp, size, syms, chunk);
-				(void)comp_env_get_new_offset(comp, id.index, (size_t)size_opnd.num);
+				(void
+				)comp_env_get_new_offset(comp, id.index, (size_t)size_opnd.value.num);
 				return OPERAND_NIL();
 			}
 
@@ -568,15 +571,15 @@ static Operand compile_node(
 			// id [idx]
 			Operand res = OPERAND_TMP(comp->tmp_count++);
 			Operand off = compile_node(comp, node.children[1], syms, chunk);
-			Operand base = (reg->reg.type == VAL_NUM)
-			               ? (Operand) {OPND_NUM, .num = (Number)reg->reg.index}
+			Operand base = (reg->value.reg.type == Register::VAL_NUM)
+			               ? Operand {Operand::OPND_NUM, (Number)reg->value.reg.index}
 			               : *reg;
 
 			emit(chunk, OP_LOAD, res, off, base);
 			return res;
 		}
-		case AST_NIL: return (Operand) {OPND_NUM, .num = 0};
-		case AST_TRUE: return (Operand) {OPND_NUM, .num = 1};
+		case AST_NIL: return Operand {Operand::OPND_NUM, 0};
+		case AST_TRUE: return Operand {Operand::OPND_NUM, 1};
 		case AST_LET: {
 			Node decls = node.children[0];
 			Node exp = node.children[1];

@@ -1,6 +1,10 @@
 #ifndef FALA_LEXER_H
 #define FALA_LEXER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 
 #include "ast.h"
@@ -27,5 +31,9 @@ void lexer_deinit(LEXER lexer);
 int lexer_lex(union TokenValue *lval, Location *location, LEXER scanner);
 
 bool is_interactive(LEXER scanner);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
