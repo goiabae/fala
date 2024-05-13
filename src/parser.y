@@ -33,6 +33,8 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 	Node node;
 }
 
+%token YYEOF 0 /* old versions of bison don't predefine this */
+
 /* values */
 %token <num> NUMBER
 %token <str> ID
