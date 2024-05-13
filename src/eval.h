@@ -26,7 +26,6 @@ typedef struct Value {
 		VALUE_FUN,
 		VALUE_NIL,
 		VALUE_TRUE,
-		VALUE_LVAL,
 	} tag;
 	union {
 		Number num;
@@ -37,7 +36,6 @@ typedef struct Value {
 		Function func;
 		String str;
 		void* nil;
-		struct Value* addr;
 	};
 } Value;
 
