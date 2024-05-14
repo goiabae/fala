@@ -21,14 +21,13 @@ static Operand compile_builtin_read(Compiler*, Chunk*, size_t, Operand*);
 static void print_operand(FILE*, Operand);
 
 Compiler::Compiler() {
-	back_patch_stack = (size_t*)malloc(sizeof(size_t) * 32);
-	back_patch = (size_t*)malloc(sizeof(size_t) * 32);
+	back_patch_stack = new size_t[32];
+	back_patch = new size_t[32];
 }
 
 Compiler::~Compiler() {
 	delete back_patch;
 	delete back_patch_stack;
-	return;
 }
 
 void err(const char* msg) {
