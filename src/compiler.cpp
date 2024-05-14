@@ -203,13 +203,13 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 	}
 }
 
-Chunk Compiler::compile(AST ast, SymbolTable* syms) {
+Chunk Compiler::compile(AST ast, const SymbolTable& syms) {
 	Chunk chunk;
 	Operand heap = {Operand::OPND_REG, {{Register::VAL_NUM, reg_count++}}};
 	Operand start = {Operand::OPND_NUM, {1024 - 1}};
 
 	emit(&chunk, OP_MOV, heap, start);
-	compile(ast.root, syms, &chunk);
+	compile(ast.root, &syms, &chunk);
 	return chunk;
 }
 
@@ -253,11 +253,11 @@ static Operand compile_builtin_array(
 	return addr;
 }
 
-Operand Compiler::compile(Node node, SymbolTable* syms, Chunk* chunk) {
+Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 	switch (node.type) {
 		case AST_APP: {
 			Node func_node = node.children[0];
-			String func_name = sym_table_get(syms, func_node.index);
+			String func_name = sym_table_get((SymbolTable*)syms, func_node.index);
 			Node args_node = node.children[1];
 
 			Operand* args = new Operand[args_node.children_count];
@@ -499,7 +499,8 @@ Operand Compiler::compile(Node node, SymbolTable* syms, Chunk* chunk) {
 		}
 		case AST_ID: assert(false && "unreachable");
 		case AST_STR:
-			return Operand {Operand::OPND_STR, sym_table_get(syms, node.index)};
+			return Operand {
+				Operand::OPND_STR, sym_table_get((SymbolTable*)syms, node.index)};
 		case AST_DECL: {
 			// fun f args = exp
 			if (node.children_count == 3) {

@@ -117,8 +117,8 @@ struct Compiler {
 	Compiler();
 	~Compiler();
 
-	Chunk compile(AST ast, SymbolTable* syms);
-	Operand compile(Node node, SymbolTable* syms, Chunk* chunk);
+	Chunk compile(AST ast, const SymbolTable& syms);
+	Operand compile(Node node, const SymbolTable* syms, Chunk* chunk);
 	Operand get_temporary();
 	Operand get_label();
 };

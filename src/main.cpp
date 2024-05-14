@@ -21,6 +21,23 @@ extern "C" {
 #include "compiler.hpp"
 #include "eval.h"
 
+struct File {
+	File(const char* path, const char* mode) : m_fd {fopen(path, mode)} {}
+	File(FILE* fd) : m_fd {fd}, m_owned {false} {}
+	~File() {
+		if (m_owned) fclose(m_fd);
+	}
+
+	bool operator!() { return !m_fd; }
+
+	FILE* get_descriptor() { return m_fd; }
+	bool at_eof() { return feof(m_fd); }
+
+ private:
+	FILE* m_fd;
+	bool m_owned {true};
+};
+
 typedef struct Options {
 	bool is_invalid;
 	bool verbose;
@@ -32,10 +49,10 @@ typedef struct Options {
 	int argc;
 } Options;
 
-static AST parse(FILE* fd, SymbolTable* syms) {
-	LEXER lexer = lexer_init_from_file(fd);
+static AST parse(File& file, SymbolTable& syms) {
+	LEXER lexer = lexer_init_from_file(file.get_descriptor());
 	AST ast = ast_init();
-	if (yyparse(lexer, &ast, syms)) exit(1); // FIXME propagate error up
+	if (yyparse(lexer, &ast, &syms)) exit(1); // FIXME propagate error up
 	lexer_deinit(lexer);
 	return ast;
 }
@@ -108,14 +125,14 @@ static Options parse_args(int argc, char* argv[]) {
 }
 
 static int interpret(Options opts) {
-	FILE* fd = opts.from_stdin ? stdin : fopen(opts.argv[0], "r");
+	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
 	if (!fd) return 1;
 
 	Interpreter inter = interpreter_init();
 	Value val;
 
-	while (!feof(fd)) {
-		AST ast = parse(fd, &inter.syms);
+	while (!fd.at_eof()) {
+		AST ast = parse(fd, inter.syms);
 		if (opts.verbose) {
 			ast_print(ast, &inter.syms);
 			printf("\n");
@@ -129,36 +146,33 @@ static int interpret(Options opts) {
 	}
 
 	interpreter_deinit(&inter);
-	fclose(fd);
 
 	return (val.tag == VALUE_NUM) ? val.num : 0;
 }
 
 static int compile(Options opts) {
-	FILE* fd = opts.from_stdin ? stdin : fopen(opts.argv[0], "r");
+	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
 	if (!fd) return 1;
 
 	SymbolTable syms = sym_table_init();
-	AST ast = parse(fd, &syms);
+	AST ast = parse(fd, syms);
 	if (opts.verbose) {
 		ast_print(ast, &syms);
 		printf("\n");
 	}
 
 	Compiler comp;
-	Chunk chunk = comp.compile(ast, &syms);
+	Chunk chunk = comp.compile(ast, syms);
 
 	if (opts.output_path) {
-		FILE* out = fopen(opts.output_path, "w");
-		print_chunk(out, chunk);
-		fclose(out);
+		File out(opts.output_path, "w");
+		print_chunk(out.get_descriptor(), chunk);
 	} else if (opts.verbose) {
 		print_chunk(stdout, chunk);
 	}
 
 	ast_deinit(ast);
 	sym_table_deinit(&syms);
-	fclose(fd);
 	return 0;
 }
 
