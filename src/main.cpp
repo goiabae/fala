@@ -145,8 +145,8 @@ static int compile(Options opts) {
 		printf("\n");
 	}
 
-	Compiler comp = compiler_init();
-	Chunk chunk = compile_ast(&comp, ast, &syms);
+	Compiler comp;
+	Chunk chunk = comp.compile(ast, &syms);
 
 	if (opts.output_path) {
 		FILE* out = fopen(opts.output_path, "w");
@@ -156,8 +156,6 @@ static int compile(Options opts) {
 		print_chunk(stdout, chunk);
 	}
 
-	compiler_deinit(&comp);
-	chunk_deinit(&chunk);
 	ast_deinit(ast);
 	sym_table_deinit(&syms);
 	fclose(fd);
@@ -172,7 +170,9 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (opts.compile)
-		return compile(opts);
+		compile(opts);
 	else if (opts.interpret)
-		return interpret(opts);
+		interpret(opts);
+
+	return 0;
 }

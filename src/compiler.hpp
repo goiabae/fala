@@ -4,8 +4,14 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include <utility>
+#include <vector>
+
 #include "ast.h"
 #include "env.h"
+
+using std::pair;
+using std::vector;
 
 typedef enum InstructionOp {
 	OP_PRINTF,
@@ -51,25 +57,21 @@ typedef struct Funktion {
 struct Operand {
 	enum Type {
 		OPND_NIL, // no operand
-
 		OPND_TMP, // temporary register
 		OPND_REG, // variables register
 		OPND_LAB, // label
 		OPND_STR, // immediate string
 		OPND_NUM, // immediate number
-
 		OPND_FUN,
 	};
 
 	union Value {
-		void* nil;
 		Register reg;
 		size_t lab;
 		String str;
 		Number num;
 		Funktion fun;
 
-		Value(void*) : nil {nullptr} {}
 		Value(Register reg) : reg {reg} {}
 		Value(size_t lab) : lab {lab} {}
 		Value(String str) : str {str} {}
@@ -80,6 +82,9 @@ struct Operand {
 
 	Type type;
 	Value value;
+
+	Operand() : type {Type::OPND_NIL}, value {} {}
+	Operand(Type type, Value value) : type {type}, value {value} {}
 };
 
 typedef struct Instruction {
@@ -87,44 +92,37 @@ typedef struct Instruction {
 	Operand operands[3];
 } Instruction;
 
-typedef struct Chunk {
-	size_t len;
-	size_t cap;
-	Instruction* insts;
-} Chunk;
+using Chunk = std::vector<Instruction>;
 
-typedef struct VariableStack {
-	size_t len;
-	size_t cap;
-	Operand* opnds;
-} VariableStack;
+template<typename T>
+using Env = vector<vector<pair<size_t, T>>>;
 
 struct Compiler {
-	size_t label_count;
-	size_t tmp_count;
-	size_t reg_count;
-	Environment env;
-	VariableStack vars;
+	size_t label_count {0};
+	size_t tmp_count {0};
+	size_t reg_count {0};
 
-	bool in_loop;
+	Env<Operand> env;
+
+	bool in_loop {false};
 	Operand cnt_lab; // jump to on continue
 	Operand brk_lab; // jump to on break
 
 	// MOVs to backpatch the operands
-	size_t back_patch_stack_len;
+	size_t back_patch_stack_len {0};
 	size_t* back_patch_stack;
-	size_t back_patch_len;
+	size_t back_patch_len {0};
 	size_t* back_patch;
 
-	Compiler() {};
+	Compiler();
+	~Compiler();
+
+	Chunk compile(AST ast, SymbolTable* syms);
+	Operand compile(Node node, SymbolTable* syms, Chunk* chunk);
+	Operand get_temporary();
+	Operand get_label();
 };
 
-void chunk_deinit(Chunk*);
-void print_chunk(FILE*, Chunk);
-
-Compiler compiler_init();
-void compiler_deinit(Compiler* comp);
-
-Chunk compile_ast(Compiler* comp, AST ast, SymbolTable* syms);
+void print_chunk(FILE*, const Chunk&);
 
 #endif
