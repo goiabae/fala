@@ -1,4 +1,5 @@
 %require "3.0.5"
+%language "c"
 
 %define api.pure full
 %define parse.trace
