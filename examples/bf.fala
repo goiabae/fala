@@ -31,7 +31,7 @@ in do
 		op = read nil;
 	end;
 
-	write "brainfuck program:\n\t";
+	write "brainfuck program:\n  ";
 	for var i from 0 to len then
 		write inst[i];
 	write "\n";

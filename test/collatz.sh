@@ -1,1 +1,1 @@
-echo $(shuf -i 1-100 -n 1)
+echo 596310

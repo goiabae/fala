@@ -1,0 +1,10 @@
+  mov %r0, 1023
+  mov %r1, 3
+  mov %r2, 4
+  mov %r3, 5
+  mult %t0, %r1, %r1
+  mult %t1, %r2, %r2
+  add %t2, %t0, %t1
+  mult %t3, %r3, %r3
+  equal %t4, %t2, %t3
+  printv %t4

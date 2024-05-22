@@ -1,0 +1,64 @@
+let
+	var ALIVE = 1,
+	var DEAD = 0
+in
+let
+	var side = 8,
+	# - - - - -
+	# - . . . -
+	# - . . . -
+	# - . . . -
+	# - - - - -
+	# matrix with padding for -1,+1 "out of bounds" indexing
+	var mat = array (2*(side+2)*(side+2)),
+	fun at x y = (x+1)*(8+2) + (y+1)
+in do
+	for var i from 0 to (2*(side+2)*(side+2)) then mat[i] = DEAD;
+
+	# write glider
+	mat[at 1 0] = ALIVE;
+	mat[at 2 1] = ALIVE;
+	mat[at 0 2] = ALIVE;
+	mat[at 1 2] = ALIVE;
+	mat[at 2 2] = ALIVE;
+
+	var swap = 0;
+	var iter = ((side+2)*2 + 1);
+	while iter > 0 then do
+		var base = swap * (side+2);
+		var next = ((swap+1) % 2) * (side+2);
+
+		for var i from 0 to side+2 then
+			write "-";
+		write "\n";
+		for var x from 0 to side then do
+			var i = x + base;
+			write "|";
+			for var j from 0 to side then do
+				var neigh =
+					  mat[at (i-1) (j-1)] + mat[at (i-1) j] + mat[at (i-1) (j+1)]
+					+ mat[at  i    (j-1)]                   + mat[at  i    (j+1)]
+					+ mat[at (i+1) (j-1)] + mat[at (i+1) j] + mat[at (i+1) (j+1)];
+
+				mat[at (next + x) j] =
+					if mat[at i j] == ALIVE
+					then if neigh < 2 or neigh > 3 then DEAD else ALIVE
+					else if neigh == 3 then ALIVE else DEAD;
+
+				if mat[at i j] == ALIVE then
+					write "X"
+				else
+					write " ";
+			end;
+			write "|";
+			write "\n";
+		end;
+		for var i from 0 to side+2 then
+			write "-";
+		write "\n";
+
+		write "\n";
+		swap = ((swap + 1) % 2);
+		iter = iter - 1;
+	end;
+end

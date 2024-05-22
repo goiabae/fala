@@ -1,0 +1,52 @@
+  mov %r0, 1023
+  mov %r101, 0
+  mov %r102, 0
+label L000
+  read %t0
+  mov %r101, %t0
+  jf %t0, L001
+  store %r101, %r102(%r0)
+  add %t1, %r102, 1
+  mov %r102, %t1
+  jump L000
+label L001
+  sub %t3, %r102, 1
+  mov %r103, 1
+label L002
+  equal %t2, %r103, %t3
+  jt %t2, L004
+  load %t4, %r103(%r30064771086)
+  mov %r104, %t4
+  sub %t5, %r103, 1
+  mov %r105, %t5
+label L005
+  greatereq %t6, %r105, 0
+  load %t7, %r105(%r0)
+  greater %t8, %t7, %r104
+  and %t9, %t6, %t8
+  jf %t9, L006
+  load %t10, %r105(%r0)
+  add %t11, %r105, 1
+  store %t10, %t11(%r0)
+  sub %t12, %r105, 1
+  mov %r105, %t12
+  jump L005
+label L006
+  add %t13, %r105, 1
+  store %r104, %t13(%r0)
+label L003
+  add %r103, %r103, 1
+  jump L002
+label L004
+  sub %t15, %r102, 1
+  mov %r106, 0
+label L007
+  equal %t14, %r106, %t15
+  jt %t14, L009
+  load %t16, %r106(%r64424509447)
+  printv %t16
+  printf "\n"
+label L008
+  add %r106, %r106, 1
+  jump L007
+label L009

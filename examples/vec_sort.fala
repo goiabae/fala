@@ -1,5 +1,5 @@
 let
-	var xs[10000],
+	var xs[100],
 	var x,
 	var len = 0
 in do

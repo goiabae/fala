@@ -1,0 +1,189 @@
+  mov %r0, 1023
+  mov %r1, 0
+  mov %r2, 1
+  mov %r3, 2
+  mov %r4, 3
+  mov %r5, 4
+  mov %r6, 5
+  mov %r7, 6
+  mov %r8, 7
+  mov %t0, %r0
+  add %r0, %r0, 256
+  mov %r9, %t0
+  mov %t1, %r0
+  add %r0, %r0, 512
+  mov %r10, %t1
+  mov %r11, 0
+  mov %r12, 0
+  mov %r13, 0
+  mov %r14, 0
+label L000
+  equal %t2, %r14, 512
+  jt %t2, L002
+  sub %t3, 0, 69
+  store %t3, %r14(%r10)
+label L001
+  add %r14, %r14, 1
+  jump L000
+label L002
+  mov %r15, 0
+label L003
+  equal %t4, %r15, 256
+  jt %t4, L005
+  store 0, %r15(%r9)
+label L004
+  add %r15, %r15, 1
+  jump L003
+label L005
+  mov %r16, 0
+  read %t5
+  mov %r13, %t5
+label L006
+  greatereq %t6, %r13, 0
+  lesseq %t7, %r13, 7
+  and %t8, %t6, %t7
+  jf %t8, L007
+  store %r13, %r16(%r10)
+  add %t9, %r16, 1
+  mov %r16, %t9
+  read %t10
+  mov %r13, %t10
+  jump L006
+label L007
+  printf "brainfuck program:\n  "
+  mov %r17, 0
+label L008
+  equal %t11, %r17, %r16
+  jt %t11, L010
+  load %t12, %r17(%r10)
+  printv %t12
+label L009
+  add %r17, %r17, 1
+  jump L008
+label L010
+  printf "\n"
+label L011
+  load %t13, %r12(%r10)
+  mov %r13, %t13
+  greatereq %t14, %t13, 0
+  lesseq %t15, %t13, 7
+  and %t16, %t14, %t15
+  jf %t16, L012
+  add %t17, %r12, 1
+  mod %t18, %t17, 256
+  mov %r20, %t18
+  equal %t20, %r13, %r1
+  jf %t20, L013
+  add %t21, %r11, 1
+  mov %r11, %t21
+  mov %t19, %t21
+  jump L014
+label L013
+  equal %t23, %r13, %r2
+  jf %t23, L015
+  sub %t24, %r11, 1
+  mov %r11, %t24
+  mov %t22, %t24
+  jump L016
+label L015
+  equal %t26, %r13, %r3
+  jf %t26, L017
+  load %t27, %r11(%r9)
+  add %t28, %t27, 1
+  store %t28, %r11(%r9)
+  mov %t25, %t28
+  jump L018
+label L017
+  equal %t30, %r13, %r4
+  jf %t30, L019
+  load %t31, %r11(%r9)
+  sub %t32, %t31, 1
+  store %t32, %r11(%r9)
+  mov %t29, %t32
+  jump L020
+label L019
+  equal %t34, %r13, %r5
+  jf %t34, L021
+  load %t35, %r11(%r9)
+  printv %t35
+  printf "\n"
+  mov %t33, 0
+  jump L022
+label L021
+  equal %t37, %r13, %r6
+  jf %t37, L023
+  read %t38
+  store %t38, %r11(%r9)
+  printv %t38
+  printf "\n"
+  mov %t36, 0
+  jump L024
+label L023
+  equal %t40, %r13, %r7
+  jf %t40, L025
+  load %t42, %r11(%r9)
+  equal %t43, %t42, 0
+  mov %t41, 0
+  jf %t43, L027
+label L028
+  load %t45, %r20(%r10)
+  not %t44, %t45
+  equal %t46, %t44, %r8
+  jf %t46, L029
+  add %t47, %r20, 1
+  mod %t48, %t47, 256
+  mov %r20, %t48
+  jump L028
+label L029
+  add %t49, %r20, 1
+  mod %t50, %t49, 256
+  mov %r20, %t50
+  mov %t41, %t50
+label L027
+  mov %t39, %t41
+  jump L026
+label L025
+  equal %t52, %r13, %r8
+  jf %t52, L030
+  load %t55, %r11(%r9)
+  not %t54, %t55
+  equal %t56, %t54, 0
+  mov %t53, 0
+  jf %t56, L032
+label L033
+  load %t58, %r20(%r10)
+  not %t57, %t58
+  equal %t59, %t57, %r7
+  jf %t59, L034
+  sub %t60, %r20, 1
+  mod %t61, %t60, 256
+  mov %r20, %t61
+  jump L033
+label L034
+  add %t62, %r20, 1
+  mod %t63, %t62, 256
+  mov %r20, %t63
+  mov %t53, %t63
+label L032
+  mov %t51, %t53
+  jump L031
+label L030
+  mov %t51, 0
+label L031
+  mov %t39, %t51
+label L026
+  mov %t36, %t39
+label L024
+  mov %t33, %t36
+label L022
+  mov %t29, %t33
+label L020
+  mov %t25, %t29
+label L018
+  mov %t22, %t25
+label L016
+  mov %t19, %t22
+label L014
+  mov %r12, %r20
+  jump L011
+label L012

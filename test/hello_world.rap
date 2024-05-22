@@ -1,0 +1,2 @@
+  mov %r0, 1023
+  printf "Hello, world!\n"
