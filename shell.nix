@@ -7,7 +7,6 @@ let
 in with pkgs; mkShell {
   nativeBuildInputs = [
     stdenv.cc
-    flex
     old.bison # 3.0.5
     readline
     cmake
