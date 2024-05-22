@@ -6,7 +6,10 @@
 %define parse.error verbose
 
 %locations
-%define api.location.type {Location}
+
+%code requires {
+#define YYLTYPE Location
+}
 
 %lex-param {void *scanner}
 %parse-param {void *scanner}{AST* ast}{SymbolTable* syms}
