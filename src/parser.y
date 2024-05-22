@@ -1,3 +1,5 @@
+%require "3.0.5"
+
 %define api.pure full
 %define parse.trace
 %define parse.error verbose
