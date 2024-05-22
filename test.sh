@@ -73,3 +73,5 @@ for f in ./examples/*.fala; do
 		fi
 	fi
 done
+
+rm -r $tmp
