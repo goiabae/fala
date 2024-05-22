@@ -32,7 +32,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 #define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
 %}
 
-/* type of terminal values */
+/* type of $$ in grammar rules */
 %union {
   int num;
 	char* str;
