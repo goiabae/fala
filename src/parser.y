@@ -65,15 +65,9 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token ASTER "*" SLASH "/" PERCT "%"
 %token NOT
 
-%left DOT
-%left OR AND
-%left GREATER_EQ LESSER_EQ EQ_EQ GREATER LESSER
-%left PLUS MINUS
-%left ASTER SLASH PERCT
-%nonassoc NOT
-
 /* non-terminals */
-%type <node> exp exps infix term id decl decls var more-args params
+%type <node> exp exps op term id decl decls var func arg args params app
+%type <node> op1 op2 op3 op4 op5 op6 op7 op8 op9 op10 op11 op12 op13 op14 op15
 
 %%
 
@@ -96,7 +90,7 @@ exp : DO exps END                          { $$ = $2; }
     | LET decls IN exp                     { $$ = new_node(AST_LET,   2, (Node[2]){$2, $4}); }
     | decl
     | var "=" exp                          { $$ = new_node(AST_ASS,   2, (Node[2]){$1, $3}); }
-    | infix
+    | op
     | BREAK exp     { $$ = new_node(AST_BREAK,    1, (Node[1]) {$2}); }
     | CONTINUE exp  { $$ = new_node(AST_CONTINUE, 1, (Node[1]) {$2}); }
     ;
@@ -120,27 +114,37 @@ var : id             { $$ = new_node(AST_VAR, 1, (Node[1]){$1}); }
 
 id : ID { $$ = new_string_node(AST_ID, yyloc, syms, $1); }
 
-infix : term
-      | id term more-args      { $$ = new_node(AST_APP, 2, (Node[2]){$1, list_prepend_node($3, $2)}); }
-      | infix "." id more-args { $$ = new_node(AST_APP, 2, (Node[2]){$3, list_prepend_node($4, $1)}); }
-      | infix OR   infix { $$ = new_node(AST_OR,  2, (Node[2]){$1, $3}); }
-      | infix AND  infix { $$ = new_node(AST_AND, 2, (Node[2]){$1, $3}); }
-      | infix ">"  infix { $$ = new_node(AST_GTN, 2, (Node[2]){$1, $3}); }
-      | infix "<"  infix { $$ = new_node(AST_LTN, 2, (Node[2]){$1, $3}); }
-      | infix ">=" infix { $$ = new_node(AST_GTE, 2, (Node[2]){$1, $3}); }
-      | infix "<=" infix { $$ = new_node(AST_LTE, 2, (Node[2]){$1, $3}); }
-      | infix "==" infix { $$ = new_node(AST_EQ,  2, (Node[2]){$1, $3}); }
-      | infix "+"  infix { $$ = new_node(AST_ADD, 2, (Node[2]){$1, $3}); }
-      | infix "-"  infix { $$ = new_node(AST_SUB, 2, (Node[2]){$1, $3}); }
-      | infix "*"  infix { $$ = new_node(AST_MUL, 2, (Node[2]){$1, $3}); }
-      | infix "/"  infix { $$ = new_node(AST_DIV, 2, (Node[2]){$1, $3}); }
-      | infix "%"  infix { $$ = new_node(AST_MOD, 2, (Node[2]){$1, $3}); }
-      | NOT infix        { $$ = new_node(AST_NOT, 1, (Node[1]){$2}); }
-      ;
 
-more-args : %empty         { $$ = new_list_node(); }
-          | more-args term { $$ = list_append_node($$, $2); }
-          ;
+app : func arg args     { $$ = new_node(AST_APP, 2, (Node[2]){$1, list_prepend_node($3, $2)}); }
+    | arg "." func args { $$ = new_node(AST_APP, 2, (Node[2]){$3, list_prepend_node($4, $1)}); }
+    | app "." func args { $$ = new_node(AST_APP, 2, (Node[2]){$3, list_prepend_node($4, $1)}); }
+    ;
+
+/* TODO: allow application of function expressions to arguments */
+func : id ;
+
+arg  : term ;
+args : %empty    { $$ = new_list_node(); }
+     | args arg { $$ = list_append_node($$, $2); }
+     ;
+
+op : op1;
+
+op1  : op2  | op1 OR   op2  { $$ = new_node(AST_OR,  2, (Node[2]){$1, $3}); }
+op2  : op3  | op2 AND  op3  { $$ = new_node(AST_AND, 2, (Node[2]){$1, $3}); }
+op3  : op4  | op3 ">"  op4  { $$ = new_node(AST_GTN, 2, (Node[2]){$1, $3}); }
+op4  : op5  | op4 "<"  op5  { $$ = new_node(AST_LTN, 2, (Node[2]){$1, $3}); }
+op5  : op6  | op5 ">=" op6  { $$ = new_node(AST_GTE, 2, (Node[2]){$1, $3}); }
+op6  : op7  | op6 "<=" op7  { $$ = new_node(AST_LTE, 2, (Node[2]){$1, $3}); }
+op7  : op8  | op7 "==" op8  { $$ = new_node(AST_EQ,  2, (Node[2]){$1, $3}); }
+op8  : op9  | op8 "+"  op9  { $$ = new_node(AST_ADD, 2, (Node[2]){$1, $3}); }
+op9  : op10 | op9 "-"  op10 { $$ = new_node(AST_SUB, 2, (Node[2]){$1, $3}); }
+op10 : op11 | op10 "*" op11 { $$ = new_node(AST_MUL, 2, (Node[2]){$1, $3}); }
+op11 : op12 | op11 "/" op12 { $$ = new_node(AST_DIV, 2, (Node[2]){$1, $3}); }
+op12 : op13 | op12 "%" op13 { $$ = new_node(AST_MOD, 2, (Node[2]){$1, $3}); }
+op13 : op14 | NOT op14      { $$ = new_node(AST_NOT, 1, (Node[1]){$2}); }
+op14 : op15 | app ;
+op15 : term ;
 
 term : "(" exp ")" { $$ = $2; }
      | var
