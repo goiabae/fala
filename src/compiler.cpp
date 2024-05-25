@@ -39,11 +39,11 @@ void err(const char* msg) {
 static void comp_env_push(Compiler* comp) { comp->env.push_back({}); }
 static void comp_env_pop(Compiler* comp) { comp->env.pop_back(); }
 
-static Operand* comp_env_get_new(Compiler* comp, size_t sym_index) {
-	comp->env.back().push_back({sym_index, {}});
+static Operand* comp_env_get_new(
+	Compiler* comp, size_t sym_index, Operand value
+) {
+	comp->env.back().push_back({sym_index, value});
 	Operand& op = comp->env.back().back().second;
-	op.type = Operand::OPND_REG;
-	op.value.reg = Register {Register::VAL_NUM, comp->reg_count++};
 	return &op;
 }
 
@@ -54,7 +54,7 @@ static Operand* comp_env_get_new_offset(
 	comp->env.back().push_back({sym_index, {}});
 	Operand& op = comp->env.back().back().second;
 	op.type = Operand::OPND_REG;
-	op.value.reg = Register {Register::VAL_NUM, comp->reg_count};
+	op.value.reg = Register(comp->reg_count).as_num();
 	comp->reg_count += size;
 	return &op;
 }
@@ -183,11 +183,14 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 			fprintf(fd, "(");
 
 			Operand opnd = inst.operands[2];
-			if (opnd.value.reg.type == Register::VAL_NUM)
-				fprintf(fd, "%zu", opnd.value.reg.index);
-			else
-				fprintf(fd, "%%r%zu", opnd.value.reg.index);
-
+			if (opnd.type == Operand::OPND_NUM) {
+				fprintf(fd, "%d", opnd.value.num);
+			} else {
+				if (opnd.value.reg.type == Register::VAL_NUM)
+					fprintf(fd, "%zu", opnd.value.reg.index);
+				else
+					fprintf(fd, "%%r%zu", opnd.value.reg.index);
+			}
 			fprintf(fd, ")");
 			fprintf(fd, "\n");
 			continue;
@@ -206,7 +209,7 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 
 Chunk Compiler::compile(AST ast, const SymbolTable& syms) {
 	Chunk chunk;
-	Operand heap = {Operand::OPND_REG, {{Register::VAL_NUM, reg_count++}}};
+	Operand heap {Operand::OPND_REG, Register(reg_count++).as_num()};
 	Operand start = {Operand::OPND_NUM, {1024 - 1}};
 
 	emit(&chunk, OP_MOV, heap, start);
@@ -215,7 +218,11 @@ Chunk Compiler::compile(AST ast, const SymbolTable& syms) {
 }
 
 Operand Compiler::get_temporary() {
-	return {Operand::OPND_TMP, {{Register::VAL_NUM, tmp_count++}}};
+	return {Operand::OPND_TMP, Register(tmp_count++).as_num()};
+}
+
+Operand Compiler::get_register() {
+	return {Operand::OPND_REG, Register(reg_count++).as_num()};
 }
 
 Operand Compiler::get_label() { return {Operand::OPND_LAB, label_count++}; }
@@ -241,17 +248,24 @@ compile_builtin_read(Compiler* comp, Chunk* chunk, size_t, Operand*) {
 
 // create array with runtime-known size
 static Operand compile_builtin_array(
-	Compiler* comp, Chunk* chunk, size_t argc, Operand* args
+	Compiler* comp, Chunk* chunk, size_t argc, Operand args[]
 ) {
 	if (!(argc == 1))
 		err("The `array' builtin expects a size as the first and only argument.");
-	Operand addr {Operand::OPND_TMP, {{Register::VAL_ADDR, comp->tmp_count++}}};
-	Operand heap {Operand::OPND_REG, Register {Register::VAL_NUM, 0}};
 
-	emit(chunk, OP_MOV, addr, heap);
-	emit(chunk, OP_ADD, heap, heap, args[0]);
+	if (args[0].type == Operand::Type::OPND_NUM) {
+		// array is of constant size
+		Operand op {Operand::OPND_REG, Register(comp->reg_count).as_num()};
+		comp->reg_count += (size_t)args[0].value.num;
+		return op;
+	} else {
+		Operand addr {Operand::OPND_TMP, Register(comp->tmp_count++).as_addr()};
+		Operand heap {Operand::OPND_REG, Register(0).as_num()};
 
-	return addr;
+		emit(chunk, OP_MOV, addr, heap);
+		emit(chunk, OP_ADD, heap, heap, args[0]);
+		return addr;
+	}
 }
 
 Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
@@ -283,7 +297,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 				for (size_t i = 0; i < func.argc; i++) {
 					Node arg = func.args[i];
 					assert(arg.type == AST_ID);
-					Operand* arg_opnd = comp_env_get_new(this, arg.index);
+					Operand* arg_opnd = comp_env_get_new(this, arg.index, get_register());
 					*arg_opnd = args[i];
 				}
 
@@ -368,7 +382,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 
 			Operand from = compile(from_node, syms, chunk);
 			Operand to = compile(to_node, syms, chunk);
-			Operand* var = comp_env_get_new(this, id.index);
+			Operand* var = comp_env_get_new(this, id.index, get_register());
 
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
@@ -509,41 +523,32 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 				Node args = node.children[1];
 				Node body = node.children[2];
 
-				Operand* opnd = comp_env_get_new(this, id.index);
+				Operand* opnd = comp_env_get_new(this, id.index, get_register());
 				opnd->type = Operand::OPND_FUN;
 				opnd->value.fun = Funktion {args.children_count, args.children, body};
 
 				return {};
 			}
 
-			Node var = node.children[0];
-			Node id = var.children[0];
+			Node id = node.children[0];
 
 			// var id = exp
 			if (node.children_count == 2) {
-				Operand* opnd = comp_env_get_new(this, id.index);
-				Operand tmp = compile(node.children[1], syms, chunk);
-				if (tmp.type == Operand::OPND_TMP)
-					opnd->value.reg.type = tmp.value.reg.type;
-				emit(chunk, OP_MOV, *opnd, tmp);
-				return {};
-			}
-
-			// var id [idx]
-			if (var.children_count == 2) {
-				Node size = var.children[1];
-				if (!(size.type == AST_NUM))
-					err(
-						"Bracket declarations requires the size to be constant. Use the "
-						"`array' built-in, instead."
-					);
-				Operand size_opnd = compile(size, syms, chunk);
-				comp_env_get_new_offset(this, id.index, (size_t)size_opnd.value.num);
+				Operand exp = compile(node.children[1], syms, chunk);
+				Operand* opnd;
+				if (exp.type == Operand::OPND_REG)
+					opnd = comp_env_get_new(this, id.index, exp);
+				else {
+					Operand tmp = get_register();
+					opnd = comp_env_get_new(this, id.index, tmp);
+					opnd->value.reg.type = exp.value.reg.type;
+					emit(chunk, OP_MOV, *opnd, exp);
+				}
 				return {};
 			}
 
 			// var id
-			Operand* opnd = comp_env_get_new(this, id.index);
+			Operand* opnd = comp_env_get_new(this, id.index, get_register());
 			emit(chunk, OP_MOV, *opnd, {});
 			return {};
 		}
@@ -556,11 +561,15 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			if (node.children_count == 1) return *reg;
 
 			// id [idx]
-			Operand res = this->get_temporary();
+			Operand res = get_temporary();
 			Operand off = compile(node.children[1], syms, chunk);
-			Operand base = (reg->value.reg.type == Register::VAL_NUM)
-			               ? Operand {Operand::OPND_NUM, (Number)reg->value.reg.index}
-			               : *reg;
+			Operand base = [&] {
+				if (reg->value.reg.type == Register::VAL_ADDR) {
+					return Operand(Operand::OPND_TMP, reg->value.reg);
+				} else {
+					return Operand {Operand::OPND_NUM, (Number)reg->value.reg.index};
+				}
+			}();
 
 			emit(chunk, OP_LOAD, res, off, base);
 			return res;

@@ -100,8 +100,8 @@ exp : DO exps END                          { $$ = $2; }
     | CONTINUE exp  { $$ = NODE(AST_CONTINUE, $2); }
     ;
 
-decl : VAR var               { $$ = NODE(AST_DECL, $2); }
-     | VAR var "=" exp       { $$ = NODE(AST_DECL, $2, $4); }
+decl : VAR id               { $$ = NODE(AST_DECL, $2); }
+     | VAR id "=" exp       { $$ = NODE(AST_DECL, $2, $4); }
      | FUN id params "=" exp { $$ = NODE(AST_DECL, $2, $3, $5); }
      ;
 

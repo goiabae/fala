@@ -270,6 +270,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			break;
 		}
 		case AST_DECL: {
+			// fun id params = exp
 			if (node.children_count == 3) {
 				Node id = node.children[0];
 				Node params = node.children[1];
@@ -285,8 +286,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				break;
 			}
 
-			Node var = node.children[0];
-			Node id = var.children[0];
+			Node id = node.children[0];
 			Value* cell = inter_env_get_new(inter, id.index);
 
 			// var id = exp
@@ -295,18 +295,19 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				break;
 			}
 
+			/*
 			// var arr [size]
 			if (var.children_count == 2) {
-				Value size = ast_node_eval(inter, var.children[1]);
-				*cell = (Value) {
-					VALUE_ARR,
-					.arr.data = malloc(sizeof(Value) * (size_t)size.num),
-					.arr.len = (size_t)size.num};
-				memset(cell->arr.data, 0, sizeof(Value) * (size_t)size.num);
+			  Value size = ast_node_eval(inter, var.children[1]);
+			  *cell = (Value) {
+			    VALUE_ARR,
+			    .arr.data = malloc(sizeof(Value) * (size_t)size.num),
+			    .arr.len = (size_t)size.num};
+			  memset(cell->arr.data, 0, sizeof(Value) * (size_t)size.num);
 			}
+			*/
 
-			// var id and var arr [size]
-			// no value to return
+			// var id
 			val = (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}

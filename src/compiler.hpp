@@ -42,10 +42,13 @@ typedef enum InstructionOp {
 
 typedef struct Register {
 	enum {
-		VAL_NUM,
-		VAL_ADDR,
+		VAL_NUM,  // register contains a plain number
+		VAL_ADDR, // register contains an address of a r-register
 	} type;
 	size_t index;
+	Register(size_t idx) : index {idx} {}
+	Register& as_num() { return (type = VAL_NUM), *this; }
+	Register& as_addr() { return (type = VAL_ADDR), *this; }
 } Register;
 
 typedef struct Funktion {
@@ -77,7 +80,7 @@ struct Operand {
 		Value(String str) : str {str} {}
 		Value(Number num) : num {num} {}
 		Value(Funktion fun) : fun {fun} {}
-		Value() {};
+		Value() : num {0} {}
 	};
 
 	Type type;
@@ -120,6 +123,7 @@ struct Compiler {
 	Chunk compile(AST ast, const SymbolTable& syms);
 	Operand compile(Node node, const SymbolTable* syms, Chunk* chunk);
 	Operand get_temporary();
+	Operand get_register();
 	Operand get_label();
 };
 
