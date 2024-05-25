@@ -23,6 +23,7 @@ static void print_operand(FILE*, Operand);
 Compiler::Compiler() {
 	back_patch_stack = new size_t[32];
 	back_patch = new size_t[32];
+	env.push_back({});
 }
 
 Compiler::~Compiler() {
