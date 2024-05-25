@@ -8,7 +8,7 @@ FALA="./build/fala"
 if [ -v 1 ]; then
 	 RAP="$1"
 else
-	RAP=
+	RAP=raposeitor
 fi
 
 red='\e[0;31m'
@@ -59,14 +59,11 @@ for f in ./examples/*.fala; do
 	test "COMPILED ${f}"
 	$FALA -c -o $tmp/$f.rap ./examples/$f.fala 2> /dev/null
 
-	if [ -f ./test/$f.rap ]; then
-		cmp $tmp/$f.rap ./test/$f.rap || fail $f rap
-	else
-		warn "Compiled file for test \"${f}\" does not exist"
+	if ! [ -f $tmp/$f.rap ]; then
+		fail "Compiled file for test \"${f}\" does not exist" fala
 	fi
 
 	if [ "$RAP" ]; then
-		echo testing with raposeitor interpreter
 		interpret $f "$RAP" $tmp/$f.rap
 		if [ -f ./test/$f.out ]; then
 			cmp $tmp/$f.out ./test/$f.out || fail $f out

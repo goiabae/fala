@@ -1,9 +1,0 @@
-  mov %r0, 1023
-  read %t0
-  printv %t0
-  read %t1
-  printv %t1
-  printf "foobar"
-  printv 1337
-  printv 0
-  printv 1
