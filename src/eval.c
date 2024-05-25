@@ -360,9 +360,9 @@ void print_value(Value val) {
 	else if (val.tag == VALUE_STR)
 		printf("%s", val.str);
 	else if (val.tag == VALUE_TRUE)
-		printf("true");
+		printf("1");
 	else if (val.tag == VALUE_NIL)
-		printf("nil");
+		printf("0");
 }
 
 static void value_deinit(Value val) {
