@@ -220,9 +220,7 @@ Operand Compiler::get_register() {
 
 Operand Compiler::get_label() { return {Operand::OPND_LAB, label_count++}; }
 
-static Operand compile_builtin_write(
-	Compiler*, Chunk* chunk, size_t argc, Operand* args
-) {
+Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
 	for (size_t i = 0; i < argc; i++)
 		emit(
 			chunk,
@@ -232,26 +230,24 @@ static Operand compile_builtin_write(
 	return {};
 }
 
-Operand compile_builtin_read(Compiler* comp, Chunk* chunk, size_t, Operand*) {
-	Operand tmp = comp->get_temporary();
+Operand Compiler::builtin_read(Chunk* chunk, size_t, Operand[]) {
+	Operand tmp = get_temporary();
 	emit(chunk, OP_READ, tmp);
 	return tmp;
 }
 
 // create array with runtime-known size
-Operand compile_builtin_array(
-	Compiler* comp, Chunk* chunk, size_t argc, Operand args[]
-) {
+Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 	if (!(argc == 1))
 		err("The `array' builtin expects a size as the first and only argument.");
 
 	if (args[0].type == Operand::Type::OPND_NUM) {
 		// array is of constant size
-		Operand op {Operand::OPND_REG, Register(comp->reg_count).as_num()};
-		comp->reg_count += (size_t)args[0].value.num;
+		Operand op {Operand::OPND_REG, Register(reg_count).as_num()};
+		reg_count += (size_t)args[0].value.num;
 		return op;
 	} else {
-		Operand addr {Operand::OPND_TMP, Register(comp->tmp_count++).as_addr()};
+		Operand addr {Operand::OPND_TMP, Register(tmp_count++).as_addr()};
 		Operand heap {Operand::OPND_REG, Register(0).as_num()};
 
 		emit(chunk, OP_MOV, addr, heap);
@@ -273,13 +269,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand res;
 			if (strcmp(func_name, "write") == 0)
-				res =
-					compile_builtin_write(this, chunk, args_node.children_count, args);
+				res = builtin_write(chunk, args_node.children_count, args);
 			else if (strcmp(func_name, "read") == 0)
-				res = compile_builtin_read(this, chunk, args_node.children_count, args);
+				res = builtin_read(chunk, args_node.children_count, args);
 			else if (strcmp(func_name, "array") == 0)
-				res =
-					compile_builtin_array(this, chunk, args_node.children_count, args);
+				res = builtin_array(chunk, args_node.children_count, args);
 			else {
 				Operand* func_opnd = env_find(func_node.str_id);
 				assert(func_opnd);
