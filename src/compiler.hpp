@@ -102,6 +102,12 @@ template<typename T>
 using Env = vector<vector<pair<size_t, T>>>;
 
 struct Compiler {
+	Compiler();
+	~Compiler();
+
+	Chunk compile(AST ast, const StringPool& pool);
+
+ private:
 	size_t label_count {0};
 	size_t tmp_count {0};
 	size_t reg_count {0};
@@ -118,14 +124,53 @@ struct Compiler {
 	size_t back_patch_len {0};
 	size_t* back_patch;
 
-	Compiler();
-	~Compiler();
-
-	Chunk compile(AST ast, const StringPool& pool);
 	Operand compile(Node node, const StringPool& pool, Chunk* chunk);
 	Operand get_temporary();
 	Operand get_register();
 	Operand get_label();
+
+	void push_to_back_patch(size_t idx);
+	void back_patch_jumps(Chunk* chunk, Operand dest);
+
+	struct Scope;
+	Scope create_scope();
+
+	Operand* env_get_new(StrID str_id, Operand value);
+	Operand* env_find(StrID str_id);
+
+	friend Operand
+	compile_builtin_read(Compiler* comp, Chunk* chunk, size_t, Operand*);
+	friend Operand compile_builtin_array(
+		Compiler* comp, Chunk* chunk, size_t argc, Operand args[]
+	);
+};
+
+// move-only linear resource
+struct Compiler::Scope {
+	Scope(Env<Operand>* env) : m_env {env} { m_env->push_back({}); }
+	~Scope() {
+		if (m_owned) {
+			fprintf(stderr, "called scope destructor\n");
+			m_env->pop_back();
+		}
+	}
+	Scope(const Scope& other) = delete;
+	Scope& operator=(const Scope& other) = delete;
+	Scope(Scope&& other) {
+		m_env = other.m_env;
+		other.m_owned = false;
+		m_owned = true;
+	}
+	Scope& operator=(Scope&& other) {
+		m_env = other.m_env;
+		other.m_owned = false;
+		m_owned = true;
+		return *this;
+	}
+
+ private:
+	Env<Operand>* m_env;
+	bool m_owned {true};
 };
 
 void print_chunk(FILE*, const Chunk&);

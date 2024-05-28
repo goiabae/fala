@@ -17,8 +17,6 @@
 #define emit(C, OP, ...) chunk_append(C, Instruction {OP, {__VA_ARGS__}})
 
 static void chunk_append(Chunk* chunk, Instruction inst);
-static Operand compile_builtin_write(Compiler*, Chunk*, size_t, Operand*);
-static Operand compile_builtin_read(Compiler*, Chunk*, size_t, Operand*);
 static void print_operand(FILE*, Operand);
 
 Compiler::Compiler() {
@@ -37,19 +35,18 @@ void err(const char* msg) {
 	exit(1);
 }
 
-static void comp_env_push(Compiler* comp) { comp->env.push_back({}); }
-static void comp_env_pop(Compiler* comp) { comp->env.pop_back(); }
+Compiler::Scope Compiler::create_scope() { return Scope(&env); }
 
-static Operand* comp_env_get_new(Compiler* comp, StrID str_id, Operand value) {
-	comp->env.back().push_back({str_id.idx, value});
-	Operand& op = comp->env.back().back().second;
+Operand* Compiler::env_get_new(StrID str_id, Operand value) {
+	env.back().push_back({str_id.idx, value});
+	Operand& op = env.back().back().second;
 	return &op;
 }
 
-static Operand* comp_env_find(Compiler* comp, StrID str_id) {
-	for (size_t i = comp->env.size(); i-- > 0;)
-		for (size_t j = comp->env[i].size(); j-- > 0;)
-			if (comp->env[i][j].first == str_id.idx) return &comp->env[i][j].second;
+Operand* Compiler::env_find(StrID str_id) {
+	for (size_t i = env.size(); i-- > 0;)
+		for (size_t j = env[i].size(); j-- > 0;)
+			if (env[i][j].first == str_id.idx) return &env[i][j].second;
 	return nullptr;
 }
 
@@ -59,11 +56,19 @@ static void chunk_append(Chunk* chunk, Instruction inst) {
 	chunk->push_back(inst);
 }
 
-// backpatch MOVs destination operand
-static void chunk_backpatch(Compiler* comp, Chunk* chunk, Operand dest) {
-	size_t to_patch = comp->back_patch_stack[comp->back_patch_stack_len - 1];
+// push instruction at index id of a chunk to back patch
+void Compiler::push_to_back_patch(size_t idx) {
+	back_patch_stack[back_patch_stack_len - 1]++;
+	back_patch[back_patch_len++] = idx - 1;
+}
+
+// back patch destination of MOVs in control-flow jump expressions
+void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
+	// for the inner-most loop (top of the "stack"):
+	//   patch the destination operand of MOV instructions
+	size_t to_patch = back_patch_stack[back_patch_stack_len - 1];
 	for (size_t i = 0; i < to_patch; i++) {
-		size_t idx = comp->back_patch[comp->back_patch_len-- - 1];
+		size_t idx = back_patch[back_patch_len-- - 1];
 		(*chunk)[idx].operands[0] = dest;
 	}
 }
@@ -94,8 +99,9 @@ static void print_operand(FILE* fd, Operand opnd) {
 	}
 }
 
-const char* opcode_repr(int idx) {
-	switch (idx) {
+// return textual representation of opcode
+const char* opcode_repr(InstructionOp op) {
+	switch (op) {
 		case OP_PRINTF: return "printf";
 		case OP_PRINTV: return "printv";
 		case OP_READ: return "read";
@@ -124,8 +130,9 @@ const char* opcode_repr(int idx) {
 	}
 }
 
-int opcode_opnd_count(int idx) {
-	switch (idx) {
+// return amount of operands of each opcode
+int opcode_opnd_count(InstructionOp op) {
+	switch (op) {
 		case OP_PRINTF: return 1;
 		case OP_PRINTV: return 1;
 		case OP_READ: return 1;
@@ -226,15 +233,14 @@ static Operand compile_builtin_write(
 	return {};
 }
 
-static Operand
-compile_builtin_read(Compiler* comp, Chunk* chunk, size_t, Operand*) {
+Operand compile_builtin_read(Compiler* comp, Chunk* chunk, size_t, Operand*) {
 	Operand tmp = comp->get_temporary();
 	emit(chunk, OP_READ, tmp);
 	return tmp;
 }
 
 // create array with runtime-known size
-static Operand compile_builtin_array(
+Operand compile_builtin_array(
 	Compiler* comp, Chunk* chunk, size_t argc, Operand args[]
 ) {
 	if (!(argc == 1))
@@ -276,21 +282,21 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				res =
 					compile_builtin_array(this, chunk, args_node.children_count, args);
 			else {
-				Operand* func_opnd = comp_env_find(this, func_node.str_id);
+				Operand* func_opnd = env_find(func_node.str_id);
 				assert(func_opnd);
 				assert(func_opnd->type == Operand::OPND_FUN);
 				Funktion func = func_opnd->value.fun;
-				comp_env_push(this);
-				for (size_t i = 0; i < func.argc; i++) {
-					Node arg = func.args[i];
-					assert(arg.type == AST_ID);
-					Operand* arg_opnd =
-						comp_env_get_new(this, arg.str_id, get_register());
-					*arg_opnd = args[i];
-				}
+				{
+					Scope scope = create_scope();
+					for (size_t i = 0; i < func.argc; i++) {
+						Node arg = func.args[i];
+						assert(arg.type == AST_ID);
+						Operand* arg_opnd = env_get_new(arg.str_id, get_register());
+						*arg_opnd = args[i];
+					}
 
-				res = compile(func.root, pool, chunk);
-				comp_env_pop(this);
+					res = compile(func.root, pool, chunk);
+				}
 			}
 
 			delete[] args;
@@ -298,11 +304,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		}
 		case AST_NUM: return {Operand::OPND_NUM, node.num};
 		case AST_BLK: {
-			comp_env_push(this);
+			Scope scope = create_scope();
 			Operand opnd;
 			for (size_t i = 0; i < node.children_count; i++)
 				opnd = compile(node.children[i], pool, chunk);
-			comp_env_pop(this);
 			return opnd;
 		}
 		case AST_IF: {
@@ -366,11 +371,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand step = (with_step) ? compile(node.children[3], pool, chunk)
 			                           : Operand {Operand::OPND_NUM, 1};
 
-			comp_env_push(this);
+			Scope scope = create_scope();
 
 			Operand from = compile(from_node, pool, chunk);
 			Operand to = compile(to_node, pool, chunk);
-			Operand* var = comp_env_get_new(this, id.str_id, get_register());
+			Operand* var = env_get_new(id.str_id, get_register());
 
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
@@ -381,7 +386,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			emit(chunk, OP_JMP_TRUE, cmp, end);
 
 			Operand exp = compile(exp_node, pool, chunk);
-			chunk_backpatch(this, chunk, exp);
+			back_patch_jumps(chunk, exp);
 
 			emit(chunk, OP_LABEL, inc);
 			emit(chunk, OP_ADD, *var, *var, step);
@@ -390,8 +395,6 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			back_patch_stack_len--;
 			in_loop = false;
-
-			comp_env_pop(this);
 
 			return exp;
 		}
@@ -412,7 +415,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			emit(chunk, OP_JMP_FALSE, cond_opnd, end);
 
 			Operand exp_opnd = compile(exp, pool, chunk);
-			chunk_backpatch(this, chunk, exp_opnd);
+			back_patch_jumps(chunk, exp_opnd);
 
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
@@ -426,10 +429,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (!in_loop) err("Can't break outside of loops");
 			if (!(node.children_count == 1))
 				err("`break' requires a expression to evaluate the loop to");
+
 			Operand res = compile(node.children[0], pool, chunk);
 			emit(chunk, OP_MOV, {}, res);
-			back_patch_stack[back_patch_stack_len - 1]++;
-			back_patch[back_patch_len++] = chunk->size() - 1;
+			push_to_back_patch(chunk->size() - 1);
 			emit(chunk, OP_JMP, brk_lab);
 			return {};
 		}
@@ -437,10 +440,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (!in_loop) err("can't continue outside of loops");
 			if (!(node.children_count == 1))
 				err("continue requires a expression to evaluate the loop to");
+
 			Operand res = compile(node.children[0], pool, chunk);
 			emit(chunk, OP_MOV, {}, res);
-			back_patch_stack[back_patch_stack_len - 1]++;
-			back_patch[back_patch_len++] = chunk->size() - 1;
+			push_to_back_patch(chunk->size() - 1);
 			emit(chunk, OP_JMP, cnt_lab);
 			return {};
 		}
@@ -450,7 +453,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node id = var.children[0];
 
 			Operand tmp = compile(exp, pool, chunk);
-			Operand* reg = comp_env_find(this, id.str_id);
+			Operand* reg = env_find(id.str_id);
 			if (!reg) err("Variable not found");
 
 			if (var.children_count == 2) {
@@ -509,7 +512,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				Node args = node.children[1];
 				Node body = node.children[2];
 
-				Operand* opnd = comp_env_get_new(this, id.str_id, get_register());
+				Operand* opnd = env_get_new(id.str_id, get_register());
 				opnd->type = Operand::OPND_FUN;
 				opnd->value.fun = Funktion {args.children_count, args.children, body};
 
@@ -523,10 +526,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				Operand exp = compile(node.children[1], pool, chunk);
 				Operand* opnd;
 				if (exp.type == Operand::OPND_REG)
-					opnd = comp_env_get_new(this, id.str_id, exp);
+					opnd = env_get_new(id.str_id, exp);
 				else {
 					Operand tmp = get_register();
-					opnd = comp_env_get_new(this, id.str_id, tmp);
+					opnd = env_get_new(id.str_id, tmp);
 					opnd->value.reg.type = exp.value.reg.type;
 					emit(chunk, OP_MOV, *opnd, exp);
 				}
@@ -534,13 +537,13 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			}
 
 			// var id
-			Operand* opnd = comp_env_get_new(this, id.str_id, get_register());
+			Operand* opnd = env_get_new(id.str_id, get_register());
 			emit(chunk, OP_MOV, *opnd, {});
 			return {};
 		}
 		case AST_VAR: {
 			Node id = node.children[0];
-			Operand* reg = comp_env_find(this, id.str_id);
+			Operand* reg = env_find(id.str_id);
 			if (!reg) err("Variable not previously declared");
 
 			// id
@@ -565,15 +568,13 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_LET: {
 			Node decls = node.children[0];
 			Node exp = node.children[1];
-			comp_env_push(this);
-
-			for (size_t i = 0; i < decls.children_count; i++)
-				(void)compile(decls.children[i], pool, chunk);
-
-			Operand res = compile(exp, pool, chunk);
-
-			comp_env_pop(this);
-			return res;
+			{
+				Scope scope = create_scope();
+				for (size_t i = 0; i < decls.children_count; i++)
+					(void)compile(decls.children[i], pool, chunk);
+				Operand res = compile(exp, pool, chunk);
+				return res;
+			}
 		}
 	}
 	assert(false);
