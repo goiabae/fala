@@ -130,7 +130,7 @@ const char* opcode_repr(InstructionOp op) {
 }
 
 // return amount of operands of each opcode
-int opcode_opnd_count(InstructionOp op) {
+size_t opcode_opnd_count(InstructionOp op) {
 	switch (op) {
 		case OP_PRINTF: return 1;
 		case OP_PRINTV: return 1;
@@ -160,42 +160,39 @@ int opcode_opnd_count(InstructionOp op) {
 	assert(false);
 };
 
-void print_chunk(FILE* fd, const Chunk& chunk) {
-	for (size_t i = 0; i < chunk.size(); i++) {
-		Instruction inst = chunk[i];
+void print_operand_special(FILE* fd, Operand opnd) {
+	if (opnd.type == Operand::OPND_NUM) {
+		fprintf(fd, "%d", opnd.value.num);
+	} else {
+		if (opnd.value.reg.type == Register::VAL_NUM)
+			fprintf(fd, "%zu", opnd.value.reg.index);
+		else
+			fprintf(fd, "%%r%zu", opnd.value.reg.index);
+	}
+}
 
+void print_chunk(FILE* fd, const Chunk& chunk) {
+	constexpr const char* separators[] = {" ", ", ", ", "};
+
+	for (const auto& inst : chunk) {
 		if (inst.opcode != OP_LABEL) fprintf(fd, "  ");
 		fprintf(fd, "%s", opcode_repr(inst.opcode));
-		if (opcode_opnd_count(inst.opcode) >= 1) {
+
+		// base operand needs to printed according to it's contents' type
+		if (inst.opcode == OP_LOAD || inst.opcode == OP_STORE) {
 			fprintf(fd, " ");
 			print_operand(fd, inst.operands[0]);
-		}
-		if (inst.opcode == OP_LOAD || inst.opcode == OP_STORE) {
 			fprintf(fd, ", ");
 			print_operand(fd, inst.operands[1]);
 			fprintf(fd, "(");
-
-			Operand opnd = inst.operands[2];
-			if (opnd.type == Operand::OPND_NUM) {
-				fprintf(fd, "%d", opnd.value.num);
-			} else {
-				if (opnd.value.reg.type == Register::VAL_NUM)
-					fprintf(fd, "%zu", opnd.value.reg.index);
-				else
-					fprintf(fd, "%%r%zu", opnd.value.reg.index);
-			}
+			print_operand_special(fd, inst.operands[2]);
 			fprintf(fd, ")");
-			fprintf(fd, "\n");
-			continue;
-		}
-		if (opcode_opnd_count(inst.opcode) >= 2) {
-			fprintf(fd, ", ");
-			print_operand(fd, inst.operands[1]);
-		}
-		if (opcode_opnd_count(inst.opcode) == 3) {
-			fprintf(fd, ", ");
-			print_operand(fd, inst.operands[2]);
-		}
+		} else
+			for (size_t i = 0; i < opcode_opnd_count(inst.opcode); i++) {
+				fprintf(fd, "%s", separators[i]);
+				print_operand(fd, inst.operands[i]);
+			}
+
 		fprintf(fd, "\n");
 	}
 }
