@@ -7,6 +7,7 @@ extern "C" {
 
 #include "ast.h"
 #include "env.h"
+#include "str_pool.h"
 
 struct Value;
 
@@ -40,7 +41,7 @@ typedef struct Value {
 			struct Value* data;
 		} arr;
 		Function func;
-		String str;
+		String str; // owned string
 		void* nil;
 	};
 } Value;
@@ -52,7 +53,7 @@ typedef struct ValueStack {
 } ValueStack;
 
 typedef struct Interpreter {
-	SymbolTable syms;
+	STR_POOL pool;
 	ValueStack values;
 	Environment env;
 
@@ -61,7 +62,7 @@ typedef struct Interpreter {
 	bool should_continue;
 } Interpreter;
 
-Interpreter interpreter_init();
+Interpreter interpreter_init(STR_POOL pool);
 void interpreter_deinit(Interpreter* inter);
 
 Value ast_eval(Interpreter* inter, AST ast);

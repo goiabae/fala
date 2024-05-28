@@ -12,10 +12,11 @@
 }
 
 %lex-param {LEXER lexer}
-%parse-param {LEXER lexer}{AST* ast}{SymbolTable* syms}
+%parse-param {LEXER lexer}{AST* ast}{STR_POOL pool}
 
 /* necessary for node functions */
 %code requires {
+#include "str_pool.h"
 #include "ast.h"
 #include "lexer.h"
 
@@ -29,7 +30,7 @@
 #include "parser.h"
 
 void error_report(FILE* fd, Location* yyloc, const char* msg);
-#define yyerror(LOC, LEX, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
+#define yyerror(LOC, LEX, AST, POOL, MSG) error_report(stderr, LOC, MSG)
 #define NODE(TYPE, ...) \
   new_node( \
     TYPE, \
@@ -194,7 +195,7 @@ op14 : term ;
 term : "(" exp ")" { $$ = $2; }
      | var
      | NUMBER      { $$ = new_number_node(yyloc, $1); };
-     | STRING      { $$ = new_string_node(AST_STR, yyloc, syms, $1); }
+     | STRING      { $$ = new_string_node(AST_STR, yyloc, pool, $1); }
      | NIL         { $$ = new_nil_node(yyloc); }
      | TRUE        { $$ = new_true_node(yyloc); }
      ;
@@ -205,7 +206,7 @@ var : id             { $$ = NODE(AST_VAR, $1); }
     | id "[" exp "]" { $$ = NODE(AST_VAR, $1, $3); }
     ;
 
-id : ID { $$ = new_string_node(AST_ID, yyloc, syms, $1); }
+id : ID { $$ = new_string_node(AST_ID, yyloc, pool, $1); }
 
 %%
 void error_report(FILE* fd, Location* yyloc, const char* msg) {

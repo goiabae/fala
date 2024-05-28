@@ -9,6 +9,7 @@
 
 #include "ast.h"
 #include "env.h"
+#include "str_pool.h"
 
 using std::pair;
 using std::vector;
@@ -71,13 +72,13 @@ struct Operand {
 	union Value {
 		Register reg;
 		size_t lab;
-		String str;
+		const char* str;
 		Number num;
 		Funktion fun;
 
 		Value(Register reg) : reg {reg} {}
 		Value(size_t lab) : lab {lab} {}
-		Value(String str) : str {str} {}
+		Value(const char* str) : str {str} {}
 		Value(Number num) : num {num} {}
 		Value(Funktion fun) : fun {fun} {}
 		Value() : num {0} {}
@@ -120,8 +121,8 @@ struct Compiler {
 	Compiler();
 	~Compiler();
 
-	Chunk compile(AST ast, const SymbolTable& syms);
-	Operand compile(Node node, const SymbolTable* syms, Chunk* chunk);
+	Chunk compile(AST ast, const StringPool& pool);
+	Operand compile(Node node, const StringPool& pool, Chunk* chunk);
 	Operand get_temporary();
 	Operand get_register();
 	Operand get_label();

@@ -8,6 +8,4 @@
 typedef int Number;
 typedef char* String;
 
-size_t sym_table_insert(SymbolTable* tab, String str);
-
 #endif

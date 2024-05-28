@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "main.h"
+#include "str_pool.h"
 
 static void node_deinit(Node node);
 
@@ -33,16 +34,17 @@ AST ast_init(void) {
 
 void ast_deinit(AST ast) { node_deinit(ast.root); }
 
-static void ast_node_print(SymbolTable* tab, Node node, unsigned int space) {
+static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 	if (node.type == AST_NUM) {
 		printf("%d", node.num);
 		return;
 	} else if (node.type == AST_ID) {
-		printf("%s", sym_table_get(tab, node.index));
+		printf("%s", str_pool_find(pool, node.str_id));
 		return;
 	} else if (node.type == AST_STR) {
 		printf("\"");
-		for (char* it = sym_table_get(tab, node.index); *it != '\0'; it++) {
+		for (char* it = (char*)str_pool_find(pool, node.str_id); *it != '\0';
+		     it++) {
 			if (*it == '\n')
 				printf("\\n");
 			else
@@ -67,15 +69,13 @@ static void ast_node_print(SymbolTable* tab, Node node, unsigned int space) {
 	for (size_t i = 0; i < node.children_count; i++) {
 		printf("\n");
 		for (size_t j = 0; j < space; j++) printf(" ");
-		ast_node_print(tab, node.children[i], space);
+		ast_node_print(pool, node.children[i], space);
 	}
 
 	printf(")");
 }
 
-void ast_print(AST ast, SymbolTable* syms) {
-	ast_node_print(syms, ast.root, 0);
-}
+void ast_print(AST ast, STR_POOL pool) { ast_node_print(pool, ast.root, 0); }
 
 Node new_node(Type type, size_t len, Node* children) {
 	Node node;
@@ -92,7 +92,7 @@ Node new_node(Type type, size_t len, Node* children) {
 	return node;
 }
 
-Node new_list_node() {
+Node new_list_node(void) {
 	Node node;
 	node.type = AST_BLK;
 	node.children_count = 0;
@@ -100,10 +100,10 @@ Node new_list_node() {
 	return node;
 }
 
-Node new_string_node(Type type, Location loc, SymbolTable* tab, String str) {
+Node new_string_node(Type type, Location loc, STR_POOL pool, String str) {
 	Node node;
 	node.loc = loc;
-	node.index = sym_table_insert(tab, str);
+	node.str_id = str_pool_intern(pool, str);
 	node.type = type;
 	return node;
 }
@@ -150,30 +150,3 @@ static void node_deinit(Node node) {
 		node_deinit(node.children[i]);
 	free(node.children);
 }
-
-SymbolTable sym_table_init() {
-	SymbolTable syms;
-	syms.cap = 100;
-	syms.arr = malloc(sizeof(char*) * 100);
-	syms.len = 0;
-	return syms;
-}
-
-void sym_table_deinit(SymbolTable* tab) {
-	for (size_t i = 0; i < tab->len; i++) free(tab->arr[i]);
-	free(tab->arr);
-}
-
-size_t sym_table_insert(SymbolTable* tab, String str) {
-	for (size_t i = 0; i < tab->len; i++) {
-		if (strcmp(tab->arr[i], str) == 0) {
-			free(str);
-			return i;
-		}
-	}
-	tab->arr[tab->len++] = str;
-	assert(tab->len <= tab->cap && "Symbol table if full");
-	return tab->len - 1;
-}
-
-String sym_table_get(SymbolTable* tab, size_t index) { return tab->arr[index]; }

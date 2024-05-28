@@ -20,6 +20,7 @@ extern "C" {
 #include "ast.h"
 #include "compiler.hpp"
 #include "eval.h"
+#include "str_pool.h"
 
 struct File {
 	File(const char* path, const char* mode) : m_fd {fopen(path, mode)} {}
@@ -49,10 +50,10 @@ typedef struct Options {
 	int argc;
 } Options;
 
-static AST parse(File& file, SymbolTable& syms) {
+static AST parse(File& file, StringPool& pool) {
 	LEXER lexer = lexer_init_from_file(file.get_descriptor());
 	AST ast = ast_init();
-	if (yyparse(lexer, &ast, &syms)) exit(1); // FIXME propagate error up
+	if (yyparse(lexer, &ast, &pool)) exit(1); // FIXME propagate error up
 	lexer_deinit(lexer);
 	return ast;
 }
@@ -128,13 +129,14 @@ static int interpret(Options opts) {
 	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
 	if (!fd) return 1;
 
-	Interpreter inter = interpreter_init();
+	StringPool pool;
+	Interpreter inter = interpreter_init(&pool);
 	Value val;
 
 	while (!fd.at_eof()) {
-		AST ast = parse(fd, inter.syms);
+		AST ast = parse(fd, pool);
 		if (opts.verbose) {
-			ast_print(ast, &inter.syms);
+			ast_print(ast, &pool);
 			printf("\n");
 		}
 		val = ast_eval(&inter, ast);
@@ -154,15 +156,15 @@ static int compile(Options opts) {
 	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
 	if (!fd) return 1;
 
-	SymbolTable syms = sym_table_init();
-	AST ast = parse(fd, syms);
+	StringPool pool;
+	AST ast = parse(fd, pool);
 	if (opts.verbose) {
-		ast_print(ast, &syms);
+		ast_print(ast, &pool);
 		printf("\n");
 	}
 
 	Compiler comp;
-	Chunk chunk = comp.compile(ast, syms);
+	Chunk chunk = comp.compile(ast, pool);
 
 	if (opts.output_path) {
 		File out(opts.output_path, "w");
@@ -172,7 +174,6 @@ static int compile(Options opts) {
 	}
 
 	ast_deinit(ast);
-	sym_table_deinit(&syms);
 	return 0;
 }
 

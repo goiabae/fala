@@ -8,11 +8,12 @@
 
 #include "ast.h"
 #include "env.h"
+#include "str_pool.h"
 
-#define PUSH_BUILTIN(INTER, STR, FUNC)                                       \
-	*inter_env_get_new(&INTER, sym_table_insert(&(INTER).syms, strdup(STR))) = \
-		(Value) {                                                                \
-		VALUE_FUN, .func = {.is_builtin = true, .builtin = FUNC }                \
+#define PUSH_BUILTIN(INTER, STR, FUNC)                                     \
+	*inter_env_get_new(&INTER, str_pool_intern((INTER).pool, strdup(STR))) = \
+		(Value) {                                                              \
+		VALUE_FUN, .func = {.is_builtin = true, .builtin = FUNC }              \
 	}
 
 static void value_deinit(Value val);
@@ -20,8 +21,8 @@ static void value_stack_pop(ValueStack* stack, size_t index);
 
 static void inter_env_push(Interpreter* inter);
 static void inter_env_pop(Interpreter* inter);
-static Value* inter_env_get_new(Interpreter* inter, size_t sym_index);
-static Value* inter_env_find(Interpreter* inter, size_t sym_index);
+static Value* inter_env_get_new(Interpreter* inter, StrID str_id);
+static Value* inter_env_find(Interpreter* inter, StrID str_id);
 
 static Value builtin_read(size_t len, Value* args);
 static Value builtin_write(size_t len, Value* args);
@@ -37,15 +38,15 @@ static void inter_env_pop(Interpreter* inter) {
 	);
 }
 
-static Value* inter_env_get_new(Interpreter* inter, size_t sym_index) {
-	size_t idx = env_get_new(&inter->env, sym_index);
+static Value* inter_env_get_new(Interpreter* inter, StrID str_id) {
+	size_t idx = env_get_new(&inter->env, str_id.idx);
 	inter->values.len++;
 	return &inter->values.values[idx];
 }
 
-static Value* inter_env_find(Interpreter* inter, size_t sym_index) {
+static Value* inter_env_find(Interpreter* inter, StrID str_id) {
 	bool found = true;
-	size_t idx = env_find(&inter->env, sym_index, &found);
+	size_t idx = env_find(&inter->env, str_id.idx, &found);
 	if (!found) return NULL;
 	return &inter->values.values[idx];
 }
@@ -108,7 +109,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				from.tag == VALUE_NUM && to.tag == VALUE_NUM && inc.tag == VALUE_NUM
 			);
 
-			Value* var = inter_env_get_new(inter, var_node.index);
+			Value* var = inter_env_get_new(inter, var_node.str_id);
 
 			inter->in_loop = true;
 			for (Number i = from.num; i != to.num; i += inc.num) {
@@ -163,7 +164,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			assert(var.type == AST_VAR);
 			Node id = var.children[0];
 			Value value = ast_node_eval(inter, node.children[1]);
-			Value* addr = inter_env_find(inter, id.index);
+			Value* addr = inter_env_find(inter, id.str_id);
 			assert(addr && "Variable not found. Address is 0x0");
 
 			if (var.children_count == 2) { // array indexing
@@ -266,7 +267,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		}
 		case AST_ID: assert(false);
 		case AST_STR: {
-			val = (Value) {VALUE_STR, .str = sym_table_get(&inter->syms, node.index)};
+			val = (Value
+			) {VALUE_STR, .str = strdup(str_pool_find(inter->pool, node.str_id))};
 			break;
 		}
 		case AST_DECL: {
@@ -275,19 +277,22 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				Node id = node.children[0];
 				Node params = node.children[1];
 				Node body = node.children[2];
-				Value* cell = inter_env_get_new(inter, id.index);
+				Value* cell = inter_env_get_new(inter, id.str_id);
 				val = *cell = (Value) {
 					.tag = VALUE_FUN,
-					.func = (Function) {
-						.is_builtin = false,
-						.argc = params.children_count,
-						.args = params.children,
-						.root = body}};
+					.func =
+						(Function) {
+							.is_builtin = false,
+							.argc = params.children_count,
+							.args = params.children,
+							.root = body
+						}
+				};
 				break;
 			}
 
 			Node id = node.children[0];
-			Value* cell = inter_env_get_new(inter, id.index);
+			Value* cell = inter_env_get_new(inter, id.str_id);
 
 			// var id = exp
 			if (node.children_count == 2) {
@@ -313,7 +318,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		}
 		case AST_VAR: {
 			Node id = node.children[0];
-			Value* addr = inter_env_find(inter, id.index);
+			Value* addr = inter_env_find(inter, id.str_id);
 			assert(addr && "Variable not previously declared.");
 
 			if (node.children_count == 1) { // id
@@ -378,7 +383,7 @@ static Value apply_function(
 ) {
 	assert(func_node.type == AST_ID && "Unnamed functions are not implemented");
 
-	Value* func_ptr = inter_env_find(inter, func_node.index);
+	Value* func_ptr = inter_env_find(inter, func_node.str_id);
 	assert(func_ptr && "For now, only read and write builtins are implemented");
 	Function func = func_ptr->func;
 
@@ -398,7 +403,7 @@ static Value apply_function(
 	for (size_t i = 0; i < argc; i++) {
 		Node arg = func.args[i];
 		assert(arg.type == AST_ID);
-		Value* val = inter_env_get_new(inter, arg.index);
+		Value* val = inter_env_get_new(inter, arg.str_id);
 		*val = args[i];
 	}
 
@@ -462,10 +467,10 @@ static void value_stack_pop(ValueStack* stack, size_t index) {
 	stack->len--;
 }
 
-Interpreter interpreter_init() {
+Interpreter interpreter_init(STR_POOL pool) {
 	Interpreter inter;
 	inter.values = (ValueStack) {0, 32, malloc(sizeof(Value) * 32)};
-	inter.syms = sym_table_init();
+	inter.pool = pool;
 	inter.env = env_init();
 
 	inter.in_loop = false;
@@ -483,7 +488,6 @@ Interpreter interpreter_init() {
 }
 
 void interpreter_deinit(Interpreter* inter) {
-	sym_table_deinit(&inter->syms);
 	env_deinit(
 		&inter->env, (void (*)(void*, size_t))value_stack_pop, &inter->values
 	);

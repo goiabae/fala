@@ -10,6 +10,7 @@
 
 #include "ast.h"
 #include "env.h"
+#include "str_pool.h"
 
 #define CHUNK_INST_CAP 1024
 
@@ -39,10 +40,8 @@ void err(const char* msg) {
 static void comp_env_push(Compiler* comp) { comp->env.push_back({}); }
 static void comp_env_pop(Compiler* comp) { comp->env.pop_back(); }
 
-static Operand* comp_env_get_new(
-	Compiler* comp, size_t sym_index, Operand value
-) {
-	comp->env.back().push_back({sym_index, value});
+static Operand* comp_env_get_new(Compiler* comp, StrID str_id, Operand value) {
+	comp->env.back().push_back({str_id.idx, value});
 	Operand& op = comp->env.back().back().second;
 	return &op;
 }
@@ -59,10 +58,10 @@ static Operand* comp_env_get_new_offset(
 	return &op;
 }
 
-static Operand* comp_env_find(Compiler* comp, size_t sym_index) {
+static Operand* comp_env_find(Compiler* comp, StrID str_id) {
 	for (size_t i = comp->env.size(); i-- > 0;)
 		for (size_t j = comp->env[i].size(); j-- > 0;)
-			if (comp->env[i][j].first == sym_index) return &comp->env[i][j].second;
+			if (comp->env[i][j].first == str_id.idx) return &comp->env[i][j].second;
 	return nullptr;
 }
 
@@ -81,7 +80,7 @@ static void chunk_backpatch(Compiler* comp, Chunk* chunk, Operand dest) {
 	}
 }
 
-static void print_str(FILE* fd, String str) {
+static void print_str(FILE* fd, const char* str) {
 	fputc('"', fd);
 	char c;
 	while ((c = *(str++))) {
@@ -207,13 +206,13 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 	}
 }
 
-Chunk Compiler::compile(AST ast, const SymbolTable& syms) {
+Chunk Compiler::compile(AST ast, const StringPool& pool) {
 	Chunk chunk;
 	Operand heap {Operand::OPND_REG, Register(reg_count++).as_num()};
 	Operand start = {Operand::OPND_NUM, {1024 - 1}};
 
 	emit(&chunk, OP_MOV, heap, start);
-	compile(ast.root, &syms, &chunk);
+	compile(ast.root, pool, &chunk);
 	return chunk;
 }
 
@@ -268,16 +267,16 @@ static Operand compile_builtin_array(
 	}
 }
 
-Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
+Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 	switch (node.type) {
 		case AST_APP: {
 			Node func_node = node.children[0];
-			String func_name = sym_table_get((SymbolTable*)syms, func_node.index);
+			const char* func_name = pool.find(func_node.str_id);
 			Node args_node = node.children[1];
 
 			Operand* args = new Operand[args_node.children_count];
 			for (size_t i = 0; i < args_node.children_count; i++)
-				args[i] = compile(args_node.children[i], syms, chunk);
+				args[i] = compile(args_node.children[i], pool, chunk);
 
 			Operand res;
 			if (strcmp(func_name, "write") == 0)
@@ -289,7 +288,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 				res =
 					compile_builtin_array(this, chunk, args_node.children_count, args);
 			else {
-				Operand* func_opnd = comp_env_find(this, func_node.index);
+				Operand* func_opnd = comp_env_find(this, func_node.str_id);
 				assert(func_opnd);
 				assert(func_opnd->type == Operand::OPND_FUN);
 				Funktion func = func_opnd->value.fun;
@@ -297,11 +296,12 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 				for (size_t i = 0; i < func.argc; i++) {
 					Node arg = func.args[i];
 					assert(arg.type == AST_ID);
-					Operand* arg_opnd = comp_env_get_new(this, arg.index, get_register());
+					Operand* arg_opnd =
+						comp_env_get_new(this, arg.str_id, get_register());
 					*arg_opnd = args[i];
 				}
 
-				res = compile(func.root, syms, chunk);
+				res = compile(func.root, pool, chunk);
 				comp_env_pop(this);
 			}
 
@@ -313,7 +313,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			comp_env_push(this);
 			Operand opnd;
 			for (size_t i = 0; i < node.children_count; i++)
-				opnd = compile(node.children[i], syms, chunk);
+				opnd = compile(node.children[i], pool, chunk);
 			comp_env_pop(this);
 			return opnd;
 		}
@@ -326,17 +326,17 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			Operand l2 = get_label();
 			Operand res = get_temporary();
 
-			Operand cond_opnd = compile(cond, syms, chunk);
+			Operand cond_opnd = compile(cond, pool, chunk);
 
 			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
 
-			Operand yes_opnd = compile(yes, syms, chunk);
+			Operand yes_opnd = compile(yes, pool, chunk);
 
 			emit(chunk, OP_MOV, res, yes_opnd);
 			emit(chunk, OP_JMP, l2);
 			emit(chunk, OP_LABEL, l1);
 
-			Operand no_opnd = compile(no, syms, chunk);
+			Operand no_opnd = compile(no, pool, chunk);
 
 			emit(chunk, OP_MOV, res, no_opnd);
 			emit(chunk, OP_LABEL, l2);
@@ -350,12 +350,12 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			Operand l1 = get_label();
 			Operand res = get_temporary();
 
-			Operand cond_opnd = compile(cond, syms, chunk);
+			Operand cond_opnd = compile(cond, pool, chunk);
 
 			emit(chunk, OP_MOV, res, {});
 			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
 
-			Operand yes_opnd = compile(yes, syms, chunk);
+			Operand yes_opnd = compile(yes, pool, chunk);
 
 			emit(chunk, OP_MOV, res, yes_opnd);
 			emit(chunk, OP_LABEL, l1);
@@ -375,14 +375,14 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			Operand inc = cnt_lab = get_label();
 			Operand end = brk_lab = get_label();
 			Operand cmp = get_temporary();
-			Operand step = (with_step) ? compile(node.children[3], syms, chunk)
+			Operand step = (with_step) ? compile(node.children[3], pool, chunk)
 			                           : Operand {Operand::OPND_NUM, 1};
 
 			comp_env_push(this);
 
-			Operand from = compile(from_node, syms, chunk);
-			Operand to = compile(to_node, syms, chunk);
-			Operand* var = comp_env_get_new(this, id.index, get_register());
+			Operand from = compile(from_node, pool, chunk);
+			Operand to = compile(to_node, pool, chunk);
+			Operand* var = comp_env_get_new(this, id.str_id, get_register());
 
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
@@ -392,7 +392,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			emit(chunk, OP_EQ, cmp, *var, to);
 			emit(chunk, OP_JMP_TRUE, cmp, end);
 
-			Operand exp = compile(exp_node, syms, chunk);
+			Operand exp = compile(exp_node, pool, chunk);
 			chunk_backpatch(this, chunk, exp);
 
 			emit(chunk, OP_LABEL, inc);
@@ -419,11 +419,11 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 
 			emit(chunk, OP_LABEL, beg);
 
-			Operand cond_opnd = compile(cond, syms, chunk);
+			Operand cond_opnd = compile(cond, pool, chunk);
 
 			emit(chunk, OP_JMP_FALSE, cond_opnd, end);
 
-			Operand exp_opnd = compile(exp, syms, chunk);
+			Operand exp_opnd = compile(exp, pool, chunk);
 			chunk_backpatch(this, chunk, exp_opnd);
 
 			emit(chunk, OP_JMP, beg);
@@ -438,7 +438,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			if (!in_loop) err("Can't break outside of loops");
 			if (!(node.children_count == 1))
 				err("`break' requires a expression to evaluate the loop to");
-			Operand res = compile(node.children[0], syms, chunk);
+			Operand res = compile(node.children[0], pool, chunk);
 			emit(chunk, OP_MOV, {}, res);
 			back_patch_stack[back_patch_stack_len - 1]++;
 			back_patch[back_patch_len++] = chunk->size() - 1;
@@ -449,7 +449,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			if (!in_loop) err("can't continue outside of loops");
 			if (!(node.children_count == 1))
 				err("continue requires a expression to evaluate the loop to");
-			Operand res = compile(node.children[0], syms, chunk);
+			Operand res = compile(node.children[0], pool, chunk);
 			emit(chunk, OP_MOV, {}, res);
 			back_patch_stack[back_patch_stack_len - 1]++;
 			back_patch[back_patch_len++] = chunk->size() - 1;
@@ -461,8 +461,8 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			Node exp = node.children[1];
 			Node id = var.children[0];
 
-			Operand tmp = compile(exp, syms, chunk);
-			Operand* reg = comp_env_find(this, id.index);
+			Operand tmp = compile(exp, pool, chunk);
+			Operand* reg = comp_env_find(this, id.str_id);
 			if (!reg) err("Variable not found");
 
 			if (var.children_count == 2) {
@@ -472,7 +472,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 					(reg->value.reg.type == Register::VAL_NUM)
 						? Operand {Operand::OPND_NUM, (Number)reg->value.reg.index}
 						: *reg;
-				Operand idx = compile(var.children[1], syms, chunk);
+				Operand idx = compile(var.children[1], pool, chunk);
 				emit(chunk, OP_STORE, tmp, idx, base);
 				return tmp;
 			}
@@ -486,8 +486,8 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 		Node left_node = node.children[0];                \
 		Node right_node = node.children[1];               \
                                                       \
-		Operand left = compile(left_node, syms, chunk);   \
-		Operand right = compile(right_node, syms, chunk); \
+		Operand left = compile(left_node, pool, chunk);   \
+		Operand right = compile(right_node, pool, chunk); \
 		Operand res = get_temporary();                    \
                                                       \
 		emit(chunk, OPCODE, res, left, right);            \
@@ -508,14 +508,12 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 		case AST_MOD: BINARY_ARITH(OP_MOD);
 		case AST_NOT: {
 			Operand res = get_temporary();
-			Operand inverse = compile(node.children[0], syms, chunk);
+			Operand inverse = compile(node.children[0], pool, chunk);
 			emit(chunk, OP_NOT, res, inverse);
 			return res;
 		}
 		case AST_ID: assert(false && "unreachable");
-		case AST_STR:
-			return Operand {
-				Operand::OPND_STR, sym_table_get((SymbolTable*)syms, node.index)};
+		case AST_STR: return Operand {Operand::OPND_STR, pool.find(node.str_id)};
 		case AST_DECL: {
 			// fun f args = exp
 			if (node.children_count == 3) {
@@ -523,7 +521,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 				Node args = node.children[1];
 				Node body = node.children[2];
 
-				Operand* opnd = comp_env_get_new(this, id.index, get_register());
+				Operand* opnd = comp_env_get_new(this, id.str_id, get_register());
 				opnd->type = Operand::OPND_FUN;
 				opnd->value.fun = Funktion {args.children_count, args.children, body};
 
@@ -534,13 +532,13 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 
 			// var id = exp
 			if (node.children_count == 2) {
-				Operand exp = compile(node.children[1], syms, chunk);
+				Operand exp = compile(node.children[1], pool, chunk);
 				Operand* opnd;
 				if (exp.type == Operand::OPND_REG)
-					opnd = comp_env_get_new(this, id.index, exp);
+					opnd = comp_env_get_new(this, id.str_id, exp);
 				else {
 					Operand tmp = get_register();
-					opnd = comp_env_get_new(this, id.index, tmp);
+					opnd = comp_env_get_new(this, id.str_id, tmp);
 					opnd->value.reg.type = exp.value.reg.type;
 					emit(chunk, OP_MOV, *opnd, exp);
 				}
@@ -548,13 +546,13 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			}
 
 			// var id
-			Operand* opnd = comp_env_get_new(this, id.index, get_register());
+			Operand* opnd = comp_env_get_new(this, id.str_id, get_register());
 			emit(chunk, OP_MOV, *opnd, {});
 			return {};
 		}
 		case AST_VAR: {
 			Node id = node.children[0];
-			Operand* reg = comp_env_find(this, id.index);
+			Operand* reg = comp_env_find(this, id.str_id);
 			if (!reg) err("Variable not previously declared");
 
 			// id
@@ -562,7 +560,7 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 
 			// id [idx]
 			Operand res = get_temporary();
-			Operand off = compile(node.children[1], syms, chunk);
+			Operand off = compile(node.children[1], pool, chunk);
 			Operand base = [&] {
 				if (reg->value.reg.type == Register::VAL_ADDR) {
 					return Operand(Operand::OPND_TMP, reg->value.reg);
@@ -582,9 +580,9 @@ Operand Compiler::compile(Node node, const SymbolTable* syms, Chunk* chunk) {
 			comp_env_push(this);
 
 			for (size_t i = 0; i < decls.children_count; i++)
-				(void)compile(decls.children[i], syms, chunk);
+				(void)compile(decls.children[i], pool, chunk);
 
-			Operand res = compile(exp, syms, chunk);
+			Operand res = compile(exp, pool, chunk);
 
 			comp_env_pop(this);
 			return res;

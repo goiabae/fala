@@ -24,7 +24,7 @@ BISON_TARGET(
 	DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/parser.h
 	COMPILE_FLAGS "-v")
 
-add_executable(fala src/main.cpp src/lexer.c src/ast.c src/eval.c src/compiler.cpp src/env.c ${BISON_PARSER_OUTPUTS})
+add_executable(fala src/main.cpp src/str_pool.cpp src/lexer.c src/ast.c src/eval.c src/compiler.cpp src/env.c ${BISON_PARSER_OUTPUTS})
 set_property(TARGET fala PROPERTY C_STANDARD 11)
 set_property(TARGET fala PROPERTY CXX_STANDARD 11)
 target_include_directories(fala PRIVATE src/)
