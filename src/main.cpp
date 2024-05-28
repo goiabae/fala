@@ -20,24 +20,8 @@ extern "C" {
 #include "ast.h"
 #include "compiler.hpp"
 #include "eval.h"
+#include "file.hpp"
 #include "str_pool.h"
-
-struct File {
-	File(const char* path, const char* mode) : m_fd {fopen(path, mode)} {}
-	File(FILE* fd) : m_fd {fd}, m_owned {false} {}
-	~File() {
-		if (m_owned) fclose(m_fd);
-	}
-
-	bool operator!() { return !m_fd; }
-
-	FILE* get_descriptor() { return m_fd; }
-	bool at_eof() { return feof(m_fd); }
-
- private:
-	FILE* m_fd;
-	bool m_owned {true};
-};
 
 typedef struct Options {
 	bool is_invalid;
