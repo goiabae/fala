@@ -28,13 +28,13 @@ void ring_write_many(Ring* ring, char* buf, size_t len);
 #ifdef FALA_RING_IMPL
 
 Ring ring_init(void) {
-	return (Ring) {
-		.buf = malloc(sizeof(char) * RING_DEFAULT_CAP),
-		.read = 0,
-		.write = 0,
-		.len = 0,
-		.cap = RING_DEFAULT_CAP,
-	};
+	Ring ring;
+	ring.buf = (char*)malloc(sizeof(char) * RING_DEFAULT_CAP);
+	ring.read = 0;
+	ring.write = 0;
+	ring.len = 0;
+	ring.cap = RING_DEFAULT_CAP;
+	return ring;
 }
 
 void ring_deinit(Ring* ring) { free(ring->buf); }

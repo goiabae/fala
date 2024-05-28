@@ -35,10 +35,9 @@ typedef struct Options {
 } Options;
 
 static AST parse(File& file, StringPool& pool) {
-	LEXER lexer = lexer_init_from_file(file.get_descriptor());
+	Lexer lexer(file);
 	AST ast = ast_init();
-	if (yyparse(lexer, &ast, &pool)) exit(1); // FIXME propagate error up
-	lexer_deinit(lexer);
+	if (yyparse(&lexer, &ast, &pool)) exit(1); // FIXME propagate error up
 	return ast;
 }
 

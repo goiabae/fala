@@ -5,18 +5,15 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "ast.h"
+#include "file.hpp"
 #include "ring.h"
 
 // necessary for lval of GNU bison rule values
 #define YYSTYPE union TokenValue
-
-typedef struct Lexer {
-	FILE *fd;
-	Ring ring;
-} Lexer;
 
 union TokenValue {
 	int num;
@@ -24,16 +21,24 @@ union TokenValue {
 	Node node;
 };
 
-typedef void *LEXER;
+typedef struct Lexer *LEXER;
 
-LEXER lexer_init_from_file(FILE *fd);
-void lexer_deinit(LEXER lexer);
 int lexer_lex(union TokenValue *lval, Location *location, LEXER scanner);
 
 bool is_interactive(LEXER scanner);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+struct Lexer {
+	File *file;
+	Ring ring;
+
+	Lexer(File &_file);
+	~Lexer();
+};
 #endif
 
 #endif

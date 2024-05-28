@@ -14,8 +14,11 @@
 #include "parser.h"
 
 #define FALA_RING_IMPL
+extern "C" {
 #include "ring.h"
+}
 
+// these are sequential indexes, which I can't guarantee Bison token enums are
 enum {
 	KW_DO,
 	KW_END,
@@ -42,55 +45,62 @@ enum {
 	KW_COUNT,
 };
 
-static const char* keywords[KW_COUNT] = {
-	[KW_DO] = "do",
-	[KW_END] = "end",
-	[KW_IF] = "if",
-	[KW_THEN] = "then",
-	[KW_ELSE] = "else",
-	[KW_WHEN] = "when",
-	[KW_FOR] = "for",
-	[KW_FROM] = "from",
-	[KW_TO] = "to",
-	[KW_STEP] = "step",
-	[KW_WHILE] = "while",
-	[KW_BREAK] = "break",
-	[KW_CONTINUE] = "continue",
-	[KW_VAR] = "var",
-	[KW_LET] = "let",
-	[KW_IN] = "in",
-	[KW_FUN] = "fun",
-	[KW_OR] = "or",
-	[KW_AND] = "and",
-	[KW_NOT] = "not",
-	[KW_NIL] = "nil",
-	[KW_TRUE] = "true",
-};
+const char* keyword_repr(size_t i) {
+	switch (i) {
+		case KW_DO: return "do";
+		case KW_END: return "end";
+		case KW_IF: return "if";
+		case KW_THEN: return "then";
+		case KW_ELSE: return "else";
+		case KW_WHEN: return "when";
+		case KW_FOR: return "for";
+		case KW_FROM: return "from";
+		case KW_TO: return "to";
+		case KW_STEP: return "step";
+		case KW_WHILE: return "while";
+		case KW_BREAK: return "break";
+		case KW_CONTINUE: return "continue";
+		case KW_VAR: return "var";
+		case KW_LET: return "let";
+		case KW_IN: return "in";
+		case KW_FUN: return "fun";
+		case KW_OR: return "or";
+		case KW_AND: return "and";
+		case KW_NOT: return "not";
+		case KW_NIL: return "nil";
+		case KW_TRUE: return "true";
+	}
+	assert(false);
+}
 
-static const int keyword_parser_map[KW_COUNT] = {
-	[KW_DO] = DO,
-	[KW_END] = END,
-	[KW_IF] = IF,
-	[KW_THEN] = THEN,
-	[KW_ELSE] = ELSE,
-	[KW_WHEN] = WHEN,
-	[KW_FOR] = FOR,
-	[KW_FROM] = FROM,
-	[KW_TO] = TO,
-	[KW_STEP] = STEP,
-	[KW_WHILE] = WHILE,
-	[KW_BREAK] = BREAK,
-	[KW_CONTINUE] = CONTINUE,
-	[KW_VAR] = VAR,
-	[KW_LET] = LET,
-	[KW_IN] = IN,
-	[KW_FUN] = FUN,
-	[KW_OR] = OR,
-	[KW_AND] = AND,
-	[KW_NOT] = NOT,
-	[KW_NIL] = NIL,
-	[KW_TRUE] = TRUE,
-};
+// maps KW_ enum values to Bison's token enum value
+int keyword_to_bison(size_t i) {
+	switch (i) {
+		case KW_DO: return DO;
+		case KW_END: return END;
+		case KW_IF: return IF;
+		case KW_THEN: return THEN;
+		case KW_ELSE: return ELSE;
+		case KW_WHEN: return WHEN;
+		case KW_FOR: return FOR;
+		case KW_FROM: return FROM;
+		case KW_TO: return TO;
+		case KW_STEP: return STEP;
+		case KW_WHILE: return WHILE;
+		case KW_BREAK: return BREAK;
+		case KW_CONTINUE: return CONTINUE;
+		case KW_VAR: return VAR;
+		case KW_LET: return LET;
+		case KW_IN: return IN;
+		case KW_FUN: return FUN;
+		case KW_OR: return OR;
+		case KW_AND: return AND;
+		case KW_NOT: return NOT;
+		case KW_NIL: return NIL;
+		case KW_TRUE: return TRUE;
+	}
+	assert(false);
+}
 
 #ifndef FALA_WITH_READLINE
 static size_t read_line(char* buf, size_t count, FILE* fd) {
@@ -109,27 +119,31 @@ static void ensure(Lexer* lexer) {
 		size_t read = 0;
 
 #ifdef FALA_WITH_READLINE
-		if (lexer->fd == stdin) {
+		if (lexer->file->get_descriptor() == stdin) {
 			buf = readline("fala> ");
 			if (!buf) return;
 			add_history(buf);
 			read = strlen(buf);
 		} else {
-			buf = malloc(sizeof(char) * lexer->ring.cap);
-			read = fread(buf, sizeof(char), lexer->ring.cap, lexer->fd);
+			buf = (char*)malloc(sizeof(char) * lexer->ring.cap);
+			read = fread(
+				buf, sizeof(char), lexer->ring.cap, lexer->file->get_descriptor()
+			);
 		}
 #else
-		buf = malloc(sizeof(char) * lexer->ring.cap);
-		if (lexer->fd == stdin) {
+		buf = (char*)malloc(sizeof(char) * lexer->ring.cap);
+		if (lexer->file->get_descriptor() == stdin) {
 			printf("fala> ");
-			read = read_line(buf, lexer->ring.cap, lexer->fd);
+			read = read_line(buf, lexer->ring.cap, lexer->file->get_descriptor());
 		} else
-			read = fread(buf, sizeof(char), lexer->ring.cap, lexer->fd);
+			read = fread(
+				buf, sizeof(char), lexer->ring.cap, lexer->file->get_descriptor()
+			);
 #endif
 
 		if (read > 0) ring_write_many(&lexer->ring, buf, read);
 #ifdef FALA_WITH_READLINE
-		if (lexer->fd == stdin) ring_write(&lexer->ring, '\n');
+		if (lexer->file->get_descriptor() == stdin) ring_write(&lexer->ring, '\n');
 #endif
 		free(buf);
 	}
@@ -163,18 +177,16 @@ static bool is_valid_id_char(char c) { return isalnum(c) || c == '_'; }
 
 static char* string_dup(char* str) {
 	const size_t len = strlen(str);
-	char* copy = malloc(sizeof(char) * (len + 1));
+	char* copy = (char*)malloc(sizeof(char) * (len + 1));
 	for (size_t i = 0; i < len; i++) copy[i] = str[i];
 	copy[len] = '\0';
 	return copy;
 }
 
-int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
+extern "C" int lexer_lex(union TokenValue* value, Location* loc, LEXER lexer) {
 	loc->first_line = loc->last_line;
 	loc->first_column = loc->last_column;
 
-	Lexer* lexer = (Lexer*)_lexer;
-	(void)loc;
 	char c = advance(lexer, loc);
 	if (c < 0) return YYEOF;
 	switch (c) {
@@ -241,7 +253,8 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 				value->num = (Number)num;
 				return NUMBER;
 			} else if (isalpha(c) || c == '_') {
-				char buf[256] = {[0] = c};
+				char buf[256] {};
+				buf[0] = c;
 				size_t len = 1;
 				while (is_valid_id_char(c = peek(lexer))) {
 					buf[len++] = c;
@@ -251,7 +264,7 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 
 				// could be a reserved keyword
 				for (size_t i = 0; i < KW_COUNT; i++)
-					if (strcmp(buf, keywords[i]) == 0) return keyword_parser_map[i];
+					if (strcmp(buf, keyword_repr(i)) == 0) return keyword_to_bison(i);
 
 				value->str = string_dup(buf);
 				return ID;
@@ -262,17 +275,10 @@ int lexer_lex(union TokenValue* value, Location* loc, void* _lexer) {
 	assert(false && "unreachable");
 }
 
-LEXER lexer_init_from_file(FILE* fd) {
-	Lexer* lexer = malloc(sizeof(Lexer));
-	lexer->fd = fd;
-	lexer->ring = ring_init();
-	return lexer;
+bool is_interactive(LEXER lexer) {
+	return lexer->file->get_descriptor() == stdin;
 }
 
-void lexer_deinit(LEXER _lexer) {
-	Lexer* lexer = (Lexer*)_lexer;
-	ring_deinit(&lexer->ring);
-	free(lexer);
-}
+Lexer::Lexer(File& _file) : file(&_file), ring(ring_init()) {}
 
-bool is_interactive(LEXER lexer) { return ((Lexer*)lexer)->fd == stdin; }
+Lexer::~Lexer() { ring_deinit(&ring); }
