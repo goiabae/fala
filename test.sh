@@ -37,9 +37,9 @@ interpret() {
 	inter="$2"
 	file="$3"
 	if [ -f ./test/$test.sh ]; then
-		sh ./test/$test.sh | $inter $file > $tmp/$test.out 2> /dev/null
+		sh ./test/$test.sh | $inter $file > $tmp/$test.out
 	else
-		$inter $file > $tmp/$test.out 2> /dev/null
+		$inter $file > $tmp/$test.out
 	fi
 }
 
@@ -57,7 +57,7 @@ for f in ./examples/*.fala; do
 	fi
 
 	test "COMPILED ${f}"
-	$FALA -c -o $tmp/$f.rap ./examples/$f.fala 2> /dev/null
+	$FALA -c -o $tmp/$f.rap ./examples/$f.fala
 
 	if ! [ -f $tmp/$f.rap ]; then
 		fail "Compiled file for test \"${f}\" does not exist" fala
