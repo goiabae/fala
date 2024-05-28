@@ -152,10 +152,7 @@ struct Compiler {
 struct Compiler::Scope {
 	Scope(Env<Operand>* env) : m_env {env} { m_env->push_back({}); }
 	~Scope() {
-		if (m_owned) {
-			fprintf(stderr, "called scope destructor\n");
-			m_env->pop_back();
-		}
+		if (m_owned) m_env->pop_back();
 	}
 	Scope(const Scope& other) = delete;
 	Scope& operator=(const Scope& other) = delete;
