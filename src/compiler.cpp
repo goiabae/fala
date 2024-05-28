@@ -26,8 +26,8 @@ Compiler::Compiler() {
 }
 
 Compiler::~Compiler() {
-	delete back_patch;
-	delete back_patch_stack;
+	delete[] back_patch;
+	delete[] back_patch_stack;
 }
 
 void err(const char* msg) {
