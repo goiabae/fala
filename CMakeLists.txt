@@ -5,6 +5,8 @@ project(fala)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+set(CMAKE_CXX_CPPCHECK "cppcheck")
+
 if(MSVC)
 	add_compile_options(/W4 "$<$<CONFIG:DEBUG>:/Zi;/Od>")
 else()

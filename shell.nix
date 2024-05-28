@@ -10,5 +10,8 @@ in with pkgs; mkShell {
     old.bison # 3.0.5
     readline
     cmake
+    cppcheck
   ];
+
+  hardeningDisable = [ "fortify" ];
 }
