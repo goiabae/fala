@@ -11,8 +11,8 @@
 #define YYLTYPE Location
 }
 
-%lex-param {void *scanner}
-%parse-param {void *scanner}{AST* ast}{SymbolTable* syms}
+%lex-param {LEXER lexer}
+%parse-param {LEXER lexer}{AST* ast}{SymbolTable* syms}
 
 /* necessary for node functions */
 %code requires {
@@ -29,7 +29,7 @@
 #include "parser.h"
 
 void error_report(FILE* fd, Location* yyloc, const char* msg);
-#define yyerror(LOC, SCAN, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
+#define yyerror(LOC, LEX, AST, SYMS, MSG) error_report(stderr, LOC, MSG)
 #define NODE(TYPE, ...) \
   new_node( \
     TYPE, \
@@ -37,9 +37,9 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
     (Node[]) {__VA_ARGS__})
 %}
 
-/* type of $$ in grammar rules */
+/* type of symbols ($N and $$) in grammar actions */
 %union {
-  int num;
+	int num;
 	char* str;
 	Node node;
 }
@@ -71,37 +71,82 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token NOT
 
 /* non-terminals */
-%type <node> exp exps op term id decl decls var func arg args params app
-%type <node> op1 op2 op3 op4 op5 op6 op7 op8 op9 op10 op11 op12 op13 op14 op15
+%type <node> exp
+
+%type <node> do block
+%type <node> cond
+%type <node> loop
+%type <node> jump
+%type <node> let decls
+%type <node> decl params
+%type <node> app func args arg
+%type <node> ass
+%type <node> op op1 op2 op3 op4 op5 op6 op7 op8 op9 op10 op11 op12 op13 op14
+
+%type <node> term var id
 
 %%
 
 %start program ;
 
-program : %empty { ast->root = new_number_node(yyloc, 0); if (is_interactive(scanner)) YYACCEPT; }
-        | exp    { ast->root = $1; if (is_interactive(scanner)) YYACCEPT; }
+program : %empty { ast->root = new_number_node(yyloc, 0);
+                   if (is_interactive(lexer)) YYACCEPT; }
+        | exp    { ast->root = $1; if (is_interactive(lexer)) YYACCEPT; }
         ;
 
-exps : exp ";"      { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-     | exps exp ";" { $$ = list_append_node($$, $2); }
-     ;
-
-exp : DO exps END                          { $$ = $2; }
-    | IF exp THEN exp ELSE exp             { $$ = NODE(AST_IF,   $2, $4, $6); }
-    | WHEN exp THEN exp                    { $$ = NODE(AST_WHEN, $2, $4); }
-    | FOR VAR var FROM exp TO exp THEN exp { $$ = NODE(AST_FOR,  $3, $5, $7, $9); }
-    | FOR VAR var FROM exp TO exp STEP exp THEN exp { $$ = NODE(AST_FOR,   $3, $5, $7, $9, $11); }
-    | WHILE exp THEN exp                   { $$ = NODE(AST_WHILE, $2, $4); }
-    | LET decls IN exp                     { $$ = NODE(AST_LET,   $2, $4); }
+exp : do
+    | cond
+    | loop
+    | jump
+    | let
     | decl
-    | var "=" exp                          { $$ = NODE(AST_ASS,   $1, $3); }
+    | app
+    | ass
     | op
-    | BREAK exp     { $$ = NODE(AST_BREAK,    $2); }
-    | CONTINUE exp  { $$ = NODE(AST_CONTINUE, $2); }
     ;
 
-decl : VAR id               { $$ = NODE(AST_DECL, $2); }
-     | VAR id "=" exp       { $$ = NODE(AST_DECL, $2, $4); }
+/* Expression sequences */
+do : DO block END { $$ = $2; }
+
+block : exp           { $$ = new_list_node();
+                        $$ = list_append_node($$, $1); }
+      | block ";" exp { $$ = list_append_node($$, $3); }
+      | block ";"
+      ;
+
+/* Conditionals */
+cond : IF exp THEN exp ELSE exp { $$ = NODE(AST_IF, $2, $4, $6); }
+     | WHEN exp THEN exp        { $$ = NODE(AST_WHEN, $2, $4); }
+     ;
+
+/* Loops */
+/* TODO: replace VAR var with an actual declaration */
+loop : WHILE exp THEN exp { $$ = NODE(AST_WHILE, $2, $4); }
+     | FOR VAR var FROM exp TO exp THEN exp {
+       $$ = NODE(AST_FOR, $3, $5, $7, $9);
+     }
+     | FOR VAR var FROM exp TO exp STEP exp THEN exp {
+       $$ = NODE(AST_FOR, $3, $5, $7, $9, $11);
+     }
+     ;
+
+/* Jumps */
+jump : BREAK exp    { $$ = NODE(AST_BREAK, $2); }
+     | CONTINUE exp { $$ = NODE(AST_CONTINUE, $2); }
+     ;
+
+/* Let bindings */
+let : LET decls     IN exp { $$ = NODE(AST_LET, $2, $4); }
+    | LET decls "," IN exp { $$ = NODE(AST_LET, $2, $5); }
+    ;
+
+decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
+      | decls "," decl { $$ = list_append_node($$, $3); }
+      ;
+
+/* Declarations */
+decl : VAR id                { $$ = NODE(AST_DECL, $2); }
+     | VAR id "=" exp        { $$ = NODE(AST_DECL, $2, $4); }
      | FUN id params "=" exp { $$ = NODE(AST_DECL, $2, $3, $5); }
      ;
 
@@ -109,16 +154,7 @@ params : %empty    { $$ = new_list_node(); }
        | params id { $$ = list_append_node($$, $2);}
        ;
 
-decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-      | decls "," decl { $$ = list_append_node($$, $3); }
-      ;
-
-var : id             { $$ = NODE(AST_VAR, $1); }
-    | id "[" exp "]" { $$ = NODE(AST_VAR, $1, $3); }
-    ;
-
-id : ID { $$ = new_string_node(AST_ID, yyloc, syms, $1); }
-
+/* Function application */
 app : func arg args     { $$ = NODE(AST_APP, $1, list_prepend_node($3, $2)); }
     | arg "." func args { $$ = NODE(AST_APP, $3, list_prepend_node($4, $1)); }
     | app "." func args { $$ = NODE(AST_APP, $3, list_prepend_node($4, $1)); }
@@ -127,11 +163,16 @@ app : func arg args     { $$ = NODE(AST_APP, $1, list_prepend_node($3, $2)); }
 /* TODO: allow application of function expressions to arguments */
 func : id ;
 
-arg  : term ;
-args : %empty    { $$ = new_list_node(); }
+args : %empty   { $$ = new_list_node(); }
      | args arg { $$ = list_append_node($$, $2); }
      ;
 
+arg : term ;
+
+/* Assignment */
+ass : var "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
+
+/* Operators. Infix and prefix */
 op : op1;
 
 op1  : op2  | op1 OR   op2  { $$ = NODE(AST_OR,  $1, $3); }
@@ -147,9 +188,9 @@ op10 : op11 | op10 "*" op11 { $$ = NODE(AST_MUL, $1, $3); }
 op11 : op12 | op11 "/" op12 { $$ = NODE(AST_DIV, $1, $3); }
 op12 : op13 | op12 "%" op13 { $$ = NODE(AST_MOD, $1, $3); }
 op13 : op14 | NOT op14      { $$ = NODE(AST_NOT, $2); }
-op14 : op15 | app ;
-op15 : term ;
+op14 : term ;
 
+/* Terms */
 term : "(" exp ")" { $$ = $2; }
      | var
      | NUMBER      { $$ = new_number_node(yyloc, $1); };
@@ -157,6 +198,14 @@ term : "(" exp ")" { $$ = $2; }
      | NIL         { $$ = new_nil_node(yyloc); }
      | TRUE        { $$ = new_true_node(yyloc); }
      ;
+
+/* l-values */
+/* TODO: get rid of this */
+var : id             { $$ = NODE(AST_VAR, $1); }
+    | id "[" exp "]" { $$ = NODE(AST_VAR, $1, $3); }
+    ;
+
+id : ID { $$ = new_string_node(AST_ID, yyloc, syms, $1); }
 
 %%
 void error_report(FILE* fd, Location* yyloc, const char* msg) {
