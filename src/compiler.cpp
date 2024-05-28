@@ -9,7 +9,6 @@
 #include <iostream>
 
 #include "ast.h"
-#include "env.h"
 #include "str_pool.h"
 
 #define CHUNK_INST_CAP 1024

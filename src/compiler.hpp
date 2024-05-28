@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "ast.h"
-#include "env.h"
 #include "str_pool.h"
 
 using std::pair;
