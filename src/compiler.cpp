@@ -70,6 +70,7 @@ void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 		size_t idx = back_patch[back_patch_len-- - 1];
 		(*chunk)[idx].operands[0] = dest;
 	}
+	back_patch_stack_len--;
 }
 
 static void print_str(FILE* fd, const char* str) {
@@ -218,12 +219,10 @@ Operand Compiler::get_register() {
 Operand Compiler::get_label() { return {Operand::OPND_LAB, label_count++}; }
 
 Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
-	for (size_t i = 0; i < argc; i++)
-		emit(
-			chunk,
-			((args[i].type == Operand::OPND_STR) ? OP_PRINTF : OP_PRINTV),
-			args[i]
-		);
+	for (size_t i = 0; i < argc; i++) {
+		const auto op = args[i].type == Operand::OPND_STR ? OP_PRINTF : OP_PRINTV;
+		emit(chunk, op, args[i]);
+	}
 	return {};
 }
 
@@ -273,8 +272,9 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				res = builtin_array(chunk, args_node.children_count, args);
 			else {
 				Operand* func_opnd = env_find(func_node.str_id);
-				assert(func_opnd);
-				assert(func_opnd->type == Operand::OPND_FUN);
+				if (!func_opnd) err("Function not found");
+				if (func_opnd->type != Operand::OPND_FUN)
+					err("Type of <name> is not function.");
 				Funktion func = func_opnd->value.fun;
 				{
 					Scope scope = create_scope();
@@ -376,14 +376,13 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			emit(chunk, OP_JMP_TRUE, cmp, end);
 
 			Operand exp = compile(exp_node, pool, chunk);
-			back_patch_jumps(chunk, exp);
 
 			emit(chunk, OP_LABEL, inc);
 			emit(chunk, OP_ADD, *var, *var, step);
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
 
-			back_patch_stack_len--;
+			back_patch_jumps(chunk, exp);
 			in_loop = false;
 
 			return exp;
@@ -405,12 +404,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			emit(chunk, OP_JMP_FALSE, cond_opnd, end);
 
 			Operand exp_opnd = compile(exp, pool, chunk);
-			back_patch_jumps(chunk, exp_opnd);
 
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
 
-			back_patch_stack_len--;
+			back_patch_jumps(chunk, exp_opnd);
 			in_loop = false;
 
 			return exp_opnd;
