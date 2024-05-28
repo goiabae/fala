@@ -46,18 +46,6 @@ static Operand* comp_env_get_new(Compiler* comp, StrID str_id, Operand value) {
 	return &op;
 }
 
-static Operand* comp_env_get_new_offset(
-	Compiler* comp, size_t sym_index, size_t size
-) {
-	// one for base and another for offset
-	comp->env.back().push_back({sym_index, {}});
-	Operand& op = comp->env.back().back().second;
-	op.type = Operand::OPND_REG;
-	op.value.reg = Register(comp->reg_count).as_num();
-	comp->reg_count += size;
-	return &op;
-}
-
 static Operand* comp_env_find(Compiler* comp, StrID str_id) {
 	for (size_t i = comp->env.size(); i-- > 0;)
 		for (size_t j = comp->env[i].size(); j-- > 0;)
