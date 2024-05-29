@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "main.h"
 #include "str_pool.h"
 
 static void node_deinit(Node node);

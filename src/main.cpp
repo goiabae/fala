@@ -1,5 +1,3 @@
-#include "main.h"
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +20,9 @@ extern "C" {
 #include "eval.h"
 #include "file.hpp"
 #include "str_pool.h"
+
+typedef int Number;
+typedef char* String;
 
 typedef struct Options {
 	bool is_invalid;
