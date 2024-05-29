@@ -38,6 +38,16 @@ struct Lexer {
 
 	Lexer(File &_file);
 	~Lexer();
+
+	Location *loc;
+	union TokenValue *value;
+
+	int lex();
+
+	void ensure();
+	char peek();
+	char advance();
+	bool match(char c);
 };
 #endif
 

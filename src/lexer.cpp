@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <string>
+
 #ifdef FALA_WITH_READLINE
 #	include <readline/history.h>
 #	include <readline/readline.h>
@@ -17,6 +19,8 @@
 extern "C" {
 #include "ring.h"
 }
+
+using std::string;
 
 // these are sequential indexes, which I can't guarantee Bison token enums are
 enum {
@@ -102,61 +106,49 @@ int keyword_to_bison(size_t i) {
 	assert(false);
 }
 
-#ifndef FALA_WITH_READLINE
 static size_t read_line(char* buf, size_t count, FILE* fd) {
-	size_t i = 0;
+	size_t read = 0;
+#ifdef FALA_WITH_READLINE
+	(void)fd;
+	char* line = readline("fala> ");
+	if (!line) return 0;
+	add_history(line);
+	read = strlen(line);
+	if (read > count) return 0;
+	strncpy(buf, line, read);
+	buf[read++] = '\n';
+	buf[read] = '\0';
+	free(line);
+#else
+	printf("fala> ");
 	char c = '\0';
-	while (i < count && c != EOF)
-		buf[i++] = c = ((c = (char)getc(fd)) == '\n') ? EOF : c;
-	return i;
-}
+	while (read < count && c != EOF)
+		buf[read++] = c = ((c = (char)getc(fd)) == '\n') ? EOF : c;
 #endif
+	return read;
+}
 
 // ensures that there are elements to read in the ring buffer
-static void ensure(Lexer* lexer) {
-	if (lexer->ring.len == 0) {
-		char* buf;
-		size_t read = 0;
+void Lexer::ensure() {
+	if (ring.len > 0) return;
 
-#ifdef FALA_WITH_READLINE
-		if (lexer->file->get_descriptor() == stdin) {
-			buf = readline("fala> ");
-			if (!buf) return;
-			add_history(buf);
-			read = strlen(buf);
-		} else {
-			buf = (char*)malloc(sizeof(char) * lexer->ring.cap);
-			read = fread(
-				buf, sizeof(char), lexer->ring.cap, lexer->file->get_descriptor()
-			);
-		}
-#else
-		buf = (char*)malloc(sizeof(char) * lexer->ring.cap);
-		if (lexer->file->get_descriptor() == stdin) {
-			printf("fala> ");
-			read = read_line(buf, lexer->ring.cap, lexer->file->get_descriptor());
-		} else
-			read = fread(
-				buf, sizeof(char), lexer->ring.cap, lexer->file->get_descriptor()
-			);
-#endif
+	char* buf = new char[ring.cap];
+	size_t read = (file->get_descriptor() == stdin)
+	              ? read_line(buf, ring.cap, file->get_descriptor())
+	              : fread(buf, sizeof(char), ring.cap, file->get_descriptor());
 
-		if (read > 0) ring_write_many(&lexer->ring, buf, read);
-#ifdef FALA_WITH_READLINE
-		if (lexer->file->get_descriptor() == stdin) ring_write(&lexer->ring, '\n');
-#endif
-		free(buf);
-	}
+	if (read > 0) ring_write_many(&ring, buf, read);
+	delete[] buf;
 }
 
-static char peek(Lexer* lexer) {
-	ensure(lexer);
-	return ring_peek(&lexer->ring);
+char Lexer::peek() {
+	ensure();
+	return ring_peek(&ring);
 }
 
-static char advance(Lexer* lexer, Location* loc) {
-	ensure(lexer);
-	char c = ring_read(&lexer->ring);
+char Lexer::advance() {
+	ensure();
+	char c = ring_read(&ring);
 	if (c == '\n') {
 		loc->last_line++;
 		loc->last_column = 0;
@@ -167,15 +159,15 @@ static char advance(Lexer* lexer, Location* loc) {
 }
 
 // advances a character if it matches, otherwise do nothing
-static bool match(Lexer* lexer, Location* loc, char c) {
-	char ch = ring_peek(&lexer->ring);
-	if (ch == c) advance(lexer, loc);
+bool Lexer::match(char c) {
+	char ch = ring_peek(&ring);
+	if (ch == c) advance();
 	return ch == c;
 }
 
 static bool is_valid_id_char(char c) { return isalnum(c) || c == '_'; }
 
-static char* string_dup(char* str) {
+static char* string_dup(const char* str) {
 	const size_t len = strlen(str);
 	char* copy = (char*)malloc(sizeof(char) * (len + 1));
 	for (size_t i = 0; i < len; i++) copy[i] = str[i];
@@ -184,10 +176,16 @@ static char* string_dup(char* str) {
 }
 
 extern "C" int lexer_lex(union TokenValue* value, Location* loc, LEXER lexer) {
+	lexer->loc = loc;
+	lexer->value = value;
+	return lexer->lex();
+}
+
+int Lexer::lex() {
 	loc->first_line = loc->last_line;
 	loc->first_column = loc->last_column;
 
-	char c = advance(lexer, loc);
+	char c = advance();
 	if (c < 0) return YYEOF;
 	switch (c) {
 		case '(': return PAREN_OPEN;
@@ -196,9 +194,9 @@ extern "C" int lexer_lex(union TokenValue* value, Location* loc, LEXER lexer) {
 		case ']': return BRACKET_CLOSE;
 		case ';': return SEMICOL;
 		case ',': return COMMA;
-		case '=': return match(lexer, loc, '=') ? EQ_EQ : EQ;
-		case '>': return match(lexer, loc, '=') ? GREATER_EQ : GREATER;
-		case '<': return match(lexer, loc, '=') ? LESSER_EQ : LESSER;
+		case '=': return match('=') ? EQ_EQ : EQ;
+		case '>': return match('=') ? GREATER_EQ : GREATER;
+		case '<': return match('=') ? LESSER_EQ : LESSER;
 		case '+': return PLUS;
 		case '-': return MINUS;
 		case '*': return ASTER;
@@ -209,64 +207,55 @@ extern "C" int lexer_lex(union TokenValue* value, Location* loc, LEXER lexer) {
 
 			// just skip whitespace
 		case ' ':
-		case '\t': return lexer_lex(value, loc, lexer);
+		case '\t': return lex();
 		case '\n': {
 #ifdef FALA_WITH_READLINE
-			if (is_interactive(lexer))
+			if (is_interactive(this))
 				return EOF;
 			else
 #endif
-				return lexer_lex(value, loc, lexer);
+				return lex();
 		}
 
 		case '#': {
-			while ((c = peek(lexer)) != '\n') advance(lexer, loc);
-			return lexer_lex(value, loc, lexer);
+			while ((c = peek()) != '\n') advance();
+			return lex();
 		}
 
 		case '"': {
-			char buf[256];
-			size_t len = 0;
-			while ((c = advance(lexer, loc)) != '"') {
+			string str;
+			while ((c = advance()) != '"') {
 				if (c == '\\') {
-					if (match(lexer, loc, 'n'))
-						buf[len++] = '\n';
-					else if (match(lexer, loc, 't'))
-						buf[len++] = '\t';
-					else if (match(lexer, loc, 'r'))
-						buf[len++] = '\r';
+					if (match('n'))
+						str += '\n';
+					else if (match('t'))
+						str += '\t';
+					else if (match('r'))
+						str += '\r';
+					else
+						assert(false && "LEXER: Unknown escape sequence");
 				} else {
-					buf[len++] = c;
+					str += c;
 				}
 			}
-			buf[len] = '\0';
-			value->str = string_dup(buf);
+			value->str = string_dup(str.c_str());
 			return STRING;
 		}
 		default: {
 			if (isdigit(c)) {
 				long num = c - '0';
-				while (isdigit(c = peek(lexer))) {
-					num = num * 10 + (c - '0');
-					advance(lexer, loc);
-				}
+				while (isdigit(c = peek())) num = num * 10 + (advance() - '0');
 				value->num = (Number)num;
 				return NUMBER;
 			} else if (isalpha(c) || c == '_') {
-				char buf[256] {};
-				buf[0] = c;
-				size_t len = 1;
-				while (is_valid_id_char(c = peek(lexer))) {
-					buf[len++] = c;
-					advance(lexer, loc);
-				}
-				buf[len] = '\0';
+				string str {c};
+				while (is_valid_id_char(peek())) str += advance();
 
 				// could be a reserved keyword
 				for (size_t i = 0; i < KW_COUNT; i++)
-					if (strcmp(buf, keyword_repr(i)) == 0) return keyword_to_bison(i);
+					if (str == keyword_repr(i)) return keyword_to_bison(i);
 
-				value->str = string_dup(buf);
+				value->str = string_dup(str.c_str());
 				return ID;
 			}
 			assert(false && "LEX_ERR: Unrecognized character");
