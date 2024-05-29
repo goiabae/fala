@@ -10,7 +10,7 @@ set(CMAKE_CXX_CPPCHECK "cppcheck")
 if(MSVC)
 	add_compile_options(/W4 "$<$<CONFIG:DEBUG>:/Zi;/Od>")
 else()
-	add_compile_options(-Wall -Wextra -Wpedantic -Wconversion "$<$<CONFIG:DEBUG>:-O0;-ggdb>")
+	add_compile_options(-Wall -Wextra -Wpedantic -Wconversion "$<$<CONFIG:DEBUG>:-Og;-ggdb;-pg;-fno-omit-frame-pointer;-fno-inline>")
 endif()
 
 option(WITH_READLINE "Enable readline line editting" OFF)
