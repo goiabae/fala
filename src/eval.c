@@ -7,14 +7,7 @@
 #include <string.h>
 
 #include "ast.h"
-#include "env.h"
 #include "str_pool.h"
-
-#define PUSH_BUILTIN(INTER, STR, FUNC)                                     \
-	*inter_env_get_new(&INTER, str_pool_intern((INTER).pool, strdup(STR))) = \
-		(Value) {                                                              \
-		VALUE_FUN, .func = {.is_builtin = true, .builtin = FUNC }              \
-	}
 
 static void value_deinit(Value val);
 static void value_stack_pop(ValueStack* stack, size_t index);
@@ -27,35 +20,40 @@ static Value* inter_env_find(Interpreter* inter, StrID str_id);
 static Value builtin_read(size_t len, Value* args);
 static Value builtin_write(size_t len, Value* args);
 
-static Value ast_node_eval(Interpreter* inter, Node node);
+static Value inter_eval_node(Interpreter* inter, Node node);
 static Value apply_function(Interpreter* inter, Node func_node, Node args_node);
 
-static void inter_env_push(Interpreter* inter) { env_push(&inter->env); }
+static void inter_env_push(Interpreter* inter) { inter->env.scope_count++; }
 
 static void inter_env_pop(Interpreter* inter) {
-	env_pop(
-		&inter->env, (void (*)(void*, size_t))value_stack_pop, &inter->values
-	);
+	assert(inter->env.scope_count > 0 && "Environment was empty");
+	for (size_t i = inter->env.len; i-- > 0; inter->env.len--) {
+		if (inter->env.scopes[i] != (inter->env.scope_count - 1)) break;
+		value_stack_pop(&inter->values, i);
+	}
+	inter->env.scope_count--;
 }
 
 static Value* inter_env_get_new(Interpreter* inter, StrID str_id) {
-	size_t idx = env_get_new(&inter->env, str_id.idx);
+	inter->env.scopes[inter->env.len] = inter->env.scope_count - 1;
+	inter->env.syms[inter->env.len] = str_id.idx;
+	inter->env.indexes[inter->env.len] = inter->env.len;
+	Value* res = &inter->values.values[inter->env.len++];
 	inter->values.len++;
-	return &inter->values.values[idx];
+	return res;
 }
 
 static Value* inter_env_find(Interpreter* inter, StrID str_id) {
-	bool found = true;
-	size_t idx = env_find(&inter->env, str_id.idx, &found);
-	if (!found) return NULL;
-	return &inter->values.values[idx];
+	for (size_t i = inter->env.len; i > 0;)
+		if (inter->env.syms[--i] == str_id.idx) return &inter->values.values[i];
+	return NULL;
 }
 
-Value ast_eval(Interpreter* inter, AST ast) {
-	return ast_node_eval(inter, ast.root);
+Value inter_eval(Interpreter* inter, AST ast) {
+	return inter_eval_node(inter, ast.root);
 }
 
-static Value ast_node_eval(Interpreter* inter, Node node) {
+Value inter_eval_node(Interpreter* inter, Node node) {
 	Value val;
 	switch (node.type) {
 		case AST_NUM: return (Value) {VALUE_NUM, .num = node.num}; break;
@@ -69,23 +67,23 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		case AST_BLK: {
 			inter_env_push(inter);
 			for (size_t i = 0; i < node.children_count; i++)
-				val = ast_node_eval(inter, node.children[i]);
+				val = inter_eval_node(inter, node.children[i]);
 			inter_env_pop(inter);
 			break;
 		}
 		case AST_IF: {
 			assert(node.children_count == 3);
-			Value cond = ast_node_eval(inter, node.children[0]);
+			Value cond = inter_eval_node(inter, node.children[0]);
 			if (cond.tag != VALUE_NIL)
-				val = ast_node_eval(inter, node.children[1]);
+				val = inter_eval_node(inter, node.children[1]);
 			else
-				val = ast_node_eval(inter, node.children[2]);
+				val = inter_eval_node(inter, node.children[2]);
 			break;
 		}
 		case AST_WHEN: {
 			assert(node.children_count == 2);
-			Value cond = ast_node_eval(inter, node.children[0]);
-			val = (cond.tag != VALUE_NIL) ? ast_node_eval(inter, node.children[1])
+			Value cond = inter_eval_node(inter, node.children[0]);
+			val = (cond.tag != VALUE_NIL) ? inter_eval_node(inter, node.children[1])
 			                              : (Value) {VALUE_NIL, .nil = NULL};
 			break;
 		}
@@ -100,9 +98,9 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 
 			inter_env_push(inter);
 
-			Value from = ast_node_eval(inter, from_node);
-			Value to = ast_node_eval(inter, to_node);
-			Value inc = (with_step) ? ast_node_eval(inter, step_node)
+			Value from = inter_eval_node(inter, from_node);
+			Value to = inter_eval_node(inter, to_node);
+			Value inc = (with_step) ? inter_eval_node(inter, step_node)
 			                        : (Value) {VALUE_NUM, .num = 1};
 
 			assert(
@@ -114,7 +112,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			inter->in_loop = true;
 			for (Number i = from.num; i != to.num; i += inc.num) {
 				*var = (Value) {VALUE_NUM, .num = i};
-				val = ast_node_eval(inter, exp_node);
+				val = inter_eval_node(inter, exp_node);
 				if (inter->should_break) break;
 				if (inter->should_continue) continue;
 			}
@@ -128,8 +126,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			Node cond = node.children[0];
 			Node exp = node.children[1];
 			inter->in_loop = true;
-			while (ast_node_eval(inter, cond).tag != VALUE_NIL) {
-				val = ast_node_eval(inter, exp);
+			while (inter_eval_node(inter, cond).tag != VALUE_NIL) {
+				val = inter_eval_node(inter, exp);
 				if (inter->should_break) break;
 				if (inter->should_continue) continue;
 			}
@@ -143,7 +141,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				node.children_count == 1
 				&& "INTERPRET_ERR: break requires a expression to evaluate the loop to"
 			);
-			val = ast_node_eval(inter, node.children[0]);
+			val = inter_eval_node(inter, node.children[0]);
 			break;
 		}
 		case AST_CONTINUE: {
@@ -155,7 +153,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 				node.children_count == 1
 				&& "INTERPRET_ERR: break requires a expression to evaluate the loop to"
 			);
-			val = ast_node_eval(inter, node.children[0]);
+			val = inter_eval_node(inter, node.children[0]);
 			break;
 		}
 		case AST_ASS: {
@@ -163,12 +161,12 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			Node var = node.children[0];
 			assert(var.type == AST_VAR);
 			Node id = var.children[0];
-			Value value = ast_node_eval(inter, node.children[1]);
+			Value value = inter_eval_node(inter, node.children[1]);
 			Value* addr = inter_env_find(inter, id.str_id);
 			assert(addr && "Variable not found. Address is 0x0");
 
 			if (var.children_count == 2) { // array indexing
-				Value idx = ast_node_eval(inter, var.children[1]);
+				Value idx = inter_eval_node(inter, var.children[1]);
 				assert(idx.tag == VALUE_NUM);
 				assert((size_t)idx.num < addr->arr.len);
 				val = (addr->arr.data[idx.num] = value);
@@ -179,24 +177,24 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		}
 		case AST_OR: {
 			assert(node.children_count == 2);
-			Value left = ast_node_eval(inter, node.children[0]);
+			Value left = inter_eval_node(inter, node.children[0]);
 			if (left.tag == VALUE_TRUE) {
 				val = (Value) {VALUE_TRUE, .num = 1};
 				break;
 			}
-			Value right = ast_node_eval(inter, node.children[1]);
+			Value right = inter_eval_node(inter, node.children[1]);
 			val = (right.tag == VALUE_NIL) ? (Value) {VALUE_NIL, .nil = NULL}
 			                               : (Value) {VALUE_TRUE, .num = 1};
 			break;
 		}
 		case AST_AND: {
 			assert(node.children_count == 2);
-			Value left = ast_node_eval(inter, node.children[0]);
+			Value left = inter_eval_node(inter, node.children[0]);
 			if (left.tag == VALUE_NIL) {
 				val = (Value) {VALUE_NIL, .nil = NULL};
 				break;
 			}
-			Value right = ast_node_eval(inter, node.children[1]);
+			Value right = inter_eval_node(inter, node.children[1]);
 			val = (right.tag == VALUE_NIL) ? (Value) {VALUE_NIL, .nil = NULL}
 			                               : (Value) {VALUE_TRUE, .num = 1};
 			break;
@@ -204,8 +202,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 #define ARITH_OP(OP)                                         \
 	{                                                          \
 		assert(node.children_count == 2);                        \
-		Value left = ast_node_eval(inter, node.children[0]);     \
-		Value right = ast_node_eval(inter, node.children[1]);    \
+		Value left = inter_eval_node(inter, node.children[0]);   \
+		Value right = inter_eval_node(inter, node.children[1]);  \
 		assert(left.tag == VALUE_NUM && right.tag == VALUE_NUM); \
 		val = (Value) {VALUE_NUM, .num = left.num OP right.num}; \
 		break;                                                   \
@@ -219,8 +217,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 #define CMP_OP(OP)                                                    \
 	{                                                                   \
 		assert(node.children_count == 2);                                 \
-		Value left = ast_node_eval(inter, node.children[0]);              \
-		Value right = ast_node_eval(inter, node.children[1]);             \
+		Value left = inter_eval_node(inter, node.children[0]);            \
+		Value right = inter_eval_node(inter, node.children[1]);           \
 		assert(                                                           \
 			left.tag == VALUE_NUM && right.tag == VALUE_NUM                 \
 			&& "Arithmetic comparison is allowed only between numbers"      \
@@ -236,8 +234,8 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 #undef CMP_OP
 		case AST_EQ: {
 			assert(node.children_count == 2);
-			Value left = ast_node_eval(inter, node.children[0]);
-			Value right = ast_node_eval(inter, node.children[1]);
+			Value left = inter_eval_node(inter, node.children[0]);
+			Value right = inter_eval_node(inter, node.children[1]);
 			if (left.tag == VALUE_NIL && right.tag == VALUE_NIL) {
 				val = (Value) {VALUE_TRUE, .num = 1};
 				break;
@@ -260,7 +258,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 		case AST_NOT: {
 			assert(node.children_count == 1);
 			Node op = node.children[0];
-			Value v = ast_node_eval(inter, op);
+			Value v = inter_eval_node(inter, op);
 			val = (v.tag == VALUE_NIL) ? (Value) {VALUE_TRUE, .num = 1}
 			                           : (Value) {VALUE_NIL, .nil = NULL};
 			break;
@@ -296,21 +294,9 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 
 			// var id = exp
 			if (node.children_count == 2) {
-				val = *cell = ast_node_eval(inter, node.children[1]);
+				val = *cell = inter_eval_node(inter, node.children[1]);
 				break;
 			}
-
-			/*
-			// var arr [size]
-			if (var.children_count == 2) {
-			  Value size = ast_node_eval(inter, var.children[1]);
-			  *cell = (Value) {
-			    VALUE_ARR,
-			    .arr.data = malloc(sizeof(Value) * (size_t)size.num),
-			    .arr.len = (size_t)size.num};
-			  memset(cell->arr.data, 0, sizeof(Value) * (size_t)size.num);
-			}
-			*/
 
 			// var id
 			val = (Value) {VALUE_NIL, .nil = NULL};
@@ -324,7 +310,7 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 			if (node.children_count == 1) { // id
 				val = *addr;
 			} else { // id[idx]
-				Value idx = ast_node_eval(inter, node.children[1]);
+				Value idx = inter_eval_node(inter, node.children[1]);
 				assert(
 					addr->tag == VALUE_ARR
 					&& "Variable does not correspond to a previously declared array"
@@ -349,10 +335,10 @@ static Value ast_node_eval(Interpreter* inter, Node node) {
 
 			for (size_t i = 0; i < decls.children_count; i++) {
 				Node decl = decls.children[i];
-				ast_node_eval(inter, decl);
+				inter_eval_node(inter, decl);
 			}
 
-			val = ast_node_eval(inter, exp);
+			val = inter_eval_node(inter, exp);
 			inter_env_pop(inter);
 			break;
 		}
@@ -390,7 +376,7 @@ static Value apply_function(
 	size_t argc = args_node.children_count;
 	Value* args = malloc(sizeof(Value) * argc);
 	for (size_t i = 0; i < argc; i++)
-		args[i] = ast_node_eval(inter, args_node.children[i]);
+		args[i] = inter_eval_node(inter, args_node.children[i]);
 
 	if (func.is_builtin) {
 		Value val = func.builtin(argc, args);
@@ -407,7 +393,7 @@ static Value apply_function(
 		*val = args[i];
 	}
 
-	Value val = ast_node_eval(inter, func.root);
+	Value val = inter_eval_node(inter, func.root);
 
 	inter_env_pop(inter);
 
@@ -467,11 +453,23 @@ static void value_stack_pop(ValueStack* stack, size_t index) {
 	stack->len--;
 }
 
+#define PUSH_BUILTIN(INTER, STR, FUNC)                                     \
+	*inter_env_get_new(&INTER, str_pool_intern((INTER).pool, strdup(STR))) = \
+		(Value) {                                                              \
+		VALUE_FUN, .func = {.is_builtin = true, .builtin = FUNC }              \
+	}
+
 Interpreter interpreter_init(STR_POOL pool) {
 	Interpreter inter;
 	inter.values = (ValueStack) {0, 32, malloc(sizeof(Value) * 32)};
 	inter.pool = pool;
-	inter.env = env_init();
+
+	inter.env.len = 0;
+	inter.env.cap = 32; // arbitrary choice
+	inter.env.scope_count = 0;
+	inter.env.indexes = malloc(sizeof(size_t) * inter.env.cap);
+	inter.env.syms = malloc(sizeof(size_t) * inter.env.cap);
+	inter.env.scopes = malloc(sizeof(size_t) * inter.env.cap);
 
 	inter.in_loop = false;
 	inter.should_break = false;
@@ -488,8 +486,12 @@ Interpreter interpreter_init(STR_POOL pool) {
 }
 
 void interpreter_deinit(Interpreter* inter) {
-	env_deinit(
-		&inter->env, (void (*)(void*, size_t))value_stack_pop, &inter->values
-	);
+	for (size_t i = 0; i < inter->env.len; i++) {
+		value_deinit(inter->values.values[i]);
+		inter->values.len--;
+	}
+	free(inter->env.indexes);
+	free(inter->env.scopes);
+	free(inter->env.syms);
 	free(inter->values.values);
 }

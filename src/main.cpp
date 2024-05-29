@@ -122,7 +122,7 @@ static int interpret(Options opts) {
 			ast_print(ast, &pool);
 			printf("\n");
 		}
-		val = ast_eval(&inter, ast);
+		val = inter_eval(&inter, ast);
 		if (opts.from_stdin) {
 			print_value(val);
 			printf("\n");

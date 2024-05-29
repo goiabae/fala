@@ -1,13 +1,14 @@
 #ifndef FALA_EVAL_H
 #define FALA_EVAL_H
 
+#include <stdbool.h>
+
+#include "ast.h"
+#include "str_pool.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "ast.h"
-#include "env.h"
-#include "str_pool.h"
 
 struct Value;
 
@@ -52,6 +53,17 @@ typedef struct ValueStack {
 	Value* values;
 } ValueStack;
 
+typedef struct Environment {
+	size_t len;
+	size_t cap;
+	size_t scope_count;
+
+	// index into some other structure like a value or register stack
+	size_t* indexes;
+	size_t* syms;   // symbol table index
+	size_t* scopes; // which scope each item belongs to
+} Environment;
+
 typedef struct Interpreter {
 	STR_POOL pool;
 	ValueStack values;
@@ -65,7 +77,7 @@ typedef struct Interpreter {
 Interpreter interpreter_init(STR_POOL pool);
 void interpreter_deinit(Interpreter* inter);
 
-Value ast_eval(Interpreter* inter, AST ast);
+Value inter_eval(Interpreter* inter, AST ast);
 
 void print_value(Value val);
 
