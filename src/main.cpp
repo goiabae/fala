@@ -17,7 +17,7 @@ extern "C" {
 
 #include "ast.h"
 #include "compiler.hpp"
-#include "eval.h"
+#include "eval.hpp"
 #include "file.hpp"
 #include "str_pool.h"
 
@@ -114,7 +114,7 @@ static int interpret(Options opts) {
 	if (!fd) return 1;
 
 	StringPool pool;
-	Interpreter inter = interpreter_init(&pool);
+	Interpreter inter(&pool);
 	Value val;
 
 	while (!fd.at_eof()) {
@@ -123,7 +123,7 @@ static int interpret(Options opts) {
 			ast_print(ast, &pool);
 			printf("\n");
 		}
-		val = inter_eval(&inter, ast);
+		val = inter.eval(ast);
 		if (opts.from_stdin) {
 			print_value(val);
 			printf("\n");
@@ -131,9 +131,7 @@ static int interpret(Options opts) {
 		ast_deinit(ast);
 	}
 
-	interpreter_deinit(&inter);
-
-	return (val.tag == VALUE_NUM) ? val.num : 0;
+	return (val.type == Value::Type::NUM) ? val.num : 0;
 }
 
 static int compile(Options opts) {
