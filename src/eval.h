@@ -17,11 +17,11 @@ typedef struct Function {
 	union {
 		struct Value (*builtin)(size_t, struct Value*);
 		struct {
-			size_t argc;
-			Node* args;
+			Node* params;
 			Node root;
 		};
 	};
+	size_t param_count;
 } Function;
 
 enum ValueKind {
