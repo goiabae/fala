@@ -11,11 +11,11 @@ else
 	RAP=raposeitor
 fi
 
-red='\e[0;31m'
-yellow='\e[0;33m'
-purple='\e[0;35m'
-reset='\e[0m'
-bold='\e[1m'
+red=$([ -t 1 ] && echo '\e[0;31m' || echo '')
+yellow=$([ -t 1 ] && echo '\e[0;33m' || echo '')
+purple=$([ -t 1 ] && echo '\e[0;35m' || echo '')
+reset=$([ -t 1 ] && echo '\e[0m' || echo '')
+bold=$([ -t 1 ] && echo '\e[1m' || echo '')
 
 warn() {
 	echo -e "${yellow}WARNING: ${1}${reset}"
