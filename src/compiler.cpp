@@ -365,8 +365,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_FOR: {
 			bool with_step = node.children_count == 5;
 
-			Node var_node = node.children[0];
-			Node id = var_node.children[0];
+			Node decl_node = node.children[0];
 			Node from_node = node.children[1];
 			Node to_node = node.children[2];
 			Node exp_node = node.children[3 + with_step];
@@ -381,22 +380,24 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Scope scope = create_scope();
 
+			Operand var = compile(decl_node, pool, chunk);
+			if (!var.is_register()) err("Declaration must be of a number lvalue");
+
 			Operand from = to_rvalue(chunk, compile(from_node, pool, chunk));
 			Operand to = to_rvalue(chunk, compile(to_node, pool, chunk));
-			Operand* var = env_get_new(id.str_id, get_register());
 
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
 
-			emit(chunk, OP_MOV, *var, from);
+			emit(chunk, OP_MOV, var, from);
 			emit(chunk, OP_LABEL, beg);
-			emit(chunk, OP_EQ, cmp, *var, to);
+			emit(chunk, OP_EQ, cmp, var, to);
 			emit(chunk, OP_JMP_TRUE, cmp, end);
 
 			Operand exp = compile(exp_node, pool, chunk);
 
 			emit(chunk, OP_LABEL, inc);
-			emit(chunk, OP_ADD, *var, *var, step);
+			emit(chunk, OP_ADD, var, var, step);
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
 
@@ -414,19 +415,19 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			emit(chunk, OP_LABEL, beg);
 
-			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
+			Operand cond = to_rvalue(chunk, compile(node.children[0], pool, chunk));
 
-			emit(chunk, OP_JMP_FALSE, cond_opnd, end);
+			emit(chunk, OP_JMP_FALSE, cond, end);
 
-			Operand exp_opnd = to_rvalue(chunk, compile(exp, pool, chunk));
+			Operand exp = to_rvalue(chunk, compile(node.children[1], pool, chunk));
 
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
 
-			back_patch_jumps(chunk, exp_opnd);
+			back_patch_jumps(chunk, exp);
 			in_loop = false;
 
-			return exp_opnd;
+			return exp;
 		}
 		case AST_BREAK: {
 			if (!in_loop) err("Can't break outside of loops");
