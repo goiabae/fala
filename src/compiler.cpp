@@ -524,30 +524,24 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				Node body = node.children[2];
 
 				Operand* opnd = env_get_new(id.str_id, get_register());
-				*opnd = Operand(
-					Operand::OPND_FUN, {{args.children_count, args.children, body}}
-				);
-				return {};
+				*opnd = Operand(Funktion {args.children_count, args.children, body});
+				return *opnd;
 			}
 
+			// initial value or nil
 			Operand initial = (node.children_count == 2)
 			                  ? compile(node.children[1], pool, chunk)
 			                  : Operand();
 
-			if (initial.type == Operand::OPND_REG && initial.value.reg.type == Register::VAL_NUM) {
-				env_get_new(id.str_id, initial);
-				return {};
-			}
+			// is a statically allocated array
+			if (initial.type == Operand::Type::REG && initial.reg.has_num())
+				return *env_get_new(id.str_id, initial);
 
 			Operand* opnd = env_get_new(id.str_id, get_register());
+			if (initial.type == Operand::Type::TMP) opnd->reg.type = initial.reg.type;
 
-			// var id = exp
-			if (initial.type == Operand::OPND_TMP)
-				opnd->value.reg.type = initial.value.reg.type;
-
-			// var id
 			emit(chunk, OP_MOV, *opnd, initial);
-			return {};
+			return *opnd;
 		}
 		case AST_NIL: return {};
 		case AST_TRUE: return {1};
