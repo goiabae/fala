@@ -190,7 +190,7 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 			fprintf(fd, " ");
 			print_operand(fd, inst.operands[0]);
 			fprintf(fd, ", ");
-			print_operand(fd, inst.operands[1]);
+			print_operand_special(fd, inst.operands[1]);
 			fprintf(fd, "(");
 			print_operand_special(fd, inst.operands[2]);
 			fprintf(fd, ")");
