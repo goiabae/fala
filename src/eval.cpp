@@ -7,7 +7,6 @@
 #include <string.h>
 
 #include "ast.h"
-#include "parser.h"
 #include "str_pool.h"
 
 static void value_deinit(Value val);
