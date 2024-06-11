@@ -6,29 +6,34 @@ FALA="./build/fala"
 
 # path to raposeitor intepreter
 if [ -v 1 ]; then
-	 RAP="$1"
+	RAP="$1"
 else
 	RAP=raposeitor
 fi
 
-red=$([ -t 1 ] && echo '\e[0;31m' || echo '')
-yellow=$([ -t 1 ] && echo '\e[0;33m' || echo '')
-purple=$([ -t 1 ] && echo '\e[0;35m' || echo '')
-reset=$([ -t 1 ] && echo '\e[0m' || echo '')
-bold=$([ -t 1 ] && echo '\e[1m' || echo '')
-
-warn() {
-	echo -e "${yellow}WARNING: ${1}${reset}"
-}
-
-test() {
-	echo -e "${bold}TEST: ${1}${reset}"
-}
+if [ -t 1 ]; then
+	red='\e[0;31m'
+	yellow='\e[0;33m'
+	purple='\e[0;35m'
+	reset='\e[0m'
+	bold='\e[1m'
+else
+	red=
+	yellow=
+	purple=
+	reset=
+	bold=
+fi
 
 tmp=$(mktemp -p '' -d falaXXXX)
 
+warn()  { echo -e "${yellow}WARNING: ${1}${reset}"; }
+test()  { echo -e "${bold}TEST: ${1}${reset}"; }
+error() { echo -e "${red}ERROR: ${1}${reset}"; }
+
 fail() {
-	echo -e "${red}ERROR: Output of test ${tmp}/${1}.${2} differs from expected output in ./test/${1}.${2}${reset}"
+	error "Output of test ${tmp}/${1}.${2} differs from expected output in ./test/${1}.${2}"
+	echo -e "Test files available at ${tmp}"
 	exit 1
 }
 
@@ -44,8 +49,8 @@ interpret() {
 }
 
 for f in ./examples/*.fala; do
-	f="${f##*/}"
-	f="${f%.*}"
+	f="${f##*/}" # remove parent component
+	f="${f%.*}"  # remove extension
 
 	test "INTERPRETED ${f}"
 	interpret $f "$FALA -i" ./examples/$f.fala
