@@ -353,8 +353,8 @@ void print_value(Value val) {
 		case Value::Type::STR: printf("%s", val.str); break;
 		case Value::Type::TRUE: printf("1"); break;
 		case Value::Type::NIL: printf("0"); break;
-		case Value::Type::FUN: assert(false && "is function"); break;
-		case Value::Type::ARR: assert(false && "is array"); break;
+		case Value::Type::FUN: err("Can't print function"); break;
+		case Value::Type::ARR: err("Can't print array"); break;
 		case Value::Type::VAR: print_value(*(val.var)); break;
 	}
 }
@@ -407,19 +407,19 @@ static Value builtin_write(size_t len, Value* args) {
 }
 
 static Value builtin_array(size_t argc, Value* args) {
-	assert(argc == 1 && "INTEPRET_ERR: array takes a single numeric argument");
+	if (argc != 1) err("Expected a single numeric argument");
 	Number arr_len = args[0].num;
-	assert(arr_len >= 0 && "INTERPRET_ERR: array length must be positive");
+	if (arr_len < 0) err("Array length must be positive");
 	Value val;
 	val.type = Value::Type::ARR;
 	val.arr.data = (Value*)malloc(sizeof(Value) * (size_t)arr_len);
-	assert(val.arr.data && "INTERPRET_ERR: dynamic memory allocation error");
+	if (!val.arr.data) err("Dynamic memory allocation error");
 	val.arr.len = (size_t)arr_len;
 	return val;
 }
 
 static Value builtin_exit(size_t argc, Value* args) {
-	if (argc != 1) err("INTEPRET_ERR: exit takes exit code as a argument");
+	if (argc != 1) err("exit takes exit code as a argument");
 	Number exit_code = args[0].num;
 	exit(exit_code);
 	return {};
