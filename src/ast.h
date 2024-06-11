@@ -30,6 +30,7 @@ typedef enum Type {
 	AST_GTE, // greater or eq to
 	AST_LTE, // lesser or eq to
 	AST_EQ,
+	AST_AT,
 	AST_ADD,
 	AST_SUB,
 	AST_MUL,

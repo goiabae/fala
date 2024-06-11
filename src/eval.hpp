@@ -34,7 +34,7 @@ struct Arr {
 };
 
 struct Value {
-	enum class Type { NUM, ARR, STR, FUN, NIL, TRUE };
+	enum class Type { NUM, ARR, STR, FUN, NIL, TRUE, VAR };
 
 	Type type;
 	union {
@@ -42,6 +42,7 @@ struct Value {
 		Arr arr;
 		Function func;
 		String str; // owned string
+		Value* var;
 	};
 
 	Value() : type(Type::NIL) {}
@@ -49,8 +50,11 @@ struct Value {
 	Value(Number _num) : type(Type::NUM), num(_num) {}
 	Value(String _str) : type(Type::STR), str(_str) {}
 	Value(Function _func) : type(Type::FUN), func(_func) {}
+	Value(Value* var) : type(Type::VAR), var(var) {}
 
 	operator bool() const { return type != Type::NIL; }
+
+	Value to_rvalue() { return (type == Type::VAR) ? *var : *this; }
 
 	friend std::ostream& operator<<(std::ostream& st, Value& val);
 };

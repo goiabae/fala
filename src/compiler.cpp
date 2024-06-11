@@ -164,12 +164,18 @@ size_t opcode_opnd_count(InstructionOp op) {
 void print_operand_special(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::OPND_NUM) {
 		fprintf(fd, "%d", opnd.value.num);
-	} else {
+	} else if (opnd.type == Operand::OPND_REG) {
 		if (opnd.value.reg.type == Register::VAL_NUM)
 			fprintf(fd, "%zu", opnd.value.reg.index);
 		else
 			fprintf(fd, "%%r%zu", opnd.value.reg.index);
-	}
+	} else if (opnd.type == Operand::OPND_TMP) {
+		if (opnd.value.reg.type == Register::VAL_NUM)
+			fprintf(fd, "%zu", opnd.value.reg.index);
+		else
+			fprintf(fd, "%%t%zu", opnd.value.reg.index);
+	} else
+		assert(false && "unreachable");
 }
 
 void print_chunk(FILE* fd, const Chunk& chunk) {
@@ -252,6 +258,17 @@ Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 	}
 }
 
+Operand Compiler::to_rvalue(Chunk* chunk, Operand x) {
+	if ((x.type == Operand::OPND_REG || x.type == Operand::OPND_TMP) && x.value.reg.type == Register::VAL_ADDR) {
+		Operand zero = Operand(Operand::OPND_NUM, 0);
+		Operand tmp = get_temporary();
+		emit(chunk, OP_LOAD, tmp, zero, x);
+		return tmp;
+	} else {
+		return x;
+	}
+}
+
 Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 	switch (node.type) {
 		case AST_APP: {
@@ -261,7 +278,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand* args = new Operand[args_node.children_count];
 			for (size_t i = 0; i < args_node.children_count; i++)
-				args[i] = compile(args_node.children[i], pool, chunk);
+				args[i] = to_rvalue(chunk, compile(args_node.children[i], pool, chunk));
 
 			Operand res;
 			if (strcmp(func_name, "write") == 0)
@@ -309,7 +326,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand l2 = get_label();
 			Operand res = get_temporary();
 
-			Operand cond_opnd = compile(cond, pool, chunk);
+			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
 			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
 
@@ -333,7 +350,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand l1 = get_label();
 			Operand res = get_temporary();
 
-			Operand cond_opnd = compile(cond, pool, chunk);
+			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
 			emit(chunk, OP_MOV, res, {});
 			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
@@ -358,13 +375,14 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand inc = cnt_lab = get_label();
 			Operand end = brk_lab = get_label();
 			Operand cmp = get_temporary();
-			Operand step = (with_step) ? compile(node.children[3], pool, chunk)
-			                           : Operand {Operand::OPND_NUM, 1};
+			Operand step = (with_step)
+			               ? to_rvalue(chunk, compile(node.children[3], pool, chunk))
+			               : Operand {Operand::OPND_NUM, 1};
 
 			Scope scope = create_scope();
 
-			Operand from = compile(from_node, pool, chunk);
-			Operand to = compile(to_node, pool, chunk);
+			Operand from = to_rvalue(chunk, compile(from_node, pool, chunk));
+			Operand to = to_rvalue(chunk, compile(to_node, pool, chunk));
 			Operand* var = env_get_new(id.str_id, get_register());
 
 			back_patch_stack[back_patch_stack_len++] = 0;
@@ -399,11 +417,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			emit(chunk, OP_LABEL, beg);
 
-			Operand cond_opnd = compile(cond, pool, chunk);
+			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
 			emit(chunk, OP_JMP_FALSE, cond_opnd, end);
 
-			Operand exp_opnd = compile(exp, pool, chunk);
+			Operand exp_opnd = to_rvalue(chunk, compile(exp, pool, chunk));
 
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
@@ -418,7 +436,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (!(node.children_count == 1))
 				err("`break' requires a expression to evaluate the loop to");
 
-			Operand res = compile(node.children[0], pool, chunk);
+			Operand res = to_rvalue(chunk, compile(node.children[0], pool, chunk));
 			emit(chunk, OP_MOV, {}, res);
 			push_to_back_patch(chunk->size() - 1);
 			emit(chunk, OP_JMP, brk_lab);
@@ -429,48 +447,41 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (!(node.children_count == 1))
 				err("continue requires a expression to evaluate the loop to");
 
-			Operand res = compile(node.children[0], pool, chunk);
+			Operand res = to_rvalue(chunk, compile(node.children[0], pool, chunk));
 			emit(chunk, OP_MOV, {}, res);
 			push_to_back_patch(chunk->size() - 1);
 			emit(chunk, OP_JMP, cnt_lab);
 			return {};
 		}
 		case AST_ASS: {
-			Node var = node.children[0];
-			Node exp = node.children[1];
-			Node id = var.children[0];
+			Node lvalue_node = node.children[0];
+			Node exp_node = node.children[1];
 
-			Operand tmp = compile(exp, pool, chunk);
-			Operand* reg = env_find(id.str_id);
-			if (!reg) err("Variable not found");
+			Operand lvalue = compile(lvalue_node, pool, chunk);
+			Operand exp = to_rvalue(chunk, compile(exp_node, pool, chunk));
 
-			if (var.children_count == 2) {
-				// if register is the start of the array then say so, otherwise it is a
-				// address to the register that contains the beggining of the array
-				Operand base =
-					(reg->value.reg.type == Register::VAL_NUM)
-						? Operand {Operand::OPND_NUM, (Number)reg->value.reg.index}
-						: *reg;
-				Operand idx = compile(var.children[1], pool, chunk);
-				emit(chunk, OP_STORE, tmp, idx, base);
-				return tmp;
+			// if lvalue is a register that contains an address
+			if ((lvalue.type == Operand::Type::OPND_TMP || lvalue.type == Operand::Type::OPND_REG) && lvalue.value.reg.type == Register::VAL_ADDR) {
+				Operand zero = Operand(Operand::Type::OPND_NUM, Operand::Value(0));
+				emit(chunk, OP_STORE, exp, zero, lvalue);
+			} else {
+				emit(chunk, OP_MOV, lvalue, exp);
 			}
 
-			emit(chunk, OP_MOV, *reg, tmp);
-			return tmp;
+			return exp;
 		}
 
-#define BINARY_ARITH(OPCODE)                          \
-	{                                                   \
-		Node left_node = node.children[0];                \
-		Node right_node = node.children[1];               \
-                                                      \
-		Operand left = compile(left_node, pool, chunk);   \
-		Operand right = compile(right_node, pool, chunk); \
-		Operand res = get_temporary();                    \
-                                                      \
-		emit(chunk, OPCODE, res, left, right);            \
-		return res;                                       \
+#define BINARY_ARITH(OPCODE)                                            \
+	{                                                                     \
+		Node left_node = node.children[0];                                  \
+		Node right_node = node.children[1];                                 \
+                                                                        \
+		Operand left = to_rvalue(chunk, compile(left_node, pool, chunk));   \
+		Operand right = to_rvalue(chunk, compile(right_node, pool, chunk)); \
+		Operand res = get_temporary();                                      \
+                                                                        \
+		emit(chunk, OPCODE, res, left, right);                              \
+		return res;                                                         \
 	}
 
 		case AST_OR: BINARY_ARITH(OP_OR);
@@ -487,46 +498,73 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_MOD: BINARY_ARITH(OP_MOD);
 		case AST_NOT: {
 			Operand res = get_temporary();
-			Operand inverse = compile(node.children[0], pool, chunk);
+			Operand inverse =
+				to_rvalue(chunk, compile(node.children[0], pool, chunk));
 			emit(chunk, OP_NOT, res, inverse);
 			return res;
 		}
-		case AST_ID: assert(false && "unreachable");
+		case AST_AT: {
+			// evaluates to a temporary register containing the address of the lvalue
+
+			Operand base = compile(node.children[0], pool, chunk);
+			Operand off = compile(node.children[1], pool, chunk);
+
+			if (base.type == Operand::OPND_REG || base.type == Operand::OPND_TMP) {
+				if (base.value.reg.type == Register::VAL_NUM) {
+					Operand idx = Operand(Operand::OPND_NUM, base.value.reg.index);
+					Operand tmp = get_temporary();
+					emit(chunk, OP_ADD, tmp, idx, off);
+					return Operand(Operand::OPND_TMP, tmp.value.reg.as_addr());
+				} else if (base.value.reg.type == Register::VAL_ADDR) {
+					Operand tmp = get_temporary();
+					emit(chunk, OP_ADD, tmp, base, off);
+					return Operand(Operand::OPND_TMP, tmp.value.reg.as_addr());
+				} else {
+					assert(false && "unreachable");
+				}
+			} else {
+				err("Base must be an lvalue");
+			}
+
+			assert(false && "unreachable");
+		}
+		case AST_ID: {
+			Operand* reg = env_find(node.str_id);
+			return *reg;
+		}
 		case AST_STR: return Operand {Operand::OPND_STR, pool.find(node.str_id)};
 		case AST_DECL: {
+			Node id = node.children[0];
+
 			// fun f args = exp
 			if (node.children_count == 3) {
-				Node id = node.children[0];
 				Node args = node.children[1];
 				Node body = node.children[2];
 
 				Operand* opnd = env_get_new(id.str_id, get_register());
-				opnd->type = Operand::OPND_FUN;
-				opnd->value.fun = Funktion {args.children_count, args.children, body};
-
+				*opnd = Operand(
+					Operand::OPND_FUN, {{args.children_count, args.children, body}}
+				);
 				return {};
 			}
 
-			Node id = node.children[0];
+			Operand initial = (node.children_count == 2)
+			                  ? compile(node.children[1], pool, chunk)
+			                  : Operand();
+
+			if (initial.type == Operand::OPND_REG && initial.value.reg.type == Register::VAL_NUM) {
+				env_get_new(id.str_id, initial);
+				return {};
+			}
+
+			Operand* opnd = env_get_new(id.str_id, get_register());
 
 			// var id = exp
-			if (node.children_count == 2) {
-				Operand exp = compile(node.children[1], pool, chunk);
-				Operand* opnd;
-				if (exp.type == Operand::OPND_REG)
-					opnd = env_get_new(id.str_id, exp);
-				else {
-					Operand tmp = get_register();
-					opnd = env_get_new(id.str_id, tmp);
-					opnd->value.reg.type = exp.value.reg.type;
-					emit(chunk, OP_MOV, *opnd, exp);
-				}
-				return {};
-			}
+			if (initial.type == Operand::OPND_TMP)
+				opnd->value.reg.type = initial.value.reg.type;
 
 			// var id
-			Operand* opnd = env_get_new(id.str_id, get_register());
-			emit(chunk, OP_MOV, *opnd, {});
+			emit(chunk, OP_MOV, *opnd, initial);
 			return {};
 		}
 		case AST_VAR: {

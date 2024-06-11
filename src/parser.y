@@ -81,10 +81,10 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %type <node> let decls
 %type <node> decl params
 %type <node> app func args arg
-%type <node> ass
-%type <node> op op1 op2 op3 op4 op5 op6 op7 op8 op9 op10 op11 op12 op13 op14
+%type <node> ass lvalue
+%type <node> op op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
-%type <node> term var id
+%type <node> term id
 
 %%
 
@@ -121,13 +121,12 @@ cond : IF exp THEN exp ELSE exp { $$ = NODE(AST_IF, $2, $4, $6); }
      ;
 
 /* Loops */
-/* TODO: replace VAR var with an actual declaration */
 loop : WHILE exp THEN exp { $$ = NODE(AST_WHILE, $2, $4); }
-     | FOR VAR var FROM exp TO exp THEN exp {
-       $$ = NODE(AST_FOR, $3, $5, $7, $9);
+     | FOR decl FROM exp TO exp THEN exp {
+       $$ = NODE(AST_FOR, $2, $4, $6, $8);
      }
-     | FOR VAR var FROM exp TO exp STEP exp THEN exp {
-       $$ = NODE(AST_FOR, $3, $5, $7, $9, $11);
+     | FOR decl FROM exp TO exp STEP exp THEN exp {
+       $$ = NODE(AST_FOR, $2, $4, $6, $8, $10);
      }
      ;
 
@@ -171,7 +170,9 @@ args : %empty   { $$ = new_list_node(); }
 arg : term ;
 
 /* Assignment */
-ass : var "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
+ass : lvalue "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
+
+lvalue : id | id "[" exp "]" { $$ = NODE(AST_AT, $1, $3); }
 
 /* Operators. Infix and prefix */
 op : op1;
@@ -182,29 +183,23 @@ op3  : op4  | op3 ">"  op4  { $$ = NODE(AST_GTN, $1, $3); }
 op4  : op5  | op4 "<"  op5  { $$ = NODE(AST_LTN, $1, $3); }
 op5  : op6  | op5 ">=" op6  { $$ = NODE(AST_GTE, $1, $3); }
 op6  : op7  | op6 "<=" op7  { $$ = NODE(AST_LTE, $1, $3); }
-op7  : op8  | op7 "==" op8  { $$ = NODE(AST_EQ,  $1, $3); }
-op8  : op9  | op8 "+"  op9  { $$ = NODE(AST_ADD, $1, $3); }
-op9  : op10 | op9 "-"  op10 { $$ = NODE(AST_SUB, $1, $3); }
-op10 : op11 | op10 "*" op11 { $$ = NODE(AST_MUL, $1, $3); }
-op11 : op12 | op11 "/" op12 { $$ = NODE(AST_DIV, $1, $3); }
-op12 : op13 | op12 "%" op13 { $$ = NODE(AST_MOD, $1, $3); }
-op13 : op14 | NOT op14      { $$ = NODE(AST_NOT, $2); }
-op14 : term ;
+op7  : op9  | op7 "==" op9  { $$ = NODE(AST_EQ,  $1, $3); }
+op9  : op10 | op9  "+" op10 { $$ = NODE(AST_ADD, $1, $3); }
+op10 : op11 | op10 "-" op11 { $$ = NODE(AST_SUB, $1, $3); }
+op11 : op12 | op11 "*" op12 { $$ = NODE(AST_MUL, $1, $3); }
+op12 : op13 | op12 "/" op13 { $$ = NODE(AST_DIV, $1, $3); }
+op13 : op14 | op13 "%" op14 { $$ = NODE(AST_MOD, $1, $3); }
+op14 : op15 | NOT op15      { $$ = NODE(AST_NOT, $2); }
+op15 : term ;
 
 /* Terms */
 term : "(" exp ")" { $$ = $2; }
-     | var
+     | lvalue
      | NUMBER      { $$ = new_number_node(yyloc, $1); };
      | STRING      { $$ = new_string_node(AST_STR, yyloc, pool, $1); }
      | NIL         { $$ = new_nil_node(yyloc); }
      | TRUE        { $$ = new_true_node(yyloc); }
      ;
-
-/* l-values */
-/* TODO: get rid of this */
-var : id             { $$ = NODE(AST_VAR, $1); }
-    | id "[" exp "]" { $$ = NODE(AST_VAR, $1, $3); }
-    ;
 
 id : ID { $$ = new_string_node(AST_ID, yyloc, pool, $1); }
 

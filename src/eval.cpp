@@ -19,6 +19,18 @@ static void err(const char* msg) {
 	exit(1);
 }
 
+static void err2(Location loc, const char* msg) {
+	fprintf(
+		stderr,
+		"INTERPRETER ERROR(%d, %d, %d): %s\n",
+		loc.first_line + 1,
+		loc.first_column + 1,
+		loc.last_column + 1,
+		msg
+	);
+	exit(1);
+}
+
 static void inter_env_push(Interpreter* inter) { inter->env.scope_count++; }
 
 static void inter_env_pop(Interpreter* inter) {
@@ -36,6 +48,7 @@ static Value* inter_env_get_new(Interpreter* inter, StrID str_id) {
 	inter->env.syms[inter->env.len] = str_id.idx;
 	inter->env.indexes[inter->env.len] = inter->env.len;
 	Value* res = &inter->values.values[inter->env.len++];
+	res->type = Value::Type::NIL;
 	inter->values.len++;
 	return res;
 }
@@ -66,7 +79,8 @@ Value eval_app(Interpreter* inter, Node node) {
 	size_t argc = args_node.children_count;
 	Value* args = new Value[argc];
 	for (size_t i = 0; i < argc; i++)
-		args[i] = inter_eval_node(inter, args_node.children[i]);
+		args[i] = inter_eval_node(inter, args_node.children[i])
+		            .to_rvalue(); // call-by-value
 
 	if (func.is_builtin) {
 		Value val = func.builtin(argc, args);
@@ -111,19 +125,21 @@ Value eval_when(Interpreter* inter, Node node) {
 	return {};
 }
 
-// for var id from exp to exp (step exp)? then exp
+// for decl from exp to exp (step exp)? then exp
 Value eval_for(Interpreter* inter, Node node) {
 	bool with_step = node.children_count == 5;
 
-	Node id_node = node.children[0].children[0];
+	Node decl_node = node.children[0];
 	Node from_node = node.children[1];
 	Node to_node = node.children[2];
 	Node step_node = node.children[3];
 	Node exp_node = node.children[3 + with_step];
 
-	Value from = inter_eval_node(inter, from_node);
-	Value to = inter_eval_node(inter, to_node);
-	Value inc = (with_step) ? inter_eval_node(inter, step_node) : Value(1);
+	Value decl = inter_eval_node(inter, decl_node);
+	Value from = inter_eval_node(inter, from_node).to_rvalue();
+	Value to = inter_eval_node(inter, to_node).to_rvalue();
+	Value inc =
+		((with_step) ? inter_eval_node(inter, step_node) : Value(1)).to_rvalue();
 
 	if (from.type != Value::Type::NUM) err("Type of `from' value is not number");
 	if (to.type != Value::Type::NUM) err("Type of `to' value is not number");
@@ -131,7 +147,7 @@ Value eval_for(Interpreter* inter, Node node) {
 
 	inter_env_push(inter);
 
-	Value* var = inter_env_get_new(inter, id_node.str_id);
+	Value* var = decl.var;
 
 	inter->in_loop = true;
 	Value res;
@@ -167,26 +183,18 @@ Value eval_while(Interpreter* inter, Node node) {
 // id ([idx])? = exp
 Value eval_ass(Interpreter* inter, Node node) {
 	assert(node.children_count == 2);
-	Node var = node.children[0];
-	Node id = var.children[0];
 
-	Value value = inter_eval_node(inter, node.children[1]);
-	Value* cell = inter_env_find(inter, id.str_id);
-	if (!cell) err("Variable not found. Address is 0x0");
+	Value lvalue = inter_eval_node(inter, node.children[0]);
+	if (lvalue.type != Value::Type::VAR) err("Can only assign to variable");
 
-	if (var.children_count == 2) { // array indexing
-		Value idx = inter_eval_node(inter, var.children[1]);
-		if (idx.type != Value::Type::NUM) err("Index needs to be a number");
-		if ((size_t)idx.num >= cell->arr.len) err("Index out of bounds");
-		return cell->arr.data[idx.num] = value;
-	}
-
-	return *cell = value; // simple access
+	Value right = inter_eval_node(inter, node.children[1]).to_rvalue();
+	return *(lvalue.var) = right;
 }
 
 Value eval_decl(Interpreter* inter, Node node) {
 	Node id = node.children[0];
 	Value* cell = inter_env_get_new(inter, id.str_id);
+	if (!cell) err2(node.loc, "Could not initialize variable");
 
 	// fun id id+ = exp
 	if (node.children_count == 3) {
@@ -198,29 +206,23 @@ Value eval_decl(Interpreter* inter, Node node) {
 		return *cell = Value(Function(exp, params.children, params.children_count));
 	}
 
-	// var id = exp
-	if (node.children_count == 2)
-		return *cell = inter_eval_node(inter, node.children[1]);
+	Value res(cell);
 
-	// var id
-	return Value(false);
+	// if has initial value
+	if (node.children_count == 2)
+		*cell = inter_eval_node(inter, node.children[1]).to_rvalue();
+
+	return res;
 }
 
 Value eval_var(Interpreter* inter, Node node) {
+	assert(false && "unreachable");
 	Node id = node.children[0];
 	Value* addr = inter_env_find(inter, id.str_id);
-	if (!addr) err("Variable not previously declared.");
+	if (!addr) err2(node.loc, "Variable not previously declared.");
 
-	if (node.children_count == 2) { // id [idx]
-		if (addr->type != Value::Type::ARR)
-			err("Variable does not correspond to a previously declared array");
-
-		Value idx = inter_eval_node(inter, node.children[1]);
-		if (idx.type != Value::Type::NUM) err("Index is not a number");
-		return Value(addr->arr.data[idx.num].num);
-	}
-
-	return *addr; // id
+	Value res(addr);
+	return res; // id
 }
 
 Value inter_eval_node(Interpreter* inter, Node node) {
@@ -263,16 +265,16 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			Value right = inter_eval_node(inter, node.children[1]);
 			return (right) ? Value(true) : Value();
 		}
-#define ARITH_OP(OP)                                                  \
-	{                                                                   \
-		assert(node.children_count == 2);                                 \
-		Value left = inter_eval_node(inter, node.children[0]);            \
-		Value right = inter_eval_node(inter, node.children[1]);           \
-		if (left.type != Value::Type::NUM)                                \
-			err("Left-hand side of arithmentic operator is not a number");  \
-		if (right.type != Value::Type::NUM)                               \
-			err("Right-hand side of arithmentic operator is not a number"); \
-		return Value(left.num OP right.num);                              \
+#define ARITH_OP(OP)                                                    \
+	{                                                                     \
+		assert(node.children_count == 2);                                   \
+		Value left = inter_eval_node(inter, node.children[0]).to_rvalue();  \
+		Value right = inter_eval_node(inter, node.children[1]).to_rvalue(); \
+		if (left.type != Value::Type::NUM)                                  \
+			err("Left-hand side of arithmentic operator is not a number");    \
+		if (right.type != Value::Type::NUM)                                 \
+			err("Right-hand side of arithmentic operator is not a number");   \
+		return Value(left.num OP right.num);                                \
 	}
 		case AST_ADD: ARITH_OP(+);
 		case AST_SUB: ARITH_OP(-);
@@ -280,15 +282,19 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_DIV: ARITH_OP(/);
 		case AST_MOD: ARITH_OP(%);
 #undef ARITH_OP
-#define CMP_OP(OP)                                                       \
-	{                                                                      \
-		assert(node.children_count == 2);                                    \
-		Value left = inter_eval_node(inter, node.children[0]);               \
-		Value right = inter_eval_node(inter, node.children[1]);              \
-		if (left.type != Value::Type::NUM || right.type != Value::Type::NUM) \
-			err("Arithmetic comparison is allowed only between numbers");      \
-                                                                         \
-		return (left.num OP right.num) ? Value(true) : Value();              \
+#define CMP_OP(OP)                                                         \
+	{                                                                        \
+		assert(node.children_count == 2);                                      \
+		Value left = inter_eval_node(inter, node.children[0]).to_rvalue();     \
+		Value right = inter_eval_node(inter, node.children[1]).to_rvalue();    \
+		if (left.type != Value::Type::NUM || right.type != Value::Type::NUM) { \
+			err2(                                                                \
+				node.children[0].loc,                                              \
+				"Arithmetic comparison is allowed only between numbers"            \
+			);                                                                   \
+		}                                                                      \
+                                                                           \
+		return (left.num OP right.num) ? Value(true) : Value();                \
 	}
 		case AST_GTN: CMP_OP(>);
 		case AST_LTN: CMP_OP(<);
@@ -296,8 +302,8 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_LTE: CMP_OP(<=);
 #undef CMP_OP
 		case AST_EQ: { // exp == exp
-			Value left = inter_eval_node(inter, node.children[0]);
-			Value right = inter_eval_node(inter, node.children[1]);
+			Value left = inter_eval_node(inter, node.children[0]).to_rvalue();
+			Value right = inter_eval_node(inter, node.children[1]).to_rvalue();
 
 			if (left.type == Value::Type::NIL && right.type == Value::Type::NIL)
 				return Value(true);
@@ -314,7 +320,21 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			Value val = inter_eval_node(inter, node.children[0]);
 			return (val) ? Value() : Value(true);
 		}
-		case AST_ID: assert(false);
+		case AST_AT: {
+			Value base = inter_eval_node(inter, node.children[0]).to_rvalue();
+			if (base.type != Value::Type::ARR) err("Can only index arrays");
+			Value off = inter_eval_node(inter, node.children[1]).to_rvalue();
+			if (off.type != Value::Type::NUM) err("Index must be a number");
+			Value res(&base.arr.data[off.num]);
+			return res;
+		}
+		case AST_ID: {
+			Value* addr = inter_env_find(inter, node.str_id);
+			if (!addr) err2(node.loc, "Variable not previously declared.");
+
+			Value res(addr);
+			return res;
+		}
 		case AST_STR: {
 			const char* str = str_pool_find(inter->pool, node.str_id);
 			return Value(strdup(str));
@@ -340,14 +360,15 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 }
 
 void print_value(Value val) {
-	if (val.type == Value::Type::NUM)
-		printf("%d", val.num);
-	else if (val.type == Value::Type::STR)
-		printf("%s", val.str);
-	else if (val.type == Value::Type::TRUE)
-		printf("1");
-	else if (val.type == Value::Type::NIL)
-		printf("0");
+	switch (val.type) {
+		case Value::Type::NUM: printf("%d", val.num); break;
+		case Value::Type::STR: printf("%s", val.str); break;
+		case Value::Type::TRUE: printf("1"); break;
+		case Value::Type::NIL: printf("0"); break;
+		case Value::Type::FUN: assert(false && "is function"); break;
+		case Value::Type::ARR: assert(false && "is array"); break;
+		case Value::Type::VAR: print_value(*(val.var)); break;
+	}
 }
 
 std::ostream& operator<<(std::ostream& st, Value& val) {
@@ -358,6 +379,7 @@ std::ostream& operator<<(std::ostream& st, Value& val) {
 		case Value::Type::NIL: return st << 0;
 		case Value::Type::ARR: assert(false);
 		case Value::Type::FUN: assert(false);
+		case Value::Type::VAR: return st << *(val.var);
 	}
 	assert(false);
 }

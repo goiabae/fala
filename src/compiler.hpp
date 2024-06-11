@@ -57,6 +57,8 @@ typedef struct Funktion {
 	Node root;
 } Funktion;
 
+struct Instruction;
+
 struct Operand {
 	enum Type {
 		OPND_NIL, // no operand
@@ -88,6 +90,8 @@ struct Operand {
 
 	Operand() : type {Type::OPND_NIL}, value {} {}
 	Operand(Type type, Value value) : type {type}, value {value} {}
+
+	Operand to_rvalue(std::vector<Instruction>* chunk);
 };
 
 typedef struct Instruction {
@@ -117,6 +121,8 @@ struct Compiler {
 	Operand get_temporary();
 	Operand get_register();
 	Operand get_label();
+
+	Operand to_rvalue(Chunk* chunk, Operand opnd);
 
 	bool in_loop {false};
 	Operand cnt_lab; // jump to on continue
