@@ -567,28 +567,6 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			emit(chunk, OP_MOV, *opnd, initial);
 			return {};
 		}
-		case AST_VAR: {
-			Node id = node.children[0];
-			Operand* reg = env_find(id.str_id);
-			if (!reg) err("Variable not previously declared");
-
-			// id
-			if (node.children_count == 1) return *reg;
-
-			// id [idx]
-			Operand res = get_temporary();
-			Operand off = compile(node.children[1], pool, chunk);
-			Operand base = [&] {
-				if (reg->value.reg.type == Register::VAL_ADDR) {
-					return Operand(Operand::OPND_TMP, reg->value.reg);
-				} else {
-					return Operand {Operand::OPND_NUM, (Number)reg->value.reg.index};
-				}
-			}();
-
-			emit(chunk, OP_LOAD, res, off, base);
-			return res;
-		}
 		case AST_NIL: return {};
 		case AST_TRUE: return {Operand::OPND_NUM, 1};
 		case AST_LET: {

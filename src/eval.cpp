@@ -215,16 +215,6 @@ Value eval_decl(Interpreter* inter, Node node) {
 	return res;
 }
 
-Value eval_var(Interpreter* inter, Node node) {
-	assert(false && "unreachable");
-	Node id = node.children[0];
-	Value* addr = inter_env_find(inter, id.str_id);
-	if (!addr) err2(node.loc, "Variable not previously declared.");
-
-	Value res(addr);
-	return res; // id
-}
-
 Value inter_eval_node(Interpreter* inter, Node node) {
 	switch (node.type) {
 		case AST_NUM: return Value(node.num);
@@ -340,7 +330,6 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			return Value(strdup(str));
 		}
 		case AST_DECL: return eval_decl(inter, node);
-		case AST_VAR: return eval_var(inter, node);
 		case AST_NIL: return {};
 		case AST_TRUE: return Value(true);
 		case AST_LET: {

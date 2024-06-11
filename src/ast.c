@@ -20,8 +20,8 @@ static const char* node_repr[] = {
 	[AST_LTE] = "<=",      [AST_EQ] = "==",       [AST_ADD] = "+",
 	[AST_SUB] = "-",       [AST_MUL] = "*",       [AST_DIV] = "/",
 	[AST_MOD] = "%",       [AST_NOT] = "not",     [AST_ID] = NULL,
-	[AST_STR] = NULL,      [AST_DECL] = "decl",   [AST_VAR] = "var",
-	[AST_LET] = "let",     [AST_AT] = "at",
+	[AST_STR] = NULL,      [AST_DECL] = "decl",   [AST_LET] = "let",
+	[AST_AT] = "at",
 };
 
 AST ast_init(void) {

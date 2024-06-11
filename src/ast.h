@@ -40,7 +40,6 @@ typedef enum Type {
 	AST_ID,
 	AST_STR,
 	AST_DECL,
-	AST_VAR, // variable id or id[idx]
 	AST_NIL,
 	AST_TRUE,
 	AST_LET,
