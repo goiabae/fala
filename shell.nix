@@ -11,6 +11,9 @@ in with pkgs; mkShell {
     readline
     cmake
     cppcheck
+    clang-analyzer
+    clang-tools
+    gdb
   ];
 
   hardeningDisable = [ "fortify" ];
