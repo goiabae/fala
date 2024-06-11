@@ -89,13 +89,13 @@ static void print_str(FILE* fd, const char* str) {
 
 static void print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
-		case Operand::OPND_NIL: fprintf(fd, "0"); break;
-		case Operand::OPND_TMP: fprintf(fd, "%%t%zu", opnd.value.reg.index); break;
-		case Operand::OPND_REG: fprintf(fd, "%%r%zu", opnd.value.reg.index); break;
-		case Operand::OPND_LAB: fprintf(fd, "L%03zu", opnd.value.lab); break;
-		case Operand::OPND_STR: print_str(fd, opnd.value.str); break;
-		case Operand::OPND_NUM: fprintf(fd, "%d", opnd.value.num); break;
-		case Operand::OPND_FUN: assert(false);
+		case Operand::Type::NIL: fprintf(fd, "0"); break;
+		case Operand::Type::TMP: fprintf(fd, "%%t%zu", opnd.reg.index); break;
+		case Operand::Type::REG: fprintf(fd, "%%r%zu", opnd.reg.index); break;
+		case Operand::Type::LAB: fprintf(fd, "L%03zu", opnd.lab.id); break;
+		case Operand::Type::STR: print_str(fd, opnd.str); break;
+		case Operand::Type::NUM: fprintf(fd, "%d", opnd.num); break;
+		case Operand::Type::FUN: assert(false);
 	}
 }
 
@@ -162,18 +162,18 @@ size_t opcode_opnd_count(InstructionOp op) {
 };
 
 void print_operand_special(FILE* fd, Operand opnd) {
-	if (opnd.type == Operand::OPND_NUM) {
-		fprintf(fd, "%d", opnd.value.num);
-	} else if (opnd.type == Operand::OPND_REG) {
-		if (opnd.value.reg.type == Register::VAL_NUM)
-			fprintf(fd, "%zu", opnd.value.reg.index);
-		else
-			fprintf(fd, "%%r%zu", opnd.value.reg.index);
-	} else if (opnd.type == Operand::OPND_TMP) {
-		if (opnd.value.reg.type == Register::VAL_NUM)
-			fprintf(fd, "%zu", opnd.value.reg.index);
-		else
-			fprintf(fd, "%%t%zu", opnd.value.reg.index);
+	if (opnd.type == Operand::Type::NUM) {
+		fprintf(fd, "%d", opnd.num);
+	} else if (opnd.type == Operand::Type::REG) {
+		if (opnd.reg.has_num())
+			fprintf(fd, "%zu", opnd.reg.index);
+		else if (opnd.reg.has_addr())
+			fprintf(fd, "%%r%zu", opnd.reg.index);
+	} else if (opnd.type == Operand::Type::TMP) {
+		if (opnd.reg.has_num())
+			fprintf(fd, "%zu", opnd.reg.index);
+		else if (opnd.reg.has_addr())
+			fprintf(fd, "%%t%zu", opnd.reg.index);
 	} else
 		assert(false && "unreachable");
 }
@@ -206,8 +206,8 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 
 Chunk Compiler::compile(AST ast, const StringPool& pool) {
 	Chunk chunk;
-	Operand heap {Operand::OPND_REG, Register(reg_count++).as_num()};
-	Operand start = {Operand::OPND_NUM, {1024 - 1}};
+	auto heap = Operand(Register(reg_count++).as_num()).as_reg();
+	Operand start(1024 - 1);
 
 	emit(&chunk, OP_MOV, heap, start);
 	compile(ast.root, pool, &chunk);
@@ -215,18 +215,18 @@ Chunk Compiler::compile(AST ast, const StringPool& pool) {
 }
 
 Operand Compiler::get_temporary() {
-	return {Operand::OPND_TMP, Register(tmp_count++).as_num()};
+	return Operand(Register(tmp_count++).as_num()).as_temp();
 }
 
 Operand Compiler::get_register() {
-	return {Operand::OPND_REG, Register(reg_count++).as_num()};
+	return Operand(Register(reg_count++).as_num()).as_reg();
 }
 
-Operand Compiler::get_label() { return {Operand::OPND_LAB, label_count++}; }
+Operand Compiler::get_label() { return {Label {label_count++}}; }
 
 Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
 	for (size_t i = 0; i < argc; i++) {
-		const auto op = args[i].type == Operand::OPND_STR ? OP_PRINTF : OP_PRINTV;
+		const auto op = args[i].type == Operand::Type::STR ? OP_PRINTF : OP_PRINTV;
 		emit(chunk, op, args[i]);
 	}
 	return {};
@@ -243,14 +243,15 @@ Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 	if (!(argc == 1))
 		err("The `array' builtin expects a size as the first and only argument.");
 
-	if (args[0].type == Operand::Type::OPND_NUM) {
-		// array is of constant size
-		Operand op {Operand::OPND_REG, Register(reg_count).as_num()};
-		reg_count += (size_t)args[0].value.num;
+	// if operand is number, array has constant size and is "inline" into the
+	// statically allocated registers
+	if (args[0].type == Operand::Type::NUM) {
+		auto op = Operand(Register(reg_count).as_num()).as_reg();
+		reg_count += (size_t)args[0].num;
 		return op;
 	} else {
-		Operand addr {Operand::OPND_TMP, Register(tmp_count++).as_addr()};
-		Operand heap {Operand::OPND_REG, Register(0).as_num()};
+		auto addr = Operand(Register(tmp_count++).as_addr()).as_temp();
+		auto heap = Operand(Register(0).as_num()).as_reg();
 
 		emit(chunk, OP_MOV, addr, heap);
 		emit(chunk, OP_ADD, heap, heap, args[0]);
@@ -258,14 +259,13 @@ Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 	}
 }
 
-Operand Compiler::to_rvalue(Chunk* chunk, Operand x) {
-	if ((x.type == Operand::OPND_REG || x.type == Operand::OPND_TMP) && x.value.reg.type == Register::VAL_ADDR) {
-		Operand zero = Operand(Operand::OPND_NUM, 0);
+Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
+	if (opnd.is_register() && opnd.reg.has_addr()) {
 		Operand tmp = get_temporary();
-		emit(chunk, OP_LOAD, tmp, zero, x);
+		emit(chunk, OP_LOAD, tmp, Operand(0), opnd);
 		return tmp;
 	} else {
-		return x;
+		return opnd;
 	}
 }
 
@@ -290,9 +290,9 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			else {
 				Operand* func_opnd = env_find(func_node.str_id);
 				if (!func_opnd) err("Function not found");
-				if (func_opnd->type != Operand::OPND_FUN)
+				if (func_opnd->type != Operand::Type::FUN)
 					err("Type of <name> is not function.");
-				Funktion func = func_opnd->value.fun;
+				Funktion func = func_opnd->fun;
 				{
 					Scope scope = create_scope();
 					for (size_t i = 0; i < func.argc; i++) {
@@ -309,7 +309,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			delete[] args;
 			return res;
 		}
-		case AST_NUM: return {Operand::OPND_NUM, node.num};
+		case AST_NUM: return Operand(node.num);
 		case AST_BLK: {
 			Scope scope = create_scope();
 			Operand opnd;
@@ -377,7 +377,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand cmp = get_temporary();
 			Operand step = (with_step)
 			               ? to_rvalue(chunk, compile(node.children[3], pool, chunk))
-			               : Operand {Operand::OPND_NUM, 1};
+			               : Operand(1);
 
 			Scope scope = create_scope();
 
@@ -406,9 +406,6 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return exp;
 		}
 		case AST_WHILE: {
-			Node cond = node.children[0];
-			Node exp = node.children[1];
-
 			Operand beg = cnt_lab = get_label();
 			Operand end = brk_lab = get_label();
 
@@ -454,19 +451,16 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return {};
 		}
 		case AST_ASS: {
-			Node lvalue_node = node.children[0];
-			Node exp_node = node.children[1];
+			Operand cell = compile(node.children[0], pool, chunk);
+			if (!cell.is_register())
+				err("Left-hand side of assignment must be an lvalue");
 
-			Operand lvalue = compile(lvalue_node, pool, chunk);
-			Operand exp = to_rvalue(chunk, compile(exp_node, pool, chunk));
+			Operand exp = to_rvalue(chunk, compile(node.children[1], pool, chunk));
 
-			// if lvalue is a register that contains an address
-			if ((lvalue.type == Operand::Type::OPND_TMP || lvalue.type == Operand::Type::OPND_REG) && lvalue.value.reg.type == Register::VAL_ADDR) {
-				Operand zero = Operand(Operand::Type::OPND_NUM, Operand::Value(0));
-				emit(chunk, OP_STORE, exp, zero, lvalue);
-			} else {
-				emit(chunk, OP_MOV, lvalue, exp);
-			}
+			if (cell.reg.has_addr())
+				emit(chunk, OP_STORE, exp, Operand(0), cell);
+			else if (cell.reg.has_num())
+				emit(chunk, OP_MOV, cell, exp);
 
 			return exp;
 		}
@@ -509,30 +503,18 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand base = compile(node.children[0], pool, chunk);
 			Operand off = compile(node.children[1], pool, chunk);
 
-			if (base.type == Operand::OPND_REG || base.type == Operand::OPND_TMP) {
-				if (base.value.reg.type == Register::VAL_NUM) {
-					Operand idx = Operand(Operand::OPND_NUM, base.value.reg.index);
-					Operand tmp = get_temporary();
-					emit(chunk, OP_ADD, tmp, idx, off);
-					return Operand(Operand::OPND_TMP, tmp.value.reg.as_addr());
-				} else if (base.value.reg.type == Register::VAL_ADDR) {
-					Operand tmp = get_temporary();
-					emit(chunk, OP_ADD, tmp, base, off);
-					return Operand(Operand::OPND_TMP, tmp.value.reg.as_addr());
-				} else {
-					assert(false && "unreachable");
-				}
-			} else {
-				err("Base must be an lvalue");
-			}
+			if (!base.is_register()) err("Base must be an lvalue");
 
-			assert(false && "unreachable");
+			Operand tmp = get_temporary();
+			if (base.reg.has_num())
+				emit(chunk, OP_ADD, tmp, Operand((Number)base.reg.index), off);
+			else if (base.reg.has_addr())
+				emit(chunk, OP_ADD, tmp, base, off);
+
+			return Operand(tmp.reg.as_addr()).as_temp();
 		}
-		case AST_ID: {
-			Operand* reg = env_find(node.str_id);
-			return *reg;
-		}
-		case AST_STR: return Operand {Operand::OPND_STR, pool.find(node.str_id)};
+		case AST_ID: return *env_find(node.str_id);
+		case AST_STR: return Operand(pool.find(node.str_id));
 		case AST_DECL: {
 			Node id = node.children[0];
 
@@ -568,7 +550,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return {};
 		}
 		case AST_NIL: return {};
-		case AST_TRUE: return {Operand::OPND_NUM, 1};
+		case AST_TRUE: return {1};
 		case AST_LET: {
 			Node decls = node.children[0];
 			Node exp = node.children[1];

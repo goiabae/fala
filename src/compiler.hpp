@@ -49,6 +49,8 @@ typedef struct Register {
 	Register(size_t idx) : index {idx} {}
 	Register& as_num() { return (type = VAL_NUM), *this; }
 	Register& as_addr() { return (type = VAL_ADDR), *this; }
+	bool has_num() const { return type == VAL_NUM; }
+	bool has_addr() const { return type == VAL_ADDR; }
 } Register;
 
 typedef struct Funktion {
@@ -57,41 +59,45 @@ typedef struct Funktion {
 	Node root;
 } Funktion;
 
+struct Label {
+	size_t id;
+};
+
 struct Instruction;
 
 struct Operand {
-	enum Type {
-		OPND_NIL, // no operand
-		OPND_TMP, // temporary register
-		OPND_REG, // variables register
-		OPND_LAB, // label
-		OPND_STR, // immediate string
-		OPND_NUM, // immediate number
-		OPND_FUN,
-	};
-
-	union Value {
-		Register reg;
-		size_t lab;
-		const char* str;
-		Number num;
-		Funktion fun;
-
-		Value(Register reg) : reg {reg} {}
-		Value(size_t lab) : lab {lab} {}
-		Value(const char* str) : str {str} {}
-		Value(Number num) : num {num} {}
-		Value(Funktion fun) : fun {fun} {}
-		Value() : num {0} {}
+	enum class Type {
+		NIL, // no operand
+		TMP, // temporary register
+		REG, // variables register
+		LAB, // label
+		STR, // immediate string
+		NUM, // immediate number
+		FUN,
 	};
 
 	Type type;
-	Value value;
 
-	Operand() : type {Type::OPND_NIL}, value {} {}
-	Operand(Type type, Value value) : type {type}, value {value} {}
+	union {
+		Register reg;
+		Label lab;
+		const char* str;
+		Number num;
+		Funktion fun;
+	};
+
+	Operand() : type {Type::NIL}, num {0} {}
+	Operand(Register reg) : type(Type::NIL), reg {reg} {}
+	Operand(Label lab) : type(Type::LAB), lab {lab} {}
+	Operand(const char* str) : type(Type::STR), str {str} {}
+	constexpr Operand(Number num) : type(Type::NUM), num {num} {}
+	Operand(Funktion fun) : type(Type::FUN), fun {fun} {}
 
 	Operand to_rvalue(std::vector<Instruction>* chunk);
+	bool is_register() const { return type == Type::REG || type == Type::TMP; }
+
+	Operand as_reg() { return (type = Type::REG), *this; }
+	Operand as_temp() { return (type = Type::TMP), *this; }
 };
 
 typedef struct Instruction {
