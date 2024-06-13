@@ -11,11 +11,7 @@
 #include "ast.h"
 #include "str_pool.h"
 
-#define CHUNK_INST_CAP 1024
-
 #define emit(C, OP, ...) chunk_append(C, Instruction {OP, {__VA_ARGS__}})
-
-static void chunk_append(Chunk* chunk, Instruction inst);
 
 Compiler::Compiler() {
 	back_patch_stack = new size_t[32];
@@ -48,8 +44,9 @@ Operand* Compiler::env_find(StrID str_id) {
 	return nullptr;
 }
 
-static void chunk_append(Chunk* chunk, Instruction inst) {
-	if (!(chunk->size() + 1 <= CHUNK_INST_CAP))
+void chunk_append(Chunk* chunk, Instruction inst) {
+	constexpr size_t chunk_inst_cap = 1024; // arbitrary choice
+	if (!(chunk->size() + 1 <= chunk_inst_cap))
 		err("Max number of instructions exceeded");
 	chunk->push_back(inst);
 }
@@ -72,7 +69,7 @@ void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 	back_patch_stack_len--;
 }
 
-static void print_str(FILE* fd, const char* str) {
+void print_str(FILE* fd, const char* str) {
 	fputc('"', fd);
 	char c;
 	while ((c = *(str++))) {
