@@ -16,7 +16,6 @@
 #define emit(C, OP, ...) chunk_append(C, Instruction {OP, {__VA_ARGS__}})
 
 static void chunk_append(Chunk* chunk, Instruction inst);
-static void print_operand(FILE*, Operand);
 
 Compiler::Compiler() {
 	back_patch_stack = new size_t[32];
@@ -87,7 +86,7 @@ static void print_str(FILE* fd, const char* str) {
 	fputc('"', fd);
 }
 
-static void print_operand(FILE* fd, Operand opnd) {
+void print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
 		case Operand::Type::NIL: fprintf(fd, "0"); break;
 		case Operand::Type::TMP: fprintf(fd, "%%t%zu", opnd.reg.index); break;
@@ -161,7 +160,7 @@ size_t opcode_opnd_count(InstructionOp op) {
 	assert(false);
 };
 
-void print_operand_special(FILE* fd, Operand opnd) {
+void print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::NUM) {
 		fprintf(fd, "%d", opnd.num);
 	} else if (opnd.type == Operand::Type::REG) {
@@ -178,28 +177,36 @@ void print_operand_special(FILE* fd, Operand opnd) {
 		assert(false && "unreachable");
 }
 
+// print an indirect memory access instruction (OP_STORE or OP_LOAD), where
+// the base and offset operands are printed differently depending on their
+// contents.
+void print_inst_indirect(FILE* fd, const Instruction& inst) {
+	fprintf(fd, "%s", opcode_repr(inst.opcode));
+	fprintf(fd, " ");
+	print_operand(fd, inst.operands[0]);
+	fprintf(fd, ", ");
+	print_operand_indirect(fd, inst.operands[1]);
+	fprintf(fd, "(");
+	print_operand_indirect(fd, inst.operands[2]);
+	fprintf(fd, ")");
+}
+
+void print_inst(FILE* fd, const Instruction& inst) {
+	constexpr const char* separators[3] = {" ", ", ", ", "};
+	if (inst.opcode != OP_LABEL) fprintf(fd, " ");
+	fprintf(fd, "%s", opcode_repr(inst.opcode));
+	for (size_t i = 0; i < opcode_opnd_count(inst.opcode); i++) {
+		fprintf(fd, "%s", separators[i]);
+		print_operand(fd, inst.operands[i]);
+	}
+}
+
 void print_chunk(FILE* fd, const Chunk& chunk) {
-	constexpr const char* separators[] = {" ", ", ", ", "};
-
 	for (const auto& inst : chunk) {
-		if (inst.opcode != OP_LABEL) fprintf(fd, "  ");
-		fprintf(fd, "%s", opcode_repr(inst.opcode));
-
-		// base operand needs to printed according to it's contents' type
-		if (inst.opcode == OP_LOAD || inst.opcode == OP_STORE) {
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0]);
-			fprintf(fd, ", ");
-			print_operand_special(fd, inst.operands[1]);
-			fprintf(fd, "(");
-			print_operand_special(fd, inst.operands[2]);
-			fprintf(fd, ")");
-		} else
-			for (size_t i = 0; i < opcode_opnd_count(inst.opcode); i++) {
-				fprintf(fd, "%s", separators[i]);
-				print_operand(fd, inst.operands[i]);
-			}
-
+		if (inst.opcode == OP_LOAD || inst.opcode == OP_STORE)
+			print_inst_indirect(fd, inst);
+		else
+			print_inst(fd, inst);
 		fprintf(fd, "\n");
 	}
 }
