@@ -12,7 +12,7 @@ extern "C" {
 typedef int Number;
 typedef char* String;
 
-typedef enum Type {
+typedef enum NodeType {
 	AST_APP, // function application
 	AST_NUM,
 	AST_BLK, // block
@@ -43,7 +43,7 @@ typedef enum Type {
 	AST_NIL,
 	AST_TRUE,
 	AST_LET,
-} Type;
+} NodeType;
 
 typedef struct Location {
 	int first_line;
@@ -52,16 +52,20 @@ typedef struct Location {
 	int last_column;
 } Location;
 
+struct Node;
+
+typedef struct BranchNode {
+	size_t children_count;
+	struct Node* children;
+} BranchNode;
+
 typedef struct Node {
-	Type type;
+	NodeType type;
 	Location loc;
 	union {
 		Number num;
 		StrID str_id;
-		struct {
-			size_t children_count;
-			struct Node* children;
-		};
+		BranchNode branch;
 	};
 } Node;
 
@@ -75,9 +79,9 @@ void ast_deinit(AST ast);
 void ast_print(AST ast, STR_POOL pool);
 
 // nodes
-Node new_node(Type type, size_t len, Node* children);
+Node new_node(NodeType type, size_t len, Node* children);
 Node new_list_node(void);
-Node new_string_node(Type type, Location loc, STR_POOL pool, String str);
+Node new_string_node(NodeType type, Location loc, STR_POOL pool, String str);
 Node new_number_node(Location loc, Number num);
 Node new_nil_node(Location loc);
 Node new_true_node(Location loc);

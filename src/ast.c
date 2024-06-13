@@ -65,10 +65,10 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 
 	space += 2;
 
-	for (size_t i = 0; i < node.children_count; i++) {
+	for (size_t i = 0; i < node.branch.children_count; i++) {
 		printf("\n");
 		for (size_t j = 0; j < space; j++) printf(" ");
-		ast_node_print(pool, node.children[i], space);
+		ast_node_print(pool, node.branch.children[i], space);
 	}
 
 	printf(")");
@@ -76,30 +76,30 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 
 void ast_print(AST ast, STR_POOL pool) { ast_node_print(pool, ast.root, 0); }
 
-Node new_node(Type type, size_t len, Node* children) {
+Node new_node(NodeType type, size_t len, Node* children) {
 	Node node;
 	node.type = type;
-	node.children_count = len;
-	node.children = NULL;
+	node.branch.children_count = len;
+	node.branch.children = NULL;
 	node.loc.first_column = children[0].loc.first_column;
 	node.loc.first_line = children[0].loc.first_line;
 	node.loc.last_column = children[len - 1].loc.last_column;
 	node.loc.last_line = children[len - 1].loc.last_line;
 	assert(len > 0);
-	node.children = malloc(sizeof(Node) * len);
-	memcpy(node.children, children, sizeof(Node) * len);
+	node.branch.children = malloc(sizeof(Node) * len);
+	memcpy(node.branch.children, children, sizeof(Node) * len);
 	return node;
 }
 
 Node new_list_node(void) {
 	Node node;
 	node.type = AST_BLK;
-	node.children_count = 0;
-	node.children = malloc(sizeof(Node) * 100);
+	node.branch.children_count = 0;
+	node.branch.children = malloc(sizeof(Node) * 100);
 	return node;
 }
 
-Node new_string_node(Type type, Location loc, STR_POOL pool, String str) {
+Node new_string_node(NodeType type, Location loc, STR_POOL pool, String str) {
 	Node node;
 	node.loc = loc;
 	node.str_id = str_pool_intern(pool, str);
@@ -121,31 +121,31 @@ Node new_true_node(Location loc) {
 }
 
 Node list_append_node(Node list, Node next) {
-	if (list.children_count == 0) list.loc = next.loc;
+	if (list.branch.children_count == 0) list.loc = next.loc;
 	list.loc.last_column = next.loc.last_column;
 	list.loc.last_line = next.loc.last_line;
-	list.children[list.children_count++] = next;
+	list.branch.children[list.branch.children_count++] = next;
 	return list;
 }
 
 Node list_prepend_node(Node list, Node next) {
-	if (list.children_count != 0)
-		for (size_t i = list.children_count; i > 0; i--)
-			list.children[i] = list.children[i - 1];
+	if (list.branch.children_count != 0)
+		for (size_t i = list.branch.children_count; i > 0; i--)
+			list.branch.children[i] = list.branch.children[i - 1];
 	else
 		list.loc = next.loc;
 	// FIXME might be out of order
 	list.loc.first_column = next.loc.last_column;
 	list.loc.first_line = next.loc.last_line;
-	list.children_count++;
-	list.children[0] = next;
+	list.branch.children_count++;
+	list.branch.children[0] = next;
 	return list;
 }
 
 static void node_deinit(Node node) {
 	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR)
 		return;
-	for (size_t i = 0; i < node.children_count; i++)
-		node_deinit(node.children[i]);
-	free(node.children);
+	for (size_t i = 0; i < node.branch.children_count; i++)
+		node_deinit(node.branch.children[i]);
+	free(node.branch.children);
 }

@@ -272,21 +272,22 @@ Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
 Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 	switch (node.type) {
 		case AST_APP: {
-			Node func_node = node.children[0];
+			Node func_node = node.branch.children[0];
 			const char* func_name = pool.find(func_node.str_id);
-			Node args_node = node.children[1];
+			Node args_node = node.branch.children[1];
 
-			Operand* args = new Operand[args_node.children_count];
-			for (size_t i = 0; i < args_node.children_count; i++)
-				args[i] = to_rvalue(chunk, compile(args_node.children[i], pool, chunk));
+			Operand* args = new Operand[args_node.branch.children_count];
+			for (size_t i = 0; i < args_node.branch.children_count; i++)
+				args[i] =
+					to_rvalue(chunk, compile(args_node.branch.children[i], pool, chunk));
 
 			Operand res;
 			if (strcmp(func_name, "write") == 0)
-				res = builtin_write(chunk, args_node.children_count, args);
+				res = builtin_write(chunk, args_node.branch.children_count, args);
 			else if (strcmp(func_name, "read") == 0)
-				res = builtin_read(chunk, args_node.children_count, args);
+				res = builtin_read(chunk, args_node.branch.children_count, args);
 			else if (strcmp(func_name, "array") == 0)
-				res = builtin_array(chunk, args_node.children_count, args);
+				res = builtin_array(chunk, args_node.branch.children_count, args);
 			else {
 				Operand* func_opnd = env_find(func_node.str_id);
 				if (!func_opnd) err("Function not found");
@@ -313,14 +314,14 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_BLK: {
 			Scope scope = create_scope();
 			Operand opnd;
-			for (size_t i = 0; i < node.children_count; i++)
-				opnd = compile(node.children[i], pool, chunk);
+			for (size_t i = 0; i < node.branch.children_count; i++)
+				opnd = compile(node.branch.children[i], pool, chunk);
 			return opnd;
 		}
 		case AST_IF: {
-			Node cond = node.children[0];
-			Node yes = node.children[1];
-			Node no = node.children[2];
+			Node cond = node.branch.children[0];
+			Node yes = node.branch.children[1];
+			Node no = node.branch.children[2];
 
 			Operand l1 = get_label();
 			Operand l2 = get_label();
@@ -344,8 +345,8 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return res;
 		}
 		case AST_WHEN: {
-			Node cond = node.children[0];
-			Node yes = node.children[1];
+			Node cond = node.branch.children[0];
+			Node yes = node.branch.children[1];
 
 			Operand l1 = get_label();
 			Operand res = get_temporary();
@@ -363,20 +364,21 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return res;
 		}
 		case AST_FOR: {
-			bool with_step = node.children_count == 5;
+			bool with_step = node.branch.children_count == 5;
 
-			Node decl_node = node.children[0];
-			Node from_node = node.children[1];
-			Node to_node = node.children[2];
-			Node exp_node = node.children[3 + with_step];
+			Node decl_node = node.branch.children[0];
+			Node from_node = node.branch.children[1];
+			Node to_node = node.branch.children[2];
+			Node exp_node = node.branch.children[3 + with_step];
 
 			Operand beg = get_label();
 			Operand inc = cnt_lab = get_label();
 			Operand end = brk_lab = get_label();
 			Operand cmp = get_temporary();
-			Operand step = (with_step)
-			               ? to_rvalue(chunk, compile(node.children[3], pool, chunk))
-			               : Operand(1);
+			Operand step =
+				(with_step)
+					? to_rvalue(chunk, compile(node.branch.children[3], pool, chunk))
+					: Operand(1);
 
 			Scope scope = create_scope();
 
@@ -415,11 +417,13 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			emit(chunk, OP_LABEL, beg);
 
-			Operand cond = to_rvalue(chunk, compile(node.children[0], pool, chunk));
+			Operand cond =
+				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
 
 			emit(chunk, OP_JMP_FALSE, cond, end);
 
-			Operand exp = to_rvalue(chunk, compile(node.children[1], pool, chunk));
+			Operand exp =
+				to_rvalue(chunk, compile(node.branch.children[1], pool, chunk));
 
 			emit(chunk, OP_JMP, beg);
 			emit(chunk, OP_LABEL, end);
@@ -431,10 +435,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		}
 		case AST_BREAK: {
 			if (!in_loop) err("Can't break outside of loops");
-			if (!(node.children_count == 1))
+			if (!(node.branch.children_count == 1))
 				err("`break' requires a expression to evaluate the loop to");
 
-			Operand res = to_rvalue(chunk, compile(node.children[0], pool, chunk));
+			Operand res =
+				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
 			emit(chunk, OP_MOV, {}, res);
 			push_to_back_patch(chunk->size() - 1);
 			emit(chunk, OP_JMP, brk_lab);
@@ -442,21 +447,23 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		}
 		case AST_CONTINUE: {
 			if (!in_loop) err("can't continue outside of loops");
-			if (!(node.children_count == 1))
+			if (!(node.branch.children_count == 1))
 				err("continue requires a expression to evaluate the loop to");
 
-			Operand res = to_rvalue(chunk, compile(node.children[0], pool, chunk));
+			Operand res =
+				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
 			emit(chunk, OP_MOV, {}, res);
 			push_to_back_patch(chunk->size() - 1);
 			emit(chunk, OP_JMP, cnt_lab);
 			return {};
 		}
 		case AST_ASS: {
-			Operand cell = compile(node.children[0], pool, chunk);
+			Operand cell = compile(node.branch.children[0], pool, chunk);
 			if (!cell.is_register())
 				err("Left-hand side of assignment must be an lvalue");
 
-			Operand exp = to_rvalue(chunk, compile(node.children[1], pool, chunk));
+			Operand exp =
+				to_rvalue(chunk, compile(node.branch.children[1], pool, chunk));
 
 			if (cell.reg.has_addr())
 				emit(chunk, OP_STORE, exp, Operand(0), cell);
@@ -468,8 +475,8 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 #define BINARY_ARITH(OPCODE)                                            \
 	{                                                                     \
-		Node left_node = node.children[0];                                  \
-		Node right_node = node.children[1];                                 \
+		Node left_node = node.branch.children[0];                           \
+		Node right_node = node.branch.children[1];                          \
                                                                         \
 		Operand left = to_rvalue(chunk, compile(left_node, pool, chunk));   \
 		Operand right = to_rvalue(chunk, compile(right_node, pool, chunk)); \
@@ -494,15 +501,15 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_NOT: {
 			Operand res = get_temporary();
 			Operand inverse =
-				to_rvalue(chunk, compile(node.children[0], pool, chunk));
+				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
 			emit(chunk, OP_NOT, res, inverse);
 			return res;
 		}
 		case AST_AT: {
 			// evaluates to a temporary register containing the address of the lvalue
 
-			Operand base = compile(node.children[0], pool, chunk);
-			Operand off = compile(node.children[1], pool, chunk);
+			Operand base = compile(node.branch.children[0], pool, chunk);
+			Operand off = compile(node.branch.children[1], pool, chunk);
 
 			if (!base.is_register()) err("Base must be an lvalue");
 
@@ -517,21 +524,23 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_ID: return *env_find(node.str_id);
 		case AST_STR: return Operand(pool.find(node.str_id));
 		case AST_DECL: {
-			Node id = node.children[0];
+			Node id = node.branch.children[0];
 
 			// fun f args = exp
-			if (node.children_count == 3) {
-				Node args = node.children[1];
-				Node body = node.children[2];
 
 				Operand* opnd = env_get_new(id.str_id, get_register());
-				*opnd = Operand(Funktion {args.children_count, args.children, body});
+			if (node.branch.children_count == 3) {
+				Node args = node.branch.children[1];
+				Node body = node.branch.children[2];
+				*opnd = Operand(
+					Funktion {args.branch.children_count, args.branch.children, body}
+				);
 				return *opnd;
 			}
 
 			// initial value or nil
-			Operand initial = (node.children_count == 2)
-			                  ? compile(node.children[1], pool, chunk)
+			Operand initial = (node.branch.children_count == 2)
+			                  ? compile(node.branch.children[1], pool, chunk)
 			                  : Operand();
 
 			// is a statically allocated array
@@ -547,12 +556,12 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_NIL: return {};
 		case AST_TRUE: return {1};
 		case AST_LET: {
-			Node decls = node.children[0];
-			Node exp = node.children[1];
+			Node decls = node.branch.children[0];
+			Node exp = node.branch.children[1];
 			{
 				Scope scope = create_scope();
-				for (size_t i = 0; i < decls.children_count; i++)
-					(void)compile(decls.children[i], pool, chunk);
+				for (size_t i = 0; i < decls.branch.children_count; i++)
+					(void)compile(decls.branch.children[i], pool, chunk);
 				Operand res = compile(exp, pool, chunk);
 				return res;
 			}

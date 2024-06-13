@@ -62,9 +62,9 @@ Value Interpreter::eval(AST ast) { return inter_eval_node(this, ast.root); }
 
 // term term+
 Value eval_app(Interpreter* inter, Node node) {
-	assert(node.children_count == 2);
-	Node func_node = node.children[0];
-	Node args_node = node.children[1];
+	assert(node.branch.children_count == 2);
+	Node func_node = node.branch.children[0];
+	Node args_node = node.branch.children[1];
 
 	if (func_node.type != AST_ID) err("Unnamed functions are not implemented");
 
@@ -72,13 +72,13 @@ Value eval_app(Interpreter* inter, Node node) {
 	if (!func_ptr) err("Function with name <name> not found");
 
 	Function func = func_ptr->func;
-	if (func.param_count != args_node.children_count && func.param_count != 0)
+	if (func.param_count != args_node.branch.children_count && func.param_count != 0)
 		err("Wrong number of arguments");
 
-	size_t argc = args_node.children_count;
+	size_t argc = args_node.branch.children_count;
 	Value* args = new Value[argc];
 	for (size_t i = 0; i < argc; i++)
-		args[i] = inter_eval_node(inter, args_node.children[i])
+		args[i] = inter_eval_node(inter, args_node.branch.children[i])
 		            .to_rvalue(); // call-by-value
 
 	if (func.is_builtin) {
@@ -91,9 +91,9 @@ Value eval_app(Interpreter* inter, Node node) {
 
 	// set all parameters to the corresponding arguments
 	for (size_t i = 0; i < argc; i++)
-		*inter_env_get_new(inter, func.params[i].str_id) = args[i];
+		*inter_env_get_new(inter, func.custom.params[i].str_id) = args[i];
 
-	Value val = inter_eval_node(inter, func.root);
+	Value val = inter_eval_node(inter, func.custom.root);
 
 	inter_env_pop(inter);
 
@@ -104,35 +104,35 @@ Value eval_app(Interpreter* inter, Node node) {
 Value eval_block(Interpreter* inter, Node node) {
 	Value res;
 	inter_env_push(inter);
-	for (size_t i = 0; i < node.children_count; i++)
-		res = inter_eval_node(inter, node.children[i]);
+	for (size_t i = 0; i < node.branch.children_count; i++)
+		res = inter_eval_node(inter, node.branch.children[i]);
 	inter_env_pop(inter);
 	return res;
 }
 
 // if exp then exp else exp
 Value eval_if(Interpreter* inter, Node node) {
-	Value cond = inter_eval_node(inter, node.children[0]);
-	return (cond) ? inter_eval_node(inter, node.children[1])
-	              : inter_eval_node(inter, node.children[2]);
+	Value cond = inter_eval_node(inter, node.branch.children[0]);
+	return (cond) ? inter_eval_node(inter, node.branch.children[1])
+	              : inter_eval_node(inter, node.branch.children[2]);
 }
 
 // when exp then exp
 Value eval_when(Interpreter* inter, Node node) {
-	Value cond = inter_eval_node(inter, node.children[0]);
-	if (cond) inter_eval_node(inter, node.children[1]);
+	Value cond = inter_eval_node(inter, node.branch.children[0]);
+	if (cond) inter_eval_node(inter, node.branch.children[1]);
 	return {};
 }
 
 // for decl from exp to exp (step exp)? then exp
 Value eval_for(Interpreter* inter, Node node) {
-	bool with_step = node.children_count == 5;
+	bool with_step = node.branch.children_count == 5;
 
-	Node decl_node = node.children[0];
-	Node from_node = node.children[1];
-	Node to_node = node.children[2];
-	Node step_node = node.children[3];
-	Node exp_node = node.children[3 + with_step];
+	Node decl_node = node.branch.children[0];
+	Node from_node = node.branch.children[1];
+	Node to_node = node.branch.children[2];
+	Node step_node = node.branch.children[3];
+	Node exp_node = node.branch.children[3 + with_step];
 
 	Value decl = inter_eval_node(inter, decl_node);
 	Value from = inter_eval_node(inter, from_node).to_rvalue();
@@ -164,9 +164,9 @@ Value eval_for(Interpreter* inter, Node node) {
 
 // while exp then exp
 Value eval_while(Interpreter* inter, Node node) {
-	assert(node.children_count == 2);
-	Node cond = node.children[0];
-	Node exp = node.children[1];
+	assert(node.branch.children_count == 2);
+	Node cond = node.branch.children[0];
+	Node exp = node.branch.children[1];
 
 	inter->in_loop = true;
 	Value res;
@@ -181,35 +181,37 @@ Value eval_while(Interpreter* inter, Node node) {
 
 // id ([idx])? = exp
 Value eval_ass(Interpreter* inter, Node node) {
-	assert(node.children_count == 2);
+	assert(node.branch.children_count == 2);
 
-	Value lvalue = inter_eval_node(inter, node.children[0]);
+	Value lvalue = inter_eval_node(inter, node.branch.children[0]);
 	if (lvalue.type != Value::Type::VAR) err("Can only assign to variable");
 
-	Value right = inter_eval_node(inter, node.children[1]).to_rvalue();
+	Value right = inter_eval_node(inter, node.branch.children[1]).to_rvalue();
 	return *(lvalue.var) = right;
 }
 
 Value eval_decl(Interpreter* inter, Node node) {
-	Node id = node.children[0];
+	Node id = node.branch.children[0];
 	Value* cell = inter_env_get_new(inter, id.str_id);
 	if (!cell) err2(node.loc, "Could not initialize variable");
 
 	// fun id id+ = exp
-	if (node.children_count == 3) {
-		Node params = node.children[1];
-		for (size_t i = 0; i < params.children_count; i++)
-			if (params.children[i].type != AST_ID)
+	if (node.branch.children_count == 3) {
+		Node params = node.branch.children[1];
+		for (size_t i = 0; i < params.branch.children_count; i++)
+			if (params.branch.children[i].type != AST_ID)
 				err("Function parameter must be a valid identifier");
-		Node exp = node.children[2];
-		return *cell = Value(Function(exp, params.children, params.children_count));
+		Node exp = node.branch.children[2];
+		return *cell = Value(
+						 Function(exp, params.branch.children, params.branch.children_count)
+					 );
 	}
 
 	Value res(cell);
 
 	// if has initial value
-	if (node.children_count == 2)
-		*cell = inter_eval_node(inter, node.children[1]).to_rvalue();
+	if (node.branch.children_count == 2)
+		*cell = inter_eval_node(inter, node.branch.children[1]).to_rvalue();
 
 	return res;
 }
@@ -224,46 +226,46 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_FOR: return eval_for(inter, node);
 		case AST_WHILE: return eval_while(inter, node);
 		case AST_BREAK: {
-			assert(node.children_count == 1); // break exp
+			assert(node.branch.children_count == 1); // break exp
 			if (!inter->in_loop) err("Can't break outside of a loop");
 			inter->should_break = true;
-			return inter_eval_node(inter, node.children[0]);
+			return inter_eval_node(inter, node.branch.children[0]);
 		}
 		case AST_CONTINUE: {
-			assert(node.children_count == 1); // continue exp
+			assert(node.branch.children_count == 1); // continue exp
 			if (!inter->in_loop) err("Can't continue outside of a loop");
 			inter->should_continue = true;
-			return inter_eval_node(inter, node.children[0]);
+			return inter_eval_node(inter, node.branch.children[0]);
 		}
 		case AST_ASS: return eval_ass(inter, node);
 		case AST_OR: {
-			assert(node.children_count == 2); // exp or exp
+			assert(node.branch.children_count == 2); // exp or exp
 
-			Value left = inter_eval_node(inter, node.children[0]);
+			Value left = inter_eval_node(inter, node.branch.children[0]);
 			if (left) return Value(true);
 
-			Value right = inter_eval_node(inter, node.children[1]);
+			Value right = inter_eval_node(inter, node.branch.children[1]);
 			return (right) ? Value(true) : Value();
 		}
 		case AST_AND: {
-			assert(node.children_count == 2); // exp and exp
+			assert(node.branch.children_count == 2); // exp and exp
 
-			Value left = inter_eval_node(inter, node.children[0]);
+			Value left = inter_eval_node(inter, node.branch.children[0]);
 			if (!left) return Value();
 
-			Value right = inter_eval_node(inter, node.children[1]);
+			Value right = inter_eval_node(inter, node.branch.children[1]);
 			return (right) ? Value(true) : Value();
 		}
-#define ARITH_OP(OP)                                                    \
-	{                                                                     \
-		assert(node.children_count == 2);                                   \
-		Value left = inter_eval_node(inter, node.children[0]).to_rvalue();  \
-		Value right = inter_eval_node(inter, node.children[1]).to_rvalue(); \
-		if (left.type != Value::Type::NUM)                                  \
-			err("Left-hand side of arithmentic operator is not a number");    \
-		if (right.type != Value::Type::NUM)                                 \
-			err("Right-hand side of arithmentic operator is not a number");   \
-		return Value(left.num OP right.num);                                \
+#define ARITH_OP(OP)                                                           \
+	{                                                                            \
+		assert(node.branch.children_count == 2);                                   \
+		Value left = inter_eval_node(inter, node.branch.children[0]).to_rvalue();  \
+		Value right = inter_eval_node(inter, node.branch.children[1]).to_rvalue(); \
+		if (left.type != Value::Type::NUM)                                         \
+			err("Left-hand side of arithmentic operator is not a number");           \
+		if (right.type != Value::Type::NUM)                                        \
+			err("Right-hand side of arithmentic operator is not a number");          \
+		return Value(left.num OP right.num);                                       \
 	}
 		case AST_ADD: ARITH_OP(+);
 		case AST_SUB: ARITH_OP(-);
@@ -271,19 +273,19 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_DIV: ARITH_OP(/);
 		case AST_MOD: ARITH_OP(%);
 #undef ARITH_OP
-#define CMP_OP(OP)                                                         \
-	{                                                                        \
-		assert(node.children_count == 2);                                      \
-		Value left = inter_eval_node(inter, node.children[0]).to_rvalue();     \
-		Value right = inter_eval_node(inter, node.children[1]).to_rvalue();    \
-		if (left.type != Value::Type::NUM || right.type != Value::Type::NUM) { \
-			err2(                                                                \
-				node.children[0].loc,                                              \
-				"Arithmetic comparison is allowed only between numbers"            \
-			);                                                                   \
-		}                                                                      \
-                                                                           \
-		return (left.num OP right.num) ? Value(true) : Value();                \
+#define CMP_OP(OP)                                                             \
+	{                                                                            \
+		assert(node.branch.children_count == 2);                                   \
+		Value left = inter_eval_node(inter, node.branch.children[0]).to_rvalue();  \
+		Value right = inter_eval_node(inter, node.branch.children[1]).to_rvalue(); \
+		if (left.type != Value::Type::NUM || right.type != Value::Type::NUM) {     \
+			err2(                                                                    \
+				node.branch.children[0].loc,                                           \
+				"Arithmetic comparison is allowed only between numbers"                \
+			);                                                                       \
+		}                                                                          \
+                                                                               \
+		return (left.num OP right.num) ? Value(true) : Value();                    \
 	}
 		case AST_GTN: CMP_OP(>);
 		case AST_LTN: CMP_OP(<);
@@ -291,8 +293,8 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_LTE: CMP_OP(<=);
 #undef CMP_OP
 		case AST_EQ: { // exp == exp
-			Value left = inter_eval_node(inter, node.children[0]).to_rvalue();
-			Value right = inter_eval_node(inter, node.children[1]).to_rvalue();
+			Value left = inter_eval_node(inter, node.branch.children[0]).to_rvalue();
+			Value right = inter_eval_node(inter, node.branch.children[1]).to_rvalue();
 
 			if (left.type == Value::Type::NIL && right.type == Value::Type::NIL)
 				return Value(true);
@@ -306,13 +308,13 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			return {};
 		}
 		case AST_NOT: { // not exp
-			Value val = inter_eval_node(inter, node.children[0]);
+			Value val = inter_eval_node(inter, node.branch.children[0]);
 			return (val) ? Value() : Value(true);
 		}
 		case AST_AT: {
-			Value base = inter_eval_node(inter, node.children[0]).to_rvalue();
+			Value base = inter_eval_node(inter, node.branch.children[0]).to_rvalue();
 			if (base.type != Value::Type::ARR) err("Can only index arrays");
-			Value off = inter_eval_node(inter, node.children[1]).to_rvalue();
+			Value off = inter_eval_node(inter, node.branch.children[1]).to_rvalue();
 			if (off.type != Value::Type::NUM) err("Index must be a number");
 			Value res(&base.arr.data[off.num]);
 			return res;
@@ -332,12 +334,12 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_NIL: return {};
 		case AST_TRUE: return Value(true);
 		case AST_LET: {
-			Node decls = node.children[0];
-			Node exp = node.children[1];
+			Node decls = node.branch.children[0];
+			Node exp = node.branch.children[1];
 			inter_env_push(inter);
 
-			for (size_t i = 0; i < decls.children_count; i++)
-				inter_eval_node(inter, decls.children[i]);
+			for (size_t i = 0; i < decls.branch.children_count; i++)
+				inter_eval_node(inter, decls.branch.children[i]);
 
 			Value res = inter_eval_node(inter, exp);
 			inter_env_pop(inter);

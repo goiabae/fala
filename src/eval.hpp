@@ -11,21 +11,27 @@
 struct Value;
 
 struct Function {
-	bool is_builtin;
-	union {
-		struct Value (*builtin)(size_t, struct Value*);
-		struct {
-			Node* params;
-			Node root;
-		};
+	struct UserDefined {
+		Node* params;
+		Node root;
 	};
+
+	using Builtin = Value (*)(size_t, Value*);
+
+	bool is_builtin;
+
+	union {
+		Value (*builtin)(size_t, struct Value*);
+		UserDefined custom;
+	};
+
 	size_t param_count;
 
-	Function(struct Value (*_builtin)(size_t, struct Value*), size_t count)
+	Function(Builtin _builtin, size_t count)
 	: is_builtin(true), builtin(_builtin), param_count(count) {}
 
 	Function(Node _root, Node* _params, size_t count)
-	: is_builtin(false), params(_params), root(_root), param_count(count) {}
+	: is_builtin(false), custom {_params, _root}, param_count(count) {}
 };
 
 struct Arr {
