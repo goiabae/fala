@@ -9,8 +9,6 @@
 #include "ast.h"
 #include "str_pool.h"
 
-static void value_deinit(Value val);
-
 static Value inter_eval_node(Interpreter* inter, Node node);
 
 static void err(const char* msg) {
@@ -30,34 +28,6 @@ static void err2(Location loc, const char* msg) {
 	exit(1);
 }
 
-static void inter_env_push(Interpreter* inter) { inter->env.scope_count++; }
-
-static void inter_env_pop(Interpreter* inter) {
-	if (inter->env.scope_count == 0) err("Environment was empty");
-	for (size_t i = inter->env.len; i-- > 0; inter->env.len--) {
-		if (inter->env.scopes[i] != (inter->env.scope_count - 1)) break;
-		value_deinit(inter->values.values[i]);
-		inter->values.len--;
-	}
-	inter->env.scope_count--;
-}
-
-static Value* inter_env_get_new(Interpreter* inter, StrID str_id) {
-	inter->env.scopes[inter->env.len] = inter->env.scope_count - 1;
-	inter->env.syms[inter->env.len] = str_id.idx;
-	inter->env.indexes[inter->env.len] = inter->env.len;
-	Value* res = &inter->values.values[inter->env.len++];
-	res->type = Value::Type::NIL;
-	inter->values.len++;
-	return res;
-}
-
-static Value* inter_env_find(Interpreter* inter, StrID str_id) {
-	for (size_t i = inter->env.len; i > 0;)
-		if (inter->env.syms[--i] == str_id.idx) return &inter->values.values[i];
-	return NULL;
-}
-
 Value Interpreter::eval(AST ast) { return inter_eval_node(this, ast.root); }
 
 // term term+
@@ -68,7 +38,7 @@ Value eval_app(Interpreter* inter, Node node) {
 
 	if (func_node.type != AST_ID) err("Unnamed functions are not implemented");
 
-	Value* func_ptr = inter_env_find(inter, func_node.str_id);
+	Value* func_ptr = inter->env.find(func_node.str_id);
 	if (!func_ptr) err("Function with name <name> not found");
 
 	Function func = func_ptr->func;
@@ -87,15 +57,13 @@ Value eval_app(Interpreter* inter, Node node) {
 		return val;
 	}
 
-	inter_env_push(inter);
+	auto scope = inter->env.make_scope();
 
 	// set all parameters to the corresponding arguments
 	for (size_t i = 0; i < argc; i++)
-		*inter_env_get_new(inter, func.custom.params[i].str_id) = args[i];
+		*inter->env.insert(func.custom.params[i].str_id) = args[i];
 
 	Value val = inter_eval_node(inter, func.custom.root);
-
-	inter_env_pop(inter);
 
 	delete[] args;
 	return val;
@@ -103,10 +71,9 @@ Value eval_app(Interpreter* inter, Node node) {
 
 Value eval_block(Interpreter* inter, Node node) {
 	Value res;
-	inter_env_push(inter);
+	auto scope = inter->env.make_scope();
 	for (size_t i = 0; i < node.branch.children_count; i++)
 		res = inter_eval_node(inter, node.branch.children[i]);
-	inter_env_pop(inter);
 	return res;
 }
 
@@ -144,7 +111,7 @@ Value eval_for(Interpreter* inter, Node node) {
 	if (to.type != Value::Type::NUM) err("Type of `to' value is not number");
 	if (inc.type != Value::Type::NUM) err("Type of `inc' value is not number");
 
-	inter_env_push(inter);
+	auto scope = inter->env.make_scope();
 
 	Value* var = decl.var;
 
@@ -158,7 +125,6 @@ Value eval_for(Interpreter* inter, Node node) {
 	}
 	inter->in_loop = false;
 
-	inter_env_pop(inter);
 	return res;
 }
 
@@ -192,7 +158,7 @@ Value eval_ass(Interpreter* inter, Node node) {
 
 Value eval_decl(Interpreter* inter, Node node) {
 	Node id = node.branch.children[0];
-	Value* cell = inter_env_get_new(inter, id.str_id);
+	Value* cell = inter->env.insert(id.str_id);
 	if (!cell) err2(node.loc, "Could not initialize variable");
 
 	// fun id id+ = exp
@@ -320,7 +286,7 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			return res;
 		}
 		case AST_ID: {
-			Value* addr = inter_env_find(inter, node.str_id);
+			Value* addr = inter->env.find(node.str_id);
 			if (!addr) err2(node.loc, "Variable not previously declared.");
 
 			Value res(addr);
@@ -336,13 +302,12 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_LET: {
 			Node decls = node.branch.children[0];
 			Node exp = node.branch.children[1];
-			inter_env_push(inter);
 
+			auto scope = inter->env.make_scope();
 			for (size_t i = 0; i < decls.branch.children_count; i++)
 				inter_eval_node(inter, decls.branch.children[i]);
 
 			Value res = inter_eval_node(inter, exp);
-			inter_env_pop(inter);
 			return res;
 		}
 	}
@@ -374,11 +339,11 @@ std::ostream& operator<<(std::ostream& st, Value& val) {
 	assert(false);
 }
 
-static void value_deinit(Value val) {
-	if (val.type == Value::Type::STR)
-		free(val.str);
-	else if (val.type == Value::Type::ARR)
-		free(val.arr.data);
+void Value::deinit() {
+	if (type == Value::Type::STR)
+		free(str);
+	else if (type == Value::Type::ARR)
+		free(arr.data);
 }
 
 static Value builtin_read(size_t _1, Value* _2) {
@@ -428,41 +393,14 @@ static Value builtin_exit(size_t argc, Value* args) {
 }
 
 // if COUNT is 0 the function takes a variable amount of arguments
-#define PUSH_BUILTIN(INTER, STR, FUNC, COUNT)                              \
-	*inter_env_get_new(&INTER, str_pool_intern((INTER).pool, strdup(STR))) = \
-		Value(Function(FUNC, COUNT))
+#define PUSH_BUILTIN(STR, FUNC, COUNT) \
+	*env.insert(pool->intern(strdup(STR))) = Value(Function(FUNC, COUNT))
 
 Interpreter::Interpreter(STR_POOL _pool)
 : pool(_pool), in_loop(false), should_break(false), should_continue(false) {
 	// arbitrary choice
-	constexpr size_t default_cap = 32;
-
-	values.len = 0;
-	values.cap = default_cap;
-	values.values = new Value[default_cap];
-
-	env.len = 0;
-	env.cap = default_cap;
-	env.scope_count = 0;
-	env.indexes = new size_t[default_cap];
-	env.syms = new size_t[default_cap];
-	env.scopes = new size_t[default_cap];
-
-	inter_env_push(this);
-
-	PUSH_BUILTIN(*this, "read", builtin_read, 1);
-	PUSH_BUILTIN(*this, "write", builtin_write, 0);
-	PUSH_BUILTIN(*this, "array", builtin_array, 1);
-	PUSH_BUILTIN(*this, "exit", builtin_exit, 1);
-}
-
-Interpreter::~Interpreter() {
-	for (size_t i = 0; i < env.len; i++) {
-		value_deinit(values.values[i]);
-		values.len--;
-	}
-	delete[] env.indexes;
-	delete[] env.syms;
-	delete[] env.scopes;
-	delete[] values.values;
+	PUSH_BUILTIN("read", builtin_read, 1);
+	PUSH_BUILTIN("write", builtin_write, 0);
+	PUSH_BUILTIN("array", builtin_array, 1);
+	PUSH_BUILTIN("exit", builtin_exit, 1);
 }

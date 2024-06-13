@@ -16,7 +16,6 @@
 Compiler::Compiler() {
 	back_patch_stack = new size_t[32];
 	back_patch = new size_t[32];
-	env.push_back({});
 }
 
 Compiler::~Compiler() {
@@ -27,21 +26,6 @@ Compiler::~Compiler() {
 void err(const char* msg) {
 	std::cout << "COMPILER_ERR: " << msg << std::endl;
 	exit(1);
-}
-
-Compiler::Scope Compiler::create_scope() { return Scope(&env); }
-
-Operand* Compiler::env_get_new(StrID str_id, Operand value) {
-	env.back().push_back({str_id.idx, value});
-	Operand& op = env.back().back().second;
-	return &op;
-}
-
-Operand* Compiler::env_find(StrID str_id) {
-	for (size_t i = env.size(); i-- > 0;)
-		for (size_t j = env[i].size(); j-- > 0;)
-			if (env[i][j].first == str_id.idx) return &env[i][j].second;
-	return nullptr;
 }
 
 void chunk_append(Chunk* chunk, Instruction inst) {
@@ -293,17 +277,17 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			else if (strcmp(func_name, "array") == 0)
 				res = builtin_array(chunk, args_node.branch.children_count, args);
 			else {
-				Operand* func_opnd = env_find(func_node.str_id);
+				Operand* func_opnd = env.find(func_node.str_id);
 				if (!func_opnd) err("Function not found");
 				if (func_opnd->type != Operand::Type::FUN)
 					err("Type of <name> is not function.");
 				Funktion func = func_opnd->fun;
 				{
-					Scope scope = create_scope();
+					auto scope = env.make_scope();
 					for (size_t i = 0; i < func.argc; i++) {
 						Node arg = func.args[i];
 						assert(arg.type == AST_ID);
-						Operand* arg_opnd = env_get_new(arg.str_id, make_register());
+						Operand* arg_opnd = env.insert(arg.str_id, make_register());
 						*arg_opnd = args[i];
 					}
 
@@ -316,7 +300,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		}
 		case AST_NUM: return Operand(node.num);
 		case AST_BLK: {
-			Scope scope = create_scope();
+			auto scope = env.make_scope();
 			Operand opnd;
 			for (size_t i = 0; i < node.branch.children_count; i++)
 				opnd = compile(node.branch.children[i], pool, chunk);
@@ -525,7 +509,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			return Operand(tmp.reg.as_addr()).as_temp();
 		}
-		case AST_ID: return *env_find(node.str_id);
+		case AST_ID: return *env.find(node.str_id);
 		case AST_STR: return Operand(pool.find(node.str_id));
 		case AST_DECL: {
 			Node id = node.branch.children[0];
@@ -535,7 +519,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				Node args = node.branch.children[1];
 				Node body = node.branch.children[2];
 
-				Operand* opnd = env_get_new(id.str_id, make_register());
+				Operand* opnd = env.insert(id.str_id, make_register());
 				*opnd = Operand(
 					Funktion {args.branch.children_count, args.branch.children, body}
 				);
@@ -549,9 +533,9 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			// is a statically allocated array
 			if (initial.type == Operand::Type::REG && initial.reg.has_num())
-				return *env_get_new(id.str_id, initial);
+				return *env.insert(id.str_id, initial);
 
-			Operand* opnd = env_get_new(id.str_id, make_register());
+			Operand* opnd = env.insert(id.str_id, make_register());
 			if (initial.type == Operand::Type::TMP) opnd->reg.type = initial.reg.type;
 
 			emit(chunk, OP_MOV, *opnd, initial);
@@ -563,7 +547,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node decls = node.branch.children[0];
 			Node exp = node.branch.children[1];
 			{
-				Scope scope = create_scope();
+				auto scope = env.make_scope();
 				for (size_t i = 0; i < decls.branch.children_count; i++)
 					(void)compile(decls.branch.children[i], pool, chunk);
 				Operand res = compile(exp, pool, chunk);

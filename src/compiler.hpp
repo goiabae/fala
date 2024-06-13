@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ast.h"
+#include "env.hpp"
 #include "str_pool.h"
 
 using std::pair;
@@ -98,6 +99,8 @@ struct Operand {
 
 	Operand as_reg() { return (type = Type::REG), *this; }
 	Operand as_temp() { return (type = Type::TMP), *this; }
+
+	void deinit() { return; }
 };
 
 typedef struct Instruction {
@@ -106,9 +109,6 @@ typedef struct Instruction {
 } Instruction;
 
 using Chunk = std::vector<Instruction>;
-
-template<typename T>
-using Env = vector<vector<pair<size_t, T>>>;
 
 struct Compiler {
 	Compiler();
@@ -144,45 +144,11 @@ struct Compiler {
 	void push_to_back_patch(size_t idx);
 	void back_patch_jumps(Chunk* chunk, Operand dest);
 
-	// analogous to a symbol table
-	// TODO: make this persistent and put into a separate semantic analysis step
 	Env<Operand> env;
-
-	// lexical scope
-	struct Scope;
-	Scope create_scope();
-
-	Operand* env_get_new(StrID str_id, Operand value);
-	Operand* env_find(StrID str_id);
 
 	Operand builtin_read(Chunk* chunk, size_t argc, Operand args[]);
 	Operand builtin_write(Chunk* chunk, size_t argc, Operand args[]);
 	Operand builtin_array(Chunk* chunk, size_t argc, Operand args[]);
-};
-
-// move-only linear resource
-struct Compiler::Scope {
-	Scope(Env<Operand>* env) : m_env {env} { m_env->push_back({}); }
-	~Scope() {
-		if (m_owned) m_env->pop_back();
-	}
-	Scope(const Scope& other) = delete;
-	Scope& operator=(const Scope& other) = delete;
-	Scope(Scope&& other) {
-		m_env = other.m_env;
-		other.m_owned = false;
-		m_owned = true;
-	}
-	Scope& operator=(Scope&& other) {
-		m_env = other.m_env;
-		other.m_owned = false;
-		m_owned = true;
-		return *this;
-	}
-
- private:
-	Env<Operand>* m_env;
-	bool m_owned {true};
 };
 
 void print_chunk(FILE*, const Chunk&);

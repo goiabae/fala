@@ -6,6 +6,7 @@
 #include <ostream>
 
 #include "ast.h"
+#include "env.hpp"
 #include "str_pool.h"
 
 struct Value;
@@ -63,32 +64,15 @@ struct Value {
 	Value to_rvalue() { return (type == Type::VAR) ? *var : *this; }
 
 	friend std::ostream& operator<<(std::ostream& st, Value& val);
-};
 
-struct ValueStack {
-	size_t len;
-	size_t cap;
-	Value* values;
-};
-
-struct Environment {
-	size_t len;
-	size_t cap;
-	size_t scope_count;
-
-	// index into some other structure like a value or register stack
-	size_t* indexes;
-	size_t* syms;   // symbol table index
-	size_t* scopes; // which scope each item belongs to
+	void deinit();
 };
 
 struct Interpreter {
 	Interpreter(STR_POOL _pool);
-	~Interpreter();
 
 	STR_POOL pool;
-	ValueStack values;
-	Environment env;
+	Env<Value> env;
 
 	bool in_loop;
 	bool should_break;
