@@ -218,15 +218,15 @@ Chunk Compiler::compile(AST ast, const StringPool& pool) {
 	return chunk;
 }
 
-Operand Compiler::get_temporary() {
+Operand Compiler::make_temporary() {
 	return Operand(Register(tmp_count++).as_num()).as_temp();
 }
 
-Operand Compiler::get_register() {
+Operand Compiler::make_register() {
 	return Operand(Register(reg_count++).as_num()).as_reg();
 }
 
-Operand Compiler::get_label() { return {Label {label_count++}}; }
+Operand Compiler::make_label() { return {Label {label_count++}}; }
 
 Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
 	for (size_t i = 0; i < argc; i++) {
@@ -237,7 +237,7 @@ Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
 }
 
 Operand Compiler::builtin_read(Chunk* chunk, size_t, Operand[]) {
-	Operand tmp = get_temporary();
+	Operand tmp = make_temporary();
 	emit(chunk, OP_READ, tmp);
 	return tmp;
 }
@@ -265,7 +265,7 @@ Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
 	if (opnd.is_register() && opnd.reg.has_addr()) {
-		Operand tmp = get_temporary();
+		Operand tmp = make_temporary();
 		emit(chunk, OP_LOAD, tmp, Operand(0), opnd);
 		return tmp;
 	} else {
@@ -303,7 +303,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 					for (size_t i = 0; i < func.argc; i++) {
 						Node arg = func.args[i];
 						assert(arg.type == AST_ID);
-						Operand* arg_opnd = env_get_new(arg.str_id, get_register());
+						Operand* arg_opnd = env_get_new(arg.str_id, make_register());
 						*arg_opnd = args[i];
 					}
 
@@ -327,9 +327,9 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node yes = node.branch.children[1];
 			Node no = node.branch.children[2];
 
-			Operand l1 = get_label();
-			Operand l2 = get_label();
-			Operand res = get_temporary();
+			Operand l1 = make_label();
+			Operand l2 = make_label();
+			Operand res = make_temporary();
 
 			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
@@ -352,8 +352,8 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node cond = node.branch.children[0];
 			Node yes = node.branch.children[1];
 
-			Operand l1 = get_label();
-			Operand res = get_temporary();
+			Operand l1 = make_label();
+			Operand res = make_temporary();
 
 			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
@@ -375,16 +375,16 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node to_node = node.branch.children[2];
 			Node exp_node = node.branch.children[3 + with_step];
 
-			Operand beg = get_label();
-			Operand inc = cnt_lab = get_label();
-			Operand end = brk_lab = get_label();
-			Operand cmp = get_temporary();
+			Operand beg = make_label();
+			Operand inc = cnt_lab = make_label();
+			Operand end = brk_lab = make_label();
+			Operand cmp = make_temporary();
 			Operand step =
 				(with_step)
 					? to_rvalue(chunk, compile(node.branch.children[3], pool, chunk))
 					: Operand(1);
 
-			Scope scope = create_scope();
+			auto scope = env.make_scope();
 
 			Operand var = compile(decl_node, pool, chunk);
 			if (!var.is_register()) err("Declaration must be of a number lvalue");
@@ -413,8 +413,8 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return exp;
 		}
 		case AST_WHILE: {
-			Operand beg = cnt_lab = get_label();
-			Operand end = brk_lab = get_label();
+			Operand beg = cnt_lab = make_label();
+			Operand end = brk_lab = make_label();
 
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
@@ -484,7 +484,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
                                                                         \
 		Operand left = to_rvalue(chunk, compile(left_node, pool, chunk));   \
 		Operand right = to_rvalue(chunk, compile(right_node, pool, chunk)); \
-		Operand res = get_temporary();                                      \
+		Operand res = make_temporary();                                     \
                                                                         \
 		emit(chunk, OPCODE, res, left, right);                              \
 		return res;                                                         \
@@ -503,7 +503,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_DIV: BINARY_ARITH(OP_DIV);
 		case AST_MOD: BINARY_ARITH(OP_MOD);
 		case AST_NOT: {
-			Operand res = get_temporary();
+			Operand res = make_temporary();
 			Operand inverse =
 				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
 			emit(chunk, OP_NOT, res, inverse);
@@ -517,7 +517,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			if (!base.is_register()) err("Base must be an lvalue");
 
-			Operand tmp = get_temporary();
+			Operand tmp = make_temporary();
 			if (base.reg.has_num())
 				emit(chunk, OP_ADD, tmp, Operand((Number)base.reg.index), off);
 			else if (base.reg.has_addr())
@@ -531,11 +531,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node id = node.branch.children[0];
 
 			// fun f args = exp
-
-				Operand* opnd = env_get_new(id.str_id, get_register());
 			if (node.branch.children_count == 3) {
 				Node args = node.branch.children[1];
 				Node body = node.branch.children[2];
+
+				Operand* opnd = env_get_new(id.str_id, make_register());
 				*opnd = Operand(
 					Funktion {args.branch.children_count, args.branch.children, body}
 				);
@@ -551,7 +551,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (initial.type == Operand::Type::REG && initial.reg.has_num())
 				return *env_get_new(id.str_id, initial);
 
-			Operand* opnd = env_get_new(id.str_id, get_register());
+			Operand* opnd = env_get_new(id.str_id, make_register());
 			if (initial.type == Operand::Type::TMP) opnd->reg.type = initial.reg.type;
 
 			emit(chunk, OP_MOV, *opnd, initial);

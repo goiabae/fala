@@ -124,9 +124,9 @@ struct Compiler {
 	size_t tmp_count {0};
 	size_t reg_count {0};
 
-	Operand get_temporary();
-	Operand get_register();
-	Operand get_label();
+	Operand make_temporary();
+	Operand make_register();
+	Operand make_label();
 
 	Operand to_rvalue(Chunk* chunk, Operand opnd);
 
