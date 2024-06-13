@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "str_pool.h"
 
 using std::pair;
+using std::string;
 using std::vector;
 
 typedef enum InstructionOp {
@@ -106,6 +108,7 @@ struct Operand {
 typedef struct Instruction {
 	InstructionOp opcode;
 	Operand operands[3];
+	string comment;
 } Instruction;
 
 using Chunk = std::vector<Instruction>;

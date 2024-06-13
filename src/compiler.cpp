@@ -11,7 +11,10 @@
 #include "ast.h"
 #include "str_pool.h"
 
-#define emit(C, OP, ...) chunk_append(C, Instruction {OP, {__VA_ARGS__}})
+#define emit2(C, COMMENT, OP, ...) \
+	chunk_append(C, Instruction {OP, {__VA_ARGS__}, COMMENT})
+
+#define emit(C, OP, ...) emit2(C, {}, OP, __VA_ARGS__)
 
 Compiler::Compiler() {
 	back_patch_stack = new size_t[32];
@@ -188,6 +191,10 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 			print_inst_indirect(fd, inst);
 		else
 			print_inst(fd, inst);
+		if (inst.comment != "") {
+			fprintf(fd, "  ; ");
+			fprintf(fd, "%s", inst.comment.c_str());
+		}
 		fprintf(fd, "\n");
 	}
 }
