@@ -551,9 +551,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			}
 
 			// initial value or nil
-			Operand initial = (node.branch.children_count == 2)
-			                  ? compile(node.branch.children[1], pool, chunk)
-			                  : Operand();
+			Operand initial =
+				(node.branch.children_count == 2)
+					? to_rvalue(chunk, compile(node.branch.children[1], pool, chunk))
+					: Operand();
 
 			// is a statically allocated array
 			if (initial.type == Operand::Type::REG && initial.reg.has_num())
