@@ -172,7 +172,7 @@ int print_operand_indirect(FILE* fd, Operand opnd) {
 // contents.
 int print_inst_indirect(FILE* fd, const Instruction& inst) {
 	int printed = 0;
-	printed += fprintf(fd, "  ");
+	printed += fprintf(fd, "    ");
 	printed += fprintf(fd, "%s", opcode_repr(inst.opcode));
 	printed += fprintf(fd, " ");
 	printed += print_operand(fd, inst.operands[0]);
