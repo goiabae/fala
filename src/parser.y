@@ -76,7 +76,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 
 %type <node> do block
 %type <node> cond
-%type <node> loop
+%type <node> loop step
 %type <node> jump
 %type <node> let decls
 %type <node> decl params
@@ -121,13 +121,12 @@ cond : IF exp THEN exp ELSE exp { $$ = NODE(AST_IF, $2, $4, $6); }
      ;
 
 /* Loops */
-loop : WHILE exp THEN exp { $$ = NODE(AST_WHILE, $2, $4); }
-     | FOR decl FROM exp TO exp THEN exp {
-       $$ = NODE(AST_FOR, $2, $4, $6, $8);
-     }
-     | FOR decl FROM exp TO exp STEP exp THEN exp {
-       $$ = NODE(AST_FOR, $2, $4, $6, $8, $10);
-     }
+loop : WHILE exp THEN exp            { $$ = NODE(AST_WHILE, $2, $4); }
+     | FOR decl TO exp step THEN exp { $$ = NODE(AST_FOR, $2, $4, $5, $7); }
+     ;
+
+step : %empty   { $$ = new_empty_node(); }
+     | STEP exp { $$ = $2; }
      ;
 
 /* Jumps */

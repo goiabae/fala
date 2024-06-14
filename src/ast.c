@@ -120,6 +120,8 @@ Node new_true_node(Location loc) {
 	return (Node) {.type = AST_TRUE, .loc = loc};
 }
 
+Node new_empty_node(void) { return (Node) {.type = AST_EMPTY}; }
+
 Node list_append_node(Node list, Node next) {
 	if (list.branch.children_count == 0) list.loc = next.loc;
 	list.loc.last_column = next.loc.last_column;

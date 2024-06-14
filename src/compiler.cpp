@@ -359,34 +359,29 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			return res;
 		}
 		case AST_FOR: {
-			bool with_step = node.branch.children_count == 5;
-
 			Node decl_node = node.branch.children[0];
-			Node from_node = node.branch.children[1];
-			Node to_node = node.branch.children[2];
-			Node exp_node = node.branch.children[3 + with_step];
+			Node to_node = node.branch.children[1];
+			Node step_node = node.branch.children[2];
+			Node exp_node = node.branch.children[3];
 
 			Operand beg = make_label();
 			Operand inc = cnt_lab = make_label();
 			Operand end = brk_lab = make_label();
 			Operand cmp = make_temporary();
-			Operand step =
-				(with_step)
-					? to_rvalue(chunk, compile(node.branch.children[3], pool, chunk))
-					: Operand(1);
+			Operand step = (step_node.type != AST_EMPTY)
+			               ? to_rvalue(chunk, compile(step_node, pool, chunk))
+			               : Operand(1);
 
 			auto scope = env.make_scope();
 
 			Operand var = compile(decl_node, pool, chunk);
 			if (!var.is_register()) err("Declaration must be of a number lvalue");
 
-			Operand from = to_rvalue(chunk, compile(from_node, pool, chunk));
 			Operand to = to_rvalue(chunk, compile(to_node, pool, chunk));
 
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
 
-			emit(chunk, OP_MOV, var, from);
 			emit(chunk, OP_LABEL, beg);
 			emit(chunk, OP_EQ, cmp, var, to);
 			emit(chunk, OP_JMP_TRUE, cmp, end);
@@ -561,6 +556,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				return res;
 			}
 		}
+		case AST_EMPTY: assert(false && "unreachable");
 	}
 	assert(false);
 }

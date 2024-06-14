@@ -93,21 +93,18 @@ Value eval_when(Interpreter* inter, Node node) {
 
 // for decl from exp to exp (step exp)? then exp
 Value eval_for(Interpreter* inter, Node node) {
-	bool with_step = node.branch.children_count == 5;
-
 	Node decl_node = node.branch.children[0];
-	Node from_node = node.branch.children[1];
-	Node to_node = node.branch.children[2];
-	Node step_node = node.branch.children[3];
-	Node exp_node = node.branch.children[3 + with_step];
+	Node to_node = node.branch.children[1];
+	Node step_node = node.branch.children[2];
+	Node exp_node = node.branch.children[3];
+
+	bool with_step = step_node.type != AST_EMPTY;
 
 	Value decl = inter_eval_node(inter, decl_node);
-	Value from = inter_eval_node(inter, from_node).to_rvalue();
 	Value to = inter_eval_node(inter, to_node).to_rvalue();
 	Value inc =
 		((with_step) ? inter_eval_node(inter, step_node) : Value(1)).to_rvalue();
 
-	if (from.type != Value::Type::NUM) err("Type of `from' value is not number");
 	if (to.type != Value::Type::NUM) err("Type of `to' value is not number");
 	if (inc.type != Value::Type::NUM) err("Type of `inc' value is not number");
 
@@ -117,7 +114,7 @@ Value eval_for(Interpreter* inter, Node node) {
 
 	inter->in_loop = true;
 	Value res;
-	for (Number i = from.num; i != to.num; i += inc.num) {
+	for (Number i = var->num; i != to.num; i += inc.num) {
 		*var = Value(i);
 		res = inter_eval_node(inter, exp_node);
 		if (inter->should_break) break;
@@ -310,6 +307,7 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			Value res = inter_eval_node(inter, exp);
 			return res;
 		}
+		case AST_EMPTY: assert(false && "unreachable");
 	}
 	assert(false);
 }

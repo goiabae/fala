@@ -17,9 +17,9 @@ in let
 	var op
 in do
 	# clear inst and data tapes
-	for var i from 0 to 512 then
+	for var i = 0 to 512 then
 		inst[i] = 0-69;
-	for var i from 0 to 256 then
+	for var i = 0 to 256 then
 		data[i] = 0;
 
 	# read instructions
@@ -32,7 +32,7 @@ in do
 	end;
 
 	write "brainfuck program:\n  ";
-	for var i from 0 to len then
+	for var i = 0 to len then
 		write inst[i];
 	write "\n";
 

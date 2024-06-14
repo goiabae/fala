@@ -13,7 +13,8 @@ typedef int Number;
 typedef char* String;
 
 typedef enum NodeType {
-	AST_APP, // function application
+	AST_EMPTY, // node for saying there is no node
+	AST_APP,   // function application
 	AST_NUM,
 	AST_BLK, // block
 	AST_IF,
@@ -85,6 +86,7 @@ Node new_string_node(NodeType type, Location loc, STR_POOL pool, String str);
 Node new_number_node(Location loc, Number num);
 Node new_nil_node(Location loc);
 Node new_true_node(Location loc);
+Node new_empty_node(void);
 Node list_append_node(Node list, Node next);
 Node list_prepend_node(Node list, Node next);
 
