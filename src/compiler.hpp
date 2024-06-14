@@ -111,7 +111,14 @@ typedef struct Instruction {
 	string comment;
 } Instruction;
 
-using Chunk = std::vector<Instruction>;
+struct Chunk {
+	Chunk& emit(
+		InstructionOp, Operand fst = {}, Operand snd = {}, Operand trd = {}
+	);
+	Chunk& with_comment(std::string comment);
+
+	std::vector<Instruction> m_vec;
+};
 
 struct Compiler {
 	Compiler();

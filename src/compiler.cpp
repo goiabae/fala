@@ -11,11 +11,6 @@
 #include "ast.h"
 #include "str_pool.h"
 
-#define emit2(C, COMMENT, OP, ...) \
-	chunk_append(C, Instruction {OP, {__VA_ARGS__}, COMMENT})
-
-#define emit(C, OP, ...) emit2(C, {}, OP, __VA_ARGS__)
-
 Compiler::Compiler() {
 	back_patch_stack = new size_t[32];
 	back_patch = new size_t[32];
@@ -31,11 +26,16 @@ void err(const char* msg) {
 	exit(1);
 }
 
-void chunk_append(Chunk* chunk, Instruction inst) {
-	constexpr size_t chunk_inst_cap = 1024; // arbitrary choice
-	if (!(chunk->size() + 1 <= chunk_inst_cap))
-		err("Max number of instructions exceeded");
-	chunk->push_back(inst);
+Chunk& Chunk::emit(
+	InstructionOp opcode, Operand fst, Operand snd, Operand trd
+) {
+	m_vec.push_back(Instruction {opcode, {fst, snd, trd}, ""});
+	return *this;
+}
+
+Chunk& Chunk::with_comment(std::string comment) {
+	m_vec.back().comment = comment;
+	return *this;
 }
 
 // push instruction at index id of a chunk to back patch
@@ -51,35 +51,40 @@ void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 	size_t to_patch = back_patch_stack[back_patch_stack_len - 1];
 	for (size_t i = 0; i < to_patch; i++) {
 		size_t idx = back_patch[back_patch_len-- - 1];
-		(*chunk)[idx].operands[0] = dest;
+		chunk->m_vec[idx].operands[0] = dest;
 	}
 	back_patch_stack_len--;
 }
 
-void print_str(FILE* fd, const char* str) {
+int print_str(FILE* fd, const char* str) {
+	int printed = 2; // because open and closing double quotes
 	fputc('"', fd);
 	char c;
 	while ((c = *(str++))) {
 		if (c == '\n')
-			fprintf(fd, "\\n");
+			printed += fprintf(fd, "\\n");
 		else if (c == '\t')
-			fprintf(fd, "\\t");
-		else
+			printed += fprintf(fd, "\\t");
+		else {
 			fputc(c, fd);
+			printed++;
+		}
 	}
 	fputc('"', fd);
+	return printed;
 }
 
-void print_operand(FILE* fd, Operand opnd) {
+int print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
-		case Operand::Type::NIL: fprintf(fd, "0"); break;
-		case Operand::Type::TMP: fprintf(fd, "%%t%zu", opnd.reg.index); break;
-		case Operand::Type::REG: fprintf(fd, "%%r%zu", opnd.reg.index); break;
-		case Operand::Type::LAB: fprintf(fd, "L%03zu", opnd.lab.id); break;
-		case Operand::Type::STR: print_str(fd, opnd.str); break;
-		case Operand::Type::NUM: fprintf(fd, "%d", opnd.num); break;
-		case Operand::Type::FUN: assert(false);
+		case Operand::Type::NIL: return fprintf(fd, "0");
+		case Operand::Type::TMP: return fprintf(fd, "%%t%zu", opnd.reg.index);
+		case Operand::Type::REG: return fprintf(fd, "%%r%zu", opnd.reg.index);
+		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.lab.id);
+		case Operand::Type::STR: return print_str(fd, opnd.str);
+		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.num);
+		case Operand::Type::FUN: assert(false && "unreachable");
 	}
+	return 0;
 }
 
 // return textual representation of opcode
@@ -144,54 +149,64 @@ size_t opcode_opnd_count(InstructionOp op) {
 	assert(false);
 };
 
-void print_operand_indirect(FILE* fd, Operand opnd) {
+int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::NUM) {
-		fprintf(fd, "%d", opnd.num);
+		return fprintf(fd, "%d", opnd.num);
 	} else if (opnd.type == Operand::Type::REG) {
 		if (opnd.reg.has_num())
-			fprintf(fd, "%zu", opnd.reg.index);
+			return fprintf(fd, "%zu", opnd.reg.index);
 		else if (opnd.reg.has_addr())
-			fprintf(fd, "%%r%zu", opnd.reg.index);
+			return fprintf(fd, "%%r%zu", opnd.reg.index);
 	} else if (opnd.type == Operand::Type::TMP) {
 		if (opnd.reg.has_num())
-			fprintf(fd, "%zu", opnd.reg.index);
+			return fprintf(fd, "%zu", opnd.reg.index);
 		else if (opnd.reg.has_addr())
-			fprintf(fd, "%%t%zu", opnd.reg.index);
+			return fprintf(fd, "%%t%zu", opnd.reg.index);
 	} else
 		assert(false && "unreachable");
+	return 0;
 }
 
 // print an indirect memory access instruction (OP_STORE or OP_LOAD), where
 // the base and offset operands are printed differently depending on their
 // contents.
-void print_inst_indirect(FILE* fd, const Instruction& inst) {
-	fprintf(fd, "%s", opcode_repr(inst.opcode));
-	fprintf(fd, " ");
-	print_operand(fd, inst.operands[0]);
-	fprintf(fd, ", ");
-	print_operand_indirect(fd, inst.operands[1]);
-	fprintf(fd, "(");
-	print_operand_indirect(fd, inst.operands[2]);
-	fprintf(fd, ")");
+int print_inst_indirect(FILE* fd, const Instruction& inst) {
+	int printed = 0;
+	printed += fprintf(fd, "  ");
+	printed += fprintf(fd, "%s", opcode_repr(inst.opcode));
+	printed += fprintf(fd, " ");
+	printed += print_operand(fd, inst.operands[0]);
+	printed += fprintf(fd, ", ");
+	printed += print_operand_indirect(fd, inst.operands[1]);
+	printed += fprintf(fd, "(");
+	printed += print_operand_indirect(fd, inst.operands[2]);
+	printed += fprintf(fd, ")");
+	return printed;
 }
 
-void print_inst(FILE* fd, const Instruction& inst) {
+int print_inst(FILE* fd, const Instruction& inst) {
 	constexpr const char* separators[3] = {" ", ", ", ", "};
-	if (inst.opcode != OP_LABEL) fprintf(fd, " ");
-	fprintf(fd, "%s", opcode_repr(inst.opcode));
+	int printed = 0;
+	if (inst.opcode != OP_LABEL) printed += fprintf(fd, "    ");
+	printed += fprintf(fd, "%s", opcode_repr(inst.opcode));
 	for (size_t i = 0; i < opcode_opnd_count(inst.opcode); i++) {
-		fprintf(fd, "%s", separators[i]);
-		print_operand(fd, inst.operands[i]);
+		printed += fprintf(fd, "%s", separators[i]);
+		printed += print_operand(fd, inst.operands[i]);
 	}
+	return printed;
 }
 
 void print_chunk(FILE* fd, const Chunk& chunk) {
-	for (const auto& inst : chunk) {
+	int max = 0;
+	int printed = 0;
+	for (const auto& inst : chunk.m_vec) {
 		if (inst.opcode == OP_LOAD || inst.opcode == OP_STORE)
-			print_inst_indirect(fd, inst);
+			printed = print_inst_indirect(fd, inst);
 		else
-			print_inst(fd, inst);
+			printed = print_inst(fd, inst);
+		if (printed > max) max = printed;
 		if (inst.comment != "") {
+			for (int i = 0; i < (max - printed); i++) fputc(' ', fd);
 			fprintf(fd, "  ; ");
 			fprintf(fd, "%s", inst.comment.c_str());
 		}
@@ -201,10 +216,11 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 
 Chunk Compiler::compile(AST ast, const StringPool& pool) {
 	Chunk chunk;
-	auto heap = Operand(Register(reg_count++).as_num()).as_reg();
+	auto dyn_alloc_start = Operand(Register(reg_count++).as_addr()).as_reg();
 	Operand start(1024 - 1);
 
-	emit(&chunk, OP_MOV, heap, start);
+	chunk.emit(OP_MOV, dyn_alloc_start, start)
+		.with_comment("contains address to start of dynamic allocation region");
 	compile(ast.root, pool, &chunk);
 	return chunk;
 }
@@ -222,14 +238,14 @@ Operand Compiler::make_label() { return {Label {label_count++}}; }
 Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
 	for (size_t i = 0; i < argc; i++) {
 		const auto op = args[i].type == Operand::Type::STR ? OP_PRINTF : OP_PRINTV;
-		emit(chunk, op, args[i]);
+		chunk->emit(op, args[i]);
 	}
 	return {};
 }
 
 Operand Compiler::builtin_read(Chunk* chunk, size_t, Operand[]) {
 	Operand tmp = make_temporary();
-	emit(chunk, OP_READ, tmp);
+	chunk->emit(OP_READ, tmp);
 	return tmp;
 }
 
@@ -246,10 +262,10 @@ Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 		return op;
 	} else {
 		auto addr = Operand(Register(tmp_count++).as_addr()).as_temp();
-		auto heap = Operand(Register(0).as_num()).as_reg();
+		auto dyn = Operand(Register(0).as_num()).as_reg();
 
-		emit(chunk, OP_MOV, addr, heap);
-		emit(chunk, OP_ADD, heap, heap, args[0]);
+		chunk->emit(OP_MOV, addr, dyn).with_comment("allocating array");
+		chunk->emit(OP_ADD, dyn, dyn, args[0]);
 		return addr;
 	}
 }
@@ -257,7 +273,8 @@ Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
 	if (opnd.is_register() && opnd.reg.has_addr()) {
 		Operand tmp = make_temporary();
-		emit(chunk, OP_LOAD, tmp, Operand(0), opnd);
+		chunk->emit(OP_LOAD, tmp, Operand(0), opnd)
+			.with_comment("casting to rvalue");
 		return tmp;
 	} else {
 		return opnd;
@@ -324,18 +341,18 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
-			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
+			chunk->emit(OP_JMP_FALSE, cond_opnd, l1).with_comment("if branch");
 
 			Operand yes_opnd = compile(yes, pool, chunk);
 
-			emit(chunk, OP_MOV, res, yes_opnd);
-			emit(chunk, OP_JMP, l2);
-			emit(chunk, OP_LABEL, l1);
+			chunk->emit(OP_MOV, res, yes_opnd);
+			chunk->emit(OP_JMP, l2);
+			chunk->emit(OP_LABEL, l1).with_comment("else branch");
 
 			Operand no_opnd = compile(no, pool, chunk);
 
-			emit(chunk, OP_MOV, res, no_opnd);
-			emit(chunk, OP_LABEL, l2);
+			chunk->emit(OP_MOV, res, no_opnd);
+			chunk->emit(OP_LABEL, l2);
 
 			return res;
 		}
@@ -348,13 +365,13 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand cond_opnd = to_rvalue(chunk, compile(cond, pool, chunk));
 
-			emit(chunk, OP_MOV, res, {});
-			emit(chunk, OP_JMP_FALSE, cond_opnd, l1);
+			chunk->emit(OP_MOV, res, {}).with_comment("when conditional");
+			chunk->emit(OP_JMP_FALSE, cond_opnd, l1);
 
 			Operand yes_opnd = compile(yes, pool, chunk);
 
-			emit(chunk, OP_MOV, res, yes_opnd);
-			emit(chunk, OP_LABEL, l1);
+			chunk->emit(OP_MOV, res, yes_opnd);
+			chunk->emit(OP_LABEL, l1);
 
 			return res;
 		}
@@ -382,16 +399,16 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
 
-			emit(chunk, OP_LABEL, beg);
-			emit(chunk, OP_EQ, cmp, var, to);
-			emit(chunk, OP_JMP_TRUE, cmp, end);
+			chunk->emit(OP_LABEL, beg).with_comment("beginning of for loop");
+			chunk->emit(OP_EQ, cmp, var, to);
+			chunk->emit(OP_JMP_TRUE, cmp, end);
 
 			Operand exp = compile(exp_node, pool, chunk);
 
-			emit(chunk, OP_LABEL, inc);
-			emit(chunk, OP_ADD, var, var, step);
-			emit(chunk, OP_JMP, beg);
-			emit(chunk, OP_LABEL, end);
+			chunk->emit(OP_LABEL, inc);
+			chunk->emit(OP_ADD, var, var, step);
+			chunk->emit(OP_JMP, beg);
+			chunk->emit(OP_LABEL, end).with_comment("end of for loop");
 
 			back_patch_jumps(chunk, exp);
 			in_loop = false;
@@ -405,18 +422,18 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
 
-			emit(chunk, OP_LABEL, beg);
+			chunk->emit(OP_LABEL, beg).with_comment("beginning of while loop");
 
 			Operand cond =
 				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
 
-			emit(chunk, OP_JMP_FALSE, cond, end);
+			chunk->emit(OP_JMP_FALSE, cond, end);
 
 			Operand exp =
 				to_rvalue(chunk, compile(node.branch.children[1], pool, chunk));
 
-			emit(chunk, OP_JMP, beg);
-			emit(chunk, OP_LABEL, end);
+			chunk->emit(OP_JMP, beg);
+			chunk->emit(OP_LABEL, end).with_comment("end of while loop");
 
 			back_patch_jumps(chunk, exp);
 			in_loop = false;
@@ -430,9 +447,9 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand res =
 				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
-			emit(chunk, OP_MOV, {}, res);
-			push_to_back_patch(chunk->size() - 1);
-			emit(chunk, OP_JMP, brk_lab);
+			chunk->emit(OP_MOV, {}, res);
+			push_to_back_patch(chunk->m_vec.size() - 1);
+			chunk->emit(OP_JMP, brk_lab).with_comment("break out of loop");
 			return {};
 		}
 		case AST_CONTINUE: {
@@ -442,9 +459,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand res =
 				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
-			emit(chunk, OP_MOV, {}, res);
-			push_to_back_patch(chunk->size() - 1);
-			emit(chunk, OP_JMP, cnt_lab);
+			chunk->emit(OP_MOV, {}, res);
+			push_to_back_patch(chunk->m_vec.size() - 1);
+			chunk->emit(OP_JMP, cnt_lab)
+				.with_comment("continue to next iteration of loop");
 			return {};
 		}
 		case AST_ASS: {
@@ -456,9 +474,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				to_rvalue(chunk, compile(node.branch.children[1], pool, chunk));
 
 			if (cell.reg.has_addr())
-				emit(chunk, OP_STORE, exp, Operand(0), cell);
+				chunk->emit(OP_STORE, exp, Operand(0), cell)
+					.with_comment("assigning to array variable");
 			else if (cell.reg.has_num())
-				emit(chunk, OP_MOV, cell, exp);
+				chunk->emit(OP_MOV, cell, exp)
+					.with_comment("assigning to integer variable");
 
 			return exp;
 		}
@@ -472,7 +492,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		Operand right = to_rvalue(chunk, compile(right_node, pool, chunk)); \
 		Operand res = make_temporary();                                     \
                                                                         \
-		emit(chunk, OPCODE, res, left, right);                              \
+		chunk->emit(OPCODE, res, left, right);                              \
 		return res;                                                         \
 	}
 
@@ -492,7 +512,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand res = make_temporary();
 			Operand inverse =
 				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
-			emit(chunk, OP_NOT, res, inverse);
+			chunk->emit(OP_NOT, res, inverse);
 			return res;
 		}
 		case AST_AT: {
@@ -505,9 +525,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand tmp = make_temporary();
 			if (base.reg.has_num())
-				emit(chunk, OP_ADD, tmp, Operand((Number)base.reg.index), off);
+				chunk->emit(OP_ADD, tmp, Operand((Number)base.reg.index), off)
+					.with_comment("accessing inline array");
 			else if (base.reg.has_addr())
-				emit(chunk, OP_ADD, tmp, base, off);
+				chunk->emit(OP_ADD, tmp, base, off)
+					.with_comment("accessing allocated array");
 
 			return Operand(tmp.reg.as_addr()).as_temp();
 		}
@@ -540,7 +562,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand* opnd = env.insert(id.str_id, make_register());
 			if (initial.type == Operand::Type::TMP) opnd->reg.type = initial.reg.type;
 
-			emit(chunk, OP_MOV, *opnd, initial);
+			chunk->emit(OP_MOV, *opnd, initial).with_comment("initializing variable");
 			return *opnd;
 		}
 		case AST_NIL: return {};
