@@ -1,13 +1,13 @@
 let
 	var xs = array 100
 in do
-	for var i = 1 to 100-1 then
+	for var i = 0 to 100 then
 		xs[i] = read nil;
 
 	# insertion sort xs
 	# impl took from https://pt.wikipedia.org/wiki/Insertion_sort
 
-	for var i = 1 to 100-1 then
+	for var i = 1 to 100 then
 	let var key = xs[i],
 			var j = i - 1
 	in do
@@ -18,6 +18,6 @@ in do
 		xs[j+1] = key;
 	end;
 
-	for var i = 0 to 100-1 then
+	for var i = 0 to 100 then
 		write xs[i] "\n";
 end
