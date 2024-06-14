@@ -533,7 +533,11 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			return Operand(tmp.reg.as_addr()).as_temp();
 		}
-		case AST_ID: return *env.find(node.str_id);
+		case AST_ID: {
+			Operand* opnd = env.find(node.str_id);
+			if (opnd == nullptr) err("Variable not found");
+			return *opnd;
+		}
 		case AST_STR: return Operand(pool.find(node.str_id));
 		case AST_DECL: {
 			Node id = node.branch.children[0];
