@@ -42,9 +42,24 @@ interpret() {
 	inter="$2"
 	file="$3"
 	if [ -f ./test/$test.sh ]; then
-		sh ./test/$test.sh | $inter $file > $tmp/$test.out
+		sh ./test/$test.sh > $tmp/$test.in
+	elif [ -f ./test/$test.c ]; then
+		cc -o $tmp/$test ./test/$test.c
+		$tmp/$test $tmp/$test.in $tmp/$test.expected
 	else
-		$inter $file > $tmp/$test.out
+		touch $tmp/$test.in
+	fi
+	$inter $file < $tmp/$test.in > $tmp/$test.actual
+}
+
+compare() {
+	test=$1
+	if [ -f ./test/$test.out ]; then
+		cmp $tmp/$f.actual ./test/$test.out || fail $test out
+	elif [ -f $tmp/$f.expected ]; then
+		cmp $tmp/$f.actual $tmp/$f.expected || fail $test out
+	else
+		warn "Interpreted output file for test \"${test}\" does not exist"
 	fi
 }
 
@@ -54,12 +69,7 @@ for f in ./examples/*.fala; do
 
 	test "INTERPRETED ${f}"
 	interpret $f "$FALA -i" ./examples/$f.fala
-
-	if [ -f ./test/$f.out ]; then
-		cmp $tmp/$f.out ./test/$f.out || fail $f out
-	else
-		warn "Interpreted output file for test \"${f}\" does not exist"
-	fi
+	compare $f
 
 	test "COMPILED ${f}"
 	$FALA -c -o $tmp/$f.rap ./examples/$f.fala
@@ -68,12 +78,8 @@ for f in ./examples/*.fala; do
 		fail "Compiled file for test \"${f}\" does not exist" fala
 	fi
 
-	if [ "$RAP" ]; then
-		interpret $f "$RAP" $tmp/$f.rap
-		if [ -f ./test/$f.out ]; then
-			cmp $tmp/$f.out ./test/$f.out || fail $f out
-		fi
-	fi
+	interpret $f "$RAP" $tmp/$f.rap
+	compare $f
 done
 
 rm -r $tmp

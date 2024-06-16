@@ -5,5 +5,5 @@ in do
 	write (fs [0] = 0) "\n";
 	write (fs [1] = 1) "\n";
 	for var i = 2 to max-1 then
-		write (fs [i] = (fs [i-1]) + (fs [i-2])) "\n";
+		write (fs[i] = fs[i-1] + fs[i-2]) "\n";
 end

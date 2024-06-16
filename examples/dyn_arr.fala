@@ -3,7 +3,7 @@ let
 	var sz = x * 3
 in do
 	var xs = array sz;
-	for var i = 0 to sz-1 then do
+	for var i = 0 to sz then do
 		xs[i] = i*2;
 		write xs[i] "\n";
 	end;
