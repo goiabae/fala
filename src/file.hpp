@@ -10,7 +10,7 @@ struct File {
 	File(const char* path, const char* mode) : m_fd {fopen(path, mode)} {}
 	File(FILE* fd) : m_fd {fd}, m_owned {false} {}
 	~File() {
-		if (m_owned) fclose(m_fd);
+		if (m_owned && m_fd != nullptr) fclose(m_fd);
 	}
 
 	File& operator=(const File& other) = delete;
