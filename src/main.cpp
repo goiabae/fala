@@ -151,7 +151,7 @@ static int compile(Options opts) {
 	if (opts.output_path) {
 		File out(opts.output_path, "w");
 		print_chunk(out.get_descriptor(), chunk);
-	} else if (opts.verbose) {
+	} else {
 		print_chunk(stdout, chunk);
 	}
 
@@ -170,6 +170,8 @@ int main(int argc, char* argv[]) {
 		compile(opts);
 	else if (opts.interpret)
 		interpret(opts);
+	else
+		compile(opts);
 
 	return 0;
 }
