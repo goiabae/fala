@@ -216,12 +216,17 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 
 Chunk Compiler::compile(AST ast, const StringPool& pool) {
 	Chunk chunk;
-	auto dyn_alloc_start = Operand(Register(reg_count++).as_addr()).as_reg();
-	Operand start(1024 - 1);
+	reg_count = 1;
+	auto dyn = Operand(Register(0).as_addr()).as_reg();
 
-	chunk.emit(OP_MOV, dyn_alloc_start, start)
-		.with_comment("contains address to start of dynamic allocation region");
+	chunk.emit(OP_MOV, dyn, {})
+		.with_comment("contains address to start of the last allocated region");
+
 	compile(ast.root, pool, &chunk);
+
+	Operand start(dyn_alloc_start);
+	chunk.m_vec[0].operands[1] = start; // backpatch after static allocations
+
 	return chunk;
 }
 
@@ -249,23 +254,24 @@ Operand Compiler::builtin_read(Chunk* chunk, size_t, Operand[]) {
 	return tmp;
 }
 
-// create array with runtime-known size
 Operand Compiler::builtin_array(Chunk* chunk, size_t argc, Operand args[]) {
 	if (!(argc == 1))
 		err("The `array' builtin expects a size as the first and only argument.");
 
-	// if operand is number, array has constant size and is "inline" into the
-	// statically allocated registers
+	// if size if constant we subtract the allocation start at compile time
 	if (args[0].type == Operand::Type::NUM) {
-		auto op = Operand(Register(reg_count).as_num()).as_reg();
-		reg_count += (size_t)args[0].num;
-		return op;
+		auto addr = Operand(Register(reg_count++).as_addr()).as_reg();
+		auto dyn = Operand(dyn_alloc_start -= args[0].num);
+
+		chunk->emit(OP_MOV, addr, dyn).with_comment("static array");
+		return addr;
+
 	} else {
-		auto addr = Operand(Register(tmp_count++).as_addr()).as_temp();
+		auto addr = Operand(Register(reg_count++).as_addr()).as_reg();
 		auto dyn = Operand(Register(0).as_num()).as_reg();
 
+		chunk->emit(OP_SUB, dyn, dyn, args[0]);
 		chunk->emit(OP_MOV, addr, dyn).with_comment("allocating array");
-		chunk->emit(OP_ADD, dyn, dyn, args[0]);
 		return addr;
 	}
 }
@@ -476,9 +482,8 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (cell.reg.has_addr())
 				chunk->emit(OP_STORE, exp, Operand(0), cell)
 					.with_comment("assigning to array variable");
-			else if (cell.reg.has_num())
-				chunk->emit(OP_MOV, cell, exp)
-					.with_comment("assigning to integer variable");
+			else // contains number
+				chunk->emit(OP_MOV, cell, exp).with_comment("assigning to variable");
 
 			return exp;
 		}
@@ -519,17 +524,15 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			// evaluates to a temporary register containing the address of the lvalue
 
 			Operand base = compile(node.branch.children[0], pool, chunk);
-			Operand off = compile(node.branch.children[1], pool, chunk);
+			Operand off =
+				to_rvalue(chunk, compile(node.branch.children[1], pool, chunk));
 
 			if (!base.is_register()) err("Base must be an lvalue");
+			if (base.type == Operand::Type::TMP) err("Not an array");
 
 			Operand tmp = make_temporary();
-			if (base.reg.has_num())
-				chunk->emit(OP_ADD, tmp, Operand((Number)base.reg.index), off)
-					.with_comment("accessing inline array");
-			else if (base.reg.has_addr())
-				chunk->emit(OP_ADD, tmp, base, off)
-					.with_comment("accessing allocated array");
+			chunk->emit(OP_ADD, tmp, base, off)
+				.with_comment("accessing allocated array");
 
 			return Operand(tmp.reg.as_addr()).as_temp();
 		}
@@ -554,21 +557,31 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				return *opnd;
 			}
 
-			// initial value or nil
-			Operand initial =
-				(node.branch.children_count == 2)
-					? to_rvalue(chunk, compile(node.branch.children[1], pool, chunk))
-					: Operand();
+			// var id = exp
+			if (node.branch.children_count == 2) {
+				Operand initial = compile(node.branch.children[1], pool, chunk);
 
-			// is a statically allocated array
-			if (initial.type == Operand::Type::REG && initial.reg.has_num())
-				return *env.insert(id.str_id, initial);
+				// initial is an array
+				if (initial.type == Operand::Type::REG && initial.reg.has_addr())
+					return *env.insert(id.str_id, initial);
 
-			Operand* opnd = env.insert(id.str_id, make_register());
-			if (initial.type == Operand::Type::TMP) opnd->reg.type = initial.reg.type;
+				// anything else
+				initial = to_rvalue(chunk, initial);
+				Operand* var = env.insert(id.str_id, make_register());
+				if (initial.is_register()) var->reg.type = initial.reg.type;
+				chunk->emit(OP_MOV, *var, initial).with_comment("creating variable");
+				return *var;
+			}
 
-			chunk->emit(OP_MOV, *opnd, initial).with_comment("initializing variable");
-			return *opnd;
+			// var id
+			if (node.branch.children_count == 1) {
+				Operand* var = env.insert(id.str_id, make_register());
+				chunk->emit(OP_MOV, *var, {})
+					.with_comment("creating uninitialized variable");
+				return *var;
+			}
+
+			assert(false && "unreachable");
 		}
 		case AST_NIL: return {};
 		case AST_TRUE: return {1};

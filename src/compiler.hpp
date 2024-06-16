@@ -96,7 +96,6 @@ struct Operand {
 	constexpr Operand(Number num) : type(Type::NUM), num {num} {}
 	Operand(Funktion fun) : type(Type::FUN), fun {fun} {}
 
-	Operand to_rvalue(std::vector<Instruction>* chunk);
 	bool is_register() const { return type == Type::REG || type == Type::TMP; }
 
 	Operand as_reg() { return (type = Type::REG), *this; }
@@ -153,6 +152,9 @@ struct Compiler {
 
 	void push_to_back_patch(size_t idx);
 	void back_patch_jumps(Chunk* chunk, Operand dest);
+
+	// used to backpatch the location of the dynamic allocation region start
+	Number dyn_alloc_start {2047};
 
 	Env<Operand> env;
 
