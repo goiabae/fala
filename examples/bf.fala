@@ -43,13 +43,13 @@ in do
 	while is_inst (op = inst[ip]) then
 	let var next = (ip + 1) % 256 in do
 		if op == GREAT then
-			dp = dp + 1
+			do dp = dp + 1; nil end
 		else if op == LESS then
-			dp = dp - 1
+			do dp = dp - 1; nil end
 		else if op == PLUS then
-			data [dp] = data [dp] + 1
+			do data [dp] = data [dp] + 1; nil end
 		else if op == MINUS then
-			data [dp] = data [dp] - 1
+			do data [dp] = data [dp] - 1; nil end
 		else if op == DOT then
 			write data[dp] "\n"
 		else if op == COMMA then
@@ -61,7 +61,7 @@ in do
 				next = (next + 1) % 256;
 			end
 		else if op == CLOSE then
-			when not data [dp] == 0 then do
+			when not (data[dp] == 0) then do
 				while not inst [next] == OPEN then
 					next = (next - 1) % 256;
 				next = (next + 1) % 256;

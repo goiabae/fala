@@ -20,6 +20,7 @@ extern "C" {
 #include "eval.hpp"
 #include "file.hpp"
 #include "str_pool.h"
+#include "typecheck.hpp"
 
 typedef int Number;
 typedef char* String;
@@ -123,6 +124,7 @@ static int interpret(Options opts) {
 			ast_print(ast, &pool);
 			printf("\n");
 		}
+		typecheck(ast);
 		val = inter.eval(ast);
 		if (opts.from_stdin) {
 			print_value(val);
@@ -144,6 +146,8 @@ static int compile(Options opts) {
 		ast_print(ast, &pool);
 		printf("\n");
 	}
+
+	typecheck(ast);
 
 	Compiler comp;
 	Chunk chunk = comp.compile(ast, pool);
