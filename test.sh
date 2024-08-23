@@ -31,10 +31,11 @@ warn()  { echo -e "${yellow}WARNING: ${1}${reset}"; }
 test()  { echo -e "${bold}TEST: ${1}${reset}"; }
 error() { echo -e "${red}ERROR: ${1}${reset}"; }
 
+fail_count=0
+
 fail() {
 	error "Output of test ${tmp}/${1}.${2} differs from expected output in ./test/${1}.${2}"
-	echo -e "Test files available at ${tmp}"
-	exit 1
+	fail_count=$(( fail_count + 1 ))
 }
 
 interpret() {
@@ -82,4 +83,11 @@ for f in ./examples/*.fala; do
 	compare $f
 done
 
-rm -r $tmp
+if [ $fail_count -eq '0' ]; then
+	rm -r $tmp
+	exit 0
+else
+	echo -e "${fail_count} tests failed"
+	echo -e "Test files available at ${tmp}"
+	exit 1
+fi
