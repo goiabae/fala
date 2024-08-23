@@ -210,6 +210,7 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 				typecheck(checker, decls.branch.children[i]);
 			return typecheck(checker, exp);
 		}
+		case AST_CHAR: return checker.get_numeric();
 	}
 
 	assert(false && "unreachable");

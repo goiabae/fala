@@ -42,6 +42,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %union {
 	int num;
 	char* str;
+	char character;
 	Node node;
 }
 
@@ -51,6 +52,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token <num> NUMBER
 %token <str> ID
 %token <str> STRING
+%token <character> CHAR
 
 /* keywords and constants */
 %token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN
@@ -198,6 +200,7 @@ term : "(" exp ")" { $$ = $2; }
      | STRING      { $$ = new_string_node(AST_STR, yyloc, pool, $1); }
      | NIL         { $$ = new_nil_node(yyloc); }
      | TRUE        { $$ = new_true_node(yyloc); }
+     | CHAR        { $$ = new_char_node(yyloc, $1); }
      ;
 
 id : ID { $$ = new_string_node(AST_ID, yyloc, pool, $1); }

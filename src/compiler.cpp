@@ -434,6 +434,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			}
 		}
 		case AST_EMPTY: assert(false && "unreachable");
+		case AST_CHAR: return {node.character};
 	}
 	assert(false);
 }

@@ -44,6 +44,7 @@ typedef enum NodeType {
 	AST_NIL,
 	AST_TRUE,
 	AST_LET,
+	AST_CHAR,
 } NodeType;
 
 typedef struct Location {
@@ -66,6 +67,7 @@ typedef struct Node {
 	union {
 		Number num;
 		StrID str_id;
+		char character;
 		BranchNode branch;
 	};
 } Node;
@@ -86,6 +88,7 @@ Node new_string_node(NodeType type, Location loc, STR_POOL pool, String str);
 Node new_number_node(Location loc, Number num);
 Node new_nil_node(Location loc);
 Node new_true_node(Location loc);
+Node new_char_node(Location loc, char character);
 Node new_empty_node(void);
 Node list_append_node(Node list, Node next);
 Node list_prepend_node(Node list, Node next);

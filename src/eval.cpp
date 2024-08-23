@@ -308,6 +308,7 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 			return res;
 		}
 		case AST_EMPTY: assert(false && "unreachable");
+		case AST_CHAR: return Value(node.character);
 	}
 	assert(false);
 }

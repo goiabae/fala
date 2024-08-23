@@ -120,6 +120,10 @@ Node new_true_node(Location loc) {
 	return (Node) {.type = AST_TRUE, .loc = loc};
 }
 
+Node new_char_node(Location loc, char character) {
+	return (Node) {.type = AST_CHAR, .loc = loc, .character = character};
+}
+
 Node new_empty_node(void) { return (Node) {.type = AST_EMPTY}; }
 
 Node list_append_node(Node list, Node next) {
@@ -145,7 +149,7 @@ Node list_prepend_node(Node list, Node next) {
 }
 
 static void node_deinit(Node node) {
-	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR)
+	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR || node.type == AST_CHAR)
 		return;
 	for (size_t i = 0; i < node.branch.children_count; i++)
 		node_deinit(node.branch.children[i]);

@@ -18,6 +18,7 @@ extern "C" {
 union TokenValue {
 	int num;
 	char *str;
+	char character;
 	Node node;
 };
 

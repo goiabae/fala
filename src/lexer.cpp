@@ -241,6 +241,15 @@ int Lexer::lex() {
 			value->str = string_dup(str.c_str());
 			return STRING;
 		}
+		case '\'': {
+			char character = advance();
+			if (!match('\''))
+				assert(
+					false && "LEXER: Character literal must have a single character"
+				);
+			value->character = character;
+			return CHAR;
+		}
 		default: {
 			if (isdigit(c)) {
 				long num = c - '0';
