@@ -32,7 +32,7 @@ add_executable(fala
 	src/lexer.cpp
 	src/ast.c
 	src/typecheck.cpp
-	src/eval.cpp
+	src/walk.cpp
 	src/compiler.cpp
 	src/bytecode.cpp
 	${BISON_PARSER_OUTPUTS})

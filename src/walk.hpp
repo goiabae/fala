@@ -9,6 +9,8 @@
 #include "env.hpp"
 #include "str_pool.h"
 
+namespace walk {
+
 struct Value;
 
 struct Function {
@@ -82,5 +84,7 @@ struct Interpreter {
 };
 
 void print_value(Value val);
+
+} // namespace walk
 
 #endif

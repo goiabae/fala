@@ -17,10 +17,10 @@ extern "C" {
 
 #include "ast.h"
 #include "compiler.hpp"
-#include "eval.hpp"
 #include "file.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
+#include "walk.hpp"
 
 typedef int Number;
 typedef char* String;
@@ -115,8 +115,8 @@ static int interpret(Options opts) {
 	if (!fd) return 1;
 
 	StringPool pool;
-	Interpreter inter(&pool);
-	Value val;
+	walk::Interpreter inter(&pool);
+	walk::Value val;
 
 	while (!fd.at_eof()) {
 		AST ast = parse(fd, pool);
@@ -133,7 +133,7 @@ static int interpret(Options opts) {
 		ast_deinit(ast);
 	}
 
-	return (val.type == Value::Type::NUM) ? val.num : 0;
+	return (val.type == walk::Value::Type::NUM) ? val.num : 0;
 }
 
 static int compile(Options opts) {

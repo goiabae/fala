@@ -1,4 +1,4 @@
-#include "eval.hpp"
+#include "walk.hpp"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -8,6 +8,8 @@
 
 #include "ast.h"
 #include "str_pool.h"
+
+namespace walk {
 
 static Value inter_eval_node(Interpreter* inter, Node node);
 
@@ -403,3 +405,5 @@ Interpreter::Interpreter(STR_POOL _pool)
 	PUSH_BUILTIN("array", builtin_array, 1);
 	PUSH_BUILTIN("exit", builtin_exit, 1);
 }
+
+} // namespace walk
