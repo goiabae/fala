@@ -188,12 +188,12 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			chunk->emit(Opcode::MOV, res, yes_opnd);
 			chunk->emit(Opcode::JMP, l2);
-			chunk->emit(Opcode::LABEL, l1).with_comment("else branch");
+			chunk->add_label(l1);
 
 			Operand no_opnd = compile(no, pool, chunk);
 
 			chunk->emit(Opcode::MOV, res, no_opnd);
-			chunk->emit(Opcode::LABEL, l2);
+			chunk->add_label(l2);
 
 			return res;
 		}
@@ -212,7 +212,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand yes_opnd = compile(yes, pool, chunk);
 
 			chunk->emit(Opcode::MOV, res, yes_opnd);
-			chunk->emit(Opcode::LABEL, l1);
+			chunk->add_label(l1);
 
 			return res;
 		}
@@ -240,16 +240,16 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
 
-			chunk->emit(Opcode::LABEL, beg).with_comment("beginning of for loop");
+			chunk->add_label(beg);
 			chunk->emit(Opcode::EQ, cmp, var, to);
 			chunk->emit(Opcode::JMP_TRUE, cmp, end);
 
 			Operand exp = compile(exp_node, pool, chunk);
 
-			chunk->emit(Opcode::LABEL, inc);
+			chunk->add_label(inc);
 			chunk->emit(Opcode::ADD, var, var, step);
 			chunk->emit(Opcode::JMP, beg);
-			chunk->emit(Opcode::LABEL, end).with_comment("end of for loop");
+			chunk->add_label(end);
 
 			back_patch_jumps(chunk, exp);
 			in_loop = false;
@@ -263,7 +263,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			back_patch_stack[back_patch_stack_len++] = 0;
 			in_loop = true;
 
-			chunk->emit(Opcode::LABEL, beg).with_comment("beginning of while loop");
+			chunk->add_label(beg);
 
 			Operand cond =
 				to_rvalue(chunk, compile(node.branch.children[0], pool, chunk));
@@ -274,7 +274,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				to_rvalue(chunk, compile(node.branch.children[1], pool, chunk));
 
 			chunk->emit(Opcode::JMP, beg);
-			chunk->emit(Opcode::LABEL, end).with_comment("end of while loop");
+			chunk->add_label(end);
 
 			back_patch_jumps(chunk, exp);
 			in_loop = false;

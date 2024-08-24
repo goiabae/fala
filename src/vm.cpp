@@ -3,14 +3,12 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
-#include <map>
 
 #include "bytecode.hpp"
 
 namespace vm {
 
 using std::array;
-using std::map;
 
 using bytecode::Chunk;
 using bytecode::Opcode;
@@ -34,12 +32,6 @@ static void err(const char* msg) {
 void run(const Chunk& code) {
 	array<int64_t, 2048> t_cells {};
 	array<int64_t, 2048> r_cells {};
-
-	map<size_t, size_t> label_indexes;
-
-	for (size_t pc = 0; pc < code.m_vec.size(); pc++)
-		if (code.m_vec[pc].opcode == Opcode::LABEL)
-			label_indexes[code.m_vec[pc].operands[0].lab.id] = pc;
 
 	constexpr auto read_buffer_cap = 50;
 	char read_buffer[read_buffer_cap] {0};
@@ -104,18 +96,25 @@ void run(const Chunk& code) {
 				INDIRECT_LOAD(inst.operands[2], inst.operands[1]) =
 					FETCH(inst.operands[0]);
 				break;
-			case Opcode::LABEL: break;
-			case Opcode::JMP: pc = label_indexes[inst.operands[0].lab.id]; break;
+			case Opcode::JMP:
+				pc = code.label_indexes.at(inst.operands[0].lab.id);
+				goto dont_inc;
 			case Opcode::JMP_FALSE:
 				if (!FETCH(inst.operands[0]))
-					pc = label_indexes[inst.operands[1].lab.id];
-				break;
+					pc = code.label_indexes.at(inst.operands[1].lab.id);
+				else
+					pc++;
+				goto dont_inc;
 			case Opcode::JMP_TRUE:
 				if (FETCH(inst.operands[0]))
-					pc = label_indexes[inst.operands[1].lab.id];
-				break;
+					pc = code.label_indexes.at(inst.operands[1].lab.id);
+				else
+					pc++;
+				goto dont_inc;
 		}
 		pc++;
+	dont_inc:
+		(void)0;
 	}
 }
 

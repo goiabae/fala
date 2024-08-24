@@ -14,6 +14,10 @@ Chunk& Chunk::with_comment(std::string comment) {
 	return *this;
 }
 
+void Chunk::add_label(Operand label) {
+	label_indexes[label.lab.id] = m_vec.size();
+}
+
 size_t opcode_opnd_count(Opcode op) {
 	switch (op) {
 		case Opcode::PRINTF: return 1;
@@ -36,7 +40,6 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::GREATER_EQ: return 3;
 		case Opcode::LOAD: return 3;
 		case Opcode::STORE: return 3;
-		case Opcode::LABEL: return 1;
 		case Opcode::JMP: return 1;
 		case Opcode::JMP_FALSE: return 2;
 		case Opcode::JMP_TRUE: return 2;
@@ -47,7 +50,12 @@ size_t opcode_opnd_count(Opcode op) {
 void print_chunk(FILE* fd, const Chunk& chunk) {
 	int max = 0;
 	int printed = 0;
+	size_t i = 0;
+	size_t li = 0;
 	for (const auto& inst : chunk.m_vec) {
+		if (li < chunk.label_indexes.size() && i == chunk.label_indexes.at(li)) {
+			fprintf(fd, "L%03zu:\n", li++);
+		}
 		print_inst(fd, inst);
 		if (printed > max) max = printed;
 		if (inst.comment != "") {
@@ -56,6 +64,10 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 			fprintf(fd, "%s", inst.comment.c_str());
 		}
 		fprintf(fd, "\n");
+		i++;
+	}
+	if (li < chunk.label_indexes.size()) {
+		fprintf(fd, "L%03zu:\n", li++);
 	}
 }
 
@@ -113,7 +125,6 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::GREATER_EQ: return "greatereq";
 		case Opcode::LOAD: return "load";
 		case Opcode::STORE: return "store";
-		case Opcode::LABEL: return "label";
 		case Opcode::JMP: return "jump";
 		case Opcode::JMP_FALSE: return "jf";
 		case Opcode::JMP_TRUE: return "jt";
@@ -162,7 +173,7 @@ int print_inst(FILE* fd, const Instruction& inst) {
 	} else {
 		constexpr const char* separators[3] = {" ", ", ", ", "};
 		int printed = 0;
-		if (inst.opcode != Opcode::LABEL) printed += fprintf(fd, "    ");
+		fprintf(fd, "    ");
 		printed += fprintf(fd, "%s", opcode_repr(inst.opcode));
 		for (size_t i = 0; i < bytecode::opcode_opnd_count(inst.opcode); i++) {
 			printed += fprintf(fd, "%s", separators[i]);

@@ -2,6 +2,7 @@
 #define BYTECODE_HPP
 
 #include <cstddef>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,6 @@ enum class Opcode {
 	GREATER_EQ,
 	LOAD,
 	STORE,
-	LABEL,
 	JMP,
 	JMP_FALSE,
 	JMP_TRUE,
@@ -106,8 +106,10 @@ struct Instruction {
 struct Chunk {
 	Chunk& emit(Opcode, Operand fst = {}, Operand snd = {}, Operand trd = {});
 	Chunk& with_comment(std::string comment);
+	void add_label(Operand label);
 
 	std::vector<Instruction> m_vec;
+	std::map<size_t, size_t> label_indexes;
 };
 
 // return amount of operands of each opcode
