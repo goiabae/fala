@@ -106,6 +106,8 @@ Options parse_args(int argc, char* argv[]) {
 
 	if (opts.argc > 0 && strcmp(opts.argv[0], "-") == 0) opts.from_stdin = true;
 
+	if (!(opts.compile || opts.interpret)) opts.is_invalid = true;
+
 	return opts;
 }
 
@@ -143,12 +145,13 @@ int interpret(Options opts) {
 	return 0;
 }
 
-static int compile(Options opts) {
-	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
-	if (!fd) return 1;
+int compile(Options opts) {
+	File input = opts.from_stdin ? stdin : File(opts.argv[0], "r");
+	if (!input) return 1;
 
 	StringPool pool;
-	AST ast = parse(fd, pool);
+	AST ast = parse(input, pool);
+
 	if (opts.verbose) {
 		ast_print(ast, &pool);
 		printf("\n");
@@ -159,12 +162,10 @@ static int compile(Options opts) {
 	Compiler comp;
 	Chunk chunk = comp.compile(ast, pool);
 
-	if (opts.output_path) {
-		File out(opts.output_path, "w");
-		print_chunk(out.get_descriptor(), chunk);
-	} else {
-		print_chunk(stdout, chunk);
-	}
+	File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
+	if (!output) return 1;
+
+	print_chunk(output.get_descriptor(), chunk);
 
 	ast_deinit(ast);
 	return 0;
@@ -181,8 +182,6 @@ int main(int argc, char* argv[]) {
 		compile(opts);
 	else if (opts.interpret)
 		interpret(opts);
-	else
-		compile(opts);
 
 	return 0;
 }
