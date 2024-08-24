@@ -6,15 +6,15 @@
 
 #include "bytecode.hpp"
 
-namespace vm {
-
 using std::array;
 
 using bytecode::Chunk;
 using bytecode::Opcode;
 using bytecode::Operand;
 
-static void err(const char* msg) {
+namespace vm {
+
+void err(const char* msg) {
 	fprintf(stderr, "VM ERROR: %s\n", msg);
 	exit(1);
 }

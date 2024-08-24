@@ -41,16 +41,17 @@ void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 
 Chunk Compiler::compile(AST ast, const StringPool& pool) {
 	Chunk chunk;
-	reg_count = 1;
-	auto dyn = Operand(Register(0).as_addr()).as_reg();
 
-	chunk.emit(Opcode::MOV, dyn, {})
+	auto dyn = make_register();
+	chunk
+		.emit(Opcode::MOV, dyn, {}) // snd will be patched after compilation
 		.with_comment("contains address to start of the last allocated region");
 
 	compile(ast.root, pool, &chunk);
 
 	Operand start(dyn_alloc_start);
-	chunk.m_vec[0].operands[1] = start; // backpatch after static allocations
+	chunk.m_vec[0].operands[1] =
+		start; // backpatching snd after static allocations
 
 	return chunk;
 }

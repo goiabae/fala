@@ -6,7 +6,6 @@
 
 #include <stack>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "ast.h"
@@ -14,7 +13,6 @@
 #include "env.hpp"
 #include "str_pool.h"
 
-using std::pair;
 using std::stack;
 using std::string;
 using std::vector;

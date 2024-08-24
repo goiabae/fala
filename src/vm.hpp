@@ -1,4 +1,4 @@
-// Raposeitor Virtual Machine
+// Bytecode Virtual Machine
 
 #ifndef VM_HPP
 #define VM_HPP
