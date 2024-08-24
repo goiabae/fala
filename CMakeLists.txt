@@ -35,6 +35,7 @@ add_executable(fala
 	src/walk.cpp
 	src/compiler.cpp
 	src/bytecode.cpp
+	src/vm.cpp
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)

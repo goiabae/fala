@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "vm.hpp"
+
 #ifndef _WIN32
 #	include <getopt.h>
 #endif
@@ -25,16 +27,17 @@ extern "C" {
 typedef int Number;
 typedef char* String;
 
-typedef struct Options {
-	bool is_invalid;
-	bool verbose;
-	bool from_stdin;
-	char* output_path;
-	bool compile;
-	bool interpret;
-	char** argv;
-	int argc;
-} Options;
+struct Options {
+	bool use_walk_interpreter {false};
+	bool is_invalid {false};
+	bool verbose {false};
+	bool from_stdin {false};
+	char* output_path {nullptr};
+	bool compile {false};
+	bool interpret {false};
+	char** argv {nullptr};
+	int argc {0};
+};
 
 static AST parse(File& file, StringPool& pool) {
 	Lexer lexer(file);
@@ -62,19 +65,14 @@ static void usage() {
 	);
 }
 
-static Options parse_args(int argc, char* argv[]) {
-	Options opts;
-	opts.verbose = false;
-	opts.is_invalid = false;
-	opts.output_path = NULL;
-	opts.from_stdin = false;
-	opts.compile = false;
-	opts.interpret = false;
+Options parse_args(int argc, char* argv[]) {
+	Options opts {};
 
 	// getopt comes from POSIX which is not available on Windows
 #ifndef _WIN32
-	for (char c = 0; (c = (char)getopt(argc, argv, "Vo:ci")) != -1;) switch (c) {
+	for (char c = 0; (c = (char)getopt(argc, argv, "Vwo:ci")) != -1;) switch (c) {
 			case 'V': opts.verbose = true; break;
+			case 'w': opts.use_walk_interpreter = true; break;
 			case 'o': opts.output_path = optarg; break;
 			case 'c': opts.compile = true; break;
 			case 'i': opts.interpret = true; break;
@@ -88,6 +86,7 @@ static Options parse_args(int argc, char* argv[]) {
 			switch (argv[i][1]) {
 				// FIXME parser -o output file
 				case 'V': opts.verbose = true; break;
+				case 'w': opts.use_walk_interpreter = true; break;
 				case 'c': opts.compile = true; break;
 				case 'i': opts.interpret = true; break;
 			}
@@ -110,30 +109,38 @@ static Options parse_args(int argc, char* argv[]) {
 	return opts;
 }
 
-static int interpret(Options opts) {
+int interpret(Options opts) {
 	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
 	if (!fd) return 1;
 
 	StringPool pool;
-	walk::Interpreter inter(&pool);
-	walk::Value val;
 
 	while (!fd.at_eof()) {
 		AST ast = parse(fd, pool);
+		typecheck(ast);
+
 		if (opts.verbose) {
 			ast_print(ast, &pool);
 			printf("\n");
 		}
-		typecheck(ast);
-		val = inter.eval(ast);
-		if (opts.from_stdin) {
-			print_value(val);
-			printf("\n");
+
+		if (opts.use_walk_interpreter) {
+			walk::Interpreter inter {&pool};
+			auto val = inter.eval(ast);
+			if (opts.from_stdin) {
+				print_value(val);
+				printf("\n");
+			}
+		} else {
+			Compiler comp;
+			Chunk chunk = comp.compile(ast, pool);
+			vm::run(chunk);
 		}
+
 		ast_deinit(ast);
 	}
 
-	return (val.type == walk::Value::Type::NUM) ? val.num : 0;
+	return 0;
 }
 
 static int compile(Options opts) {
