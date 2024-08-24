@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include <stack>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "str_pool.h"
 
 using std::pair;
+using std::stack;
 using std::string;
 using std::vector;
 
@@ -21,9 +23,6 @@ using bytecode::Chunk;
 using bytecode::Operand;
 
 struct Compiler {
-	Compiler();
-	~Compiler();
-
 	Chunk compile(AST ast, const StringPool& pool);
 
  private:
@@ -46,10 +45,11 @@ struct Compiler {
 
 	// these are used to backpatch the destination of MOVs generated when
 	// compiling BREAK and CONTINUE nodes
-	size_t back_patch_stack_len {0};
-	size_t* back_patch_stack;
-	size_t back_patch_len {0};
-	size_t* back_patch;
+	// back_patch contains the indexes in the chunk of MOVs that need patching,
+	// while back_patch_count stores the amount of MOVs for each loop that needs
+	// patching. This could also be a stack of vectors
+	stack<size_t> back_patch_count;
+	stack<size_t> back_patch;
 
 	void push_to_back_patch(size_t idx);
 	void back_patch_jumps(Chunk* chunk, Operand dest);

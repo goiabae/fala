@@ -15,16 +15,6 @@
 using bytecode::Opcode;
 using bytecode::Register;
 
-Compiler::Compiler() {
-	back_patch_stack = new size_t[32];
-	back_patch = new size_t[32];
-}
-
-Compiler::~Compiler() {
-	delete[] back_patch;
-	delete[] back_patch_stack;
-}
-
 void err(const char* msg) {
 	std::cout << "COMPILER_ERR: " << msg << std::endl;
 	exit(1);
@@ -32,20 +22,21 @@ void err(const char* msg) {
 
 // push instruction at index id of a chunk to back patch
 void Compiler::push_to_back_patch(size_t idx) {
-	back_patch_stack[back_patch_stack_len - 1]++;
-	back_patch[back_patch_len++] = idx - 1;
+	back_patch_count.top()++;
+	back_patch.push(idx - 1);
 }
 
 // back patch destination of MOVs in control-flow jump expressions
 void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 	// for the inner-most loop (top of the "stack"):
 	//   patch the destination operand of MOV instructions
-	size_t to_patch = back_patch_stack[back_patch_stack_len - 1];
+	size_t to_patch = back_patch_count.top();
+	back_patch_count.pop();
 	for (size_t i = 0; i < to_patch; i++) {
-		size_t idx = back_patch[back_patch_len-- - 1];
+		size_t idx = back_patch.top();
+		back_patch.pop();
 		chunk->m_vec[idx].operands[0] = dest;
 	}
-	back_patch_stack_len--;
 }
 
 Chunk Compiler::compile(AST ast, const StringPool& pool) {
@@ -237,7 +228,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 
 			Operand to = to_rvalue(chunk, compile(to_node, pool, chunk));
 
-			back_patch_stack[back_patch_stack_len++] = 0;
+			back_patch_count.push(0);
 			in_loop = true;
 
 			chunk->add_label(beg);
@@ -260,7 +251,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand beg = cnt_lab = make_label();
 			Operand end = brk_lab = make_label();
 
-			back_patch_stack[back_patch_stack_len++] = 0;
+			back_patch_count.push(0);
 			in_loop = true;
 
 			chunk->add_label(beg);
