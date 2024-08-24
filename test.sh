@@ -50,7 +50,7 @@ interpret() {
 	else
 		touch $tmp/$test.in
 	fi
-	$inter $file < $tmp/$test.in > $tmp/$test.actual
+	timeout 30s $inter $file < $tmp/$test.in > $tmp/$test.actual
 }
 
 compare() {
