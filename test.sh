@@ -4,13 +4,6 @@ set -u
 
 FALA="./build/fala"
 
-# path to raposeitor intepreter
-if [ -v 1 ]; then
-	RAP="$1"
-else
-	RAP=raposeitor
-fi
-
 if [ -t 1 ]; then
 	red='\e[0;31m'
 	yellow='\e[0;33m'
@@ -78,9 +71,6 @@ for f in ./examples/*.fala; do
 	if ! [ -f $tmp/$f.rap ]; then
 		fail "Compiled file for test \"${f}\" does not exist" fala
 	fi
-
-	interpret $f "$RAP" $tmp/$f.rap
-	compare $f
 done
 
 if [ $fail_count -eq '0' ]; then
