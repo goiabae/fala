@@ -57,6 +57,9 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 	} else if (node.type == AST_TRUE) {
 		printf("true");
 		return;
+	} else if (node.type == AST_CHAR) {
+		printf("'%c'", node.character);
+		return;
 	}
 
 	printf("(");
