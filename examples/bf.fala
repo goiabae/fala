@@ -51,9 +51,9 @@ in do
 		else if op == MINUS then
 			do data [dp] = data [dp] - 1; nil end
 		else if op == DOT then
-			write data[dp] "\n"
+			do write data[dp]; write "\n" end
 		else if op == COMMA then
-			write (data [dp] = read nil) "\n"
+			do write (data [dp] = read nil); write "\n" end
 		else if op == OPEN then
 			when data [dp] == 0 then do
 				while not inst [next] == CLOSE then

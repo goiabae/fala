@@ -2,8 +2,8 @@ let
 	var max = read nil,
 	var fs = array max
 in do
-	write (fs [0] = 0) "\n";
-	write (fs [1] = 1) "\n";
+	do write (fs [0] = 0); write "\n" end;
+	do write (fs [1] = 1); write "\n" end;
 	for var i = 2 to max-1 then
-		write (fs[i] = fs[i-1] + fs[i-2]) "\n";
+		do write (fs[i] = fs[i-1] + fs[i-2]); write "\n" end;
 end

@@ -41,7 +41,14 @@ void run(const Chunk& code) {
 		const auto& inst = code.m_vec[pc];
 		switch (inst.opcode) {
 			case Opcode::PRINTF: {
-				printf("%s", inst.operands[0].str);
+				size_t i = 0;
+				char c;
+				while ((c = (char)INDIRECT_LOAD(inst.operands[0], Operand((Number)i)))
+				       != 0) {
+					printf("%c", c);
+					i++;
+				}
+
 				break;
 			}
 			case Opcode::PRINTV: {

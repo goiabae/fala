@@ -95,7 +95,6 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::TMP: return fprintf(fd, "%%t%zu", opnd.reg.index);
 		case Operand::Type::REG: return fprintf(fd, "%%r%zu", opnd.reg.index);
 		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.lab.id);
-		case Operand::Type::STR: return print_str(fd, opnd.str);
 		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.num);
 		case Operand::Type::FUN: assert(false && "unreachable");
 	}

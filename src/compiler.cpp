@@ -67,11 +67,17 @@ Operand Compiler::make_register() {
 Operand Compiler::make_label() { return {bytecode::Label {label_count++}}; }
 
 Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
-	for (size_t i = 0; i < argc; i++) {
-		const auto op =
-			args[i].type == Operand::Type::STR ? Opcode::PRINTF : Opcode::PRINTV;
-		chunk->emit(op, args[i]);
-	}
+	if (argc != 1)
+		err(
+			"write accepts only a single pointer to character or integer as an "
+			"argument"
+		);
+
+	auto& op = args[0];
+	if (op.is_register() && op.reg.has_addr())
+		chunk->emit(Opcode::PRINTF, op);
+	else
+		chunk->emit(Opcode::PRINTV, op);
 	return {};
 }
 
@@ -372,7 +378,28 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			if (opnd == nullptr) err("Variable not found");
 			return *opnd;
 		}
-		case AST_STR: return Operand(pool.find(node.str_id));
+		case AST_STR: {
+			// allocates a static buffer for the string characters, ending in a
+			// setinel null character and returns a pointer to the start
+
+			const char* str = pool.find(node.str_id);
+			auto str_len = strlen(str);
+			auto buf = make_temporary();
+			buf.reg = buf.reg.as_addr();
+			dyn_alloc_start -= (Number)str_len + 1;
+
+			chunk->emit(Opcode::MOV, buf, Operand(dyn_alloc_start));
+
+			for (size_t i = 0; i < str_len + 1; i++)
+				chunk->emit(
+					Opcode::MOV,
+					Operand(Register((size_t)dyn_alloc_start + i).as_num()).as_reg(),
+					Operand((Number)str[i])
+				);
+
+			return buf;
+			// return Operand(pool.find(node.str_id));
+		}
 		case AST_DECL: {
 			Node id = node.branch.children[0];
 

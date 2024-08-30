@@ -67,7 +67,6 @@ struct Operand {
 		TMP, // temporary register
 		REG, // variables register
 		LAB, // label
-		STR, // immediate string
 		NUM, // immediate number
 		FUN,
 	};
@@ -77,7 +76,6 @@ struct Operand {
 	union {
 		Register reg;
 		Label lab;
-		const char* str;
 		Number num;
 		Funktion fun;
 	};
@@ -85,7 +83,6 @@ struct Operand {
 	Operand() : type {Type::NIL}, num {0} {}
 	Operand(Register reg) : type(Type::NIL), reg {reg} {}
 	Operand(Label lab) : type(Type::LAB), lab {lab} {}
-	Operand(const char* str) : type(Type::STR), str {str} {}
 	constexpr Operand(Number num) : type(Type::NUM), num {num} {}
 	Operand(Funktion fun) : type(Type::FUN), fun {fun} {}
 
