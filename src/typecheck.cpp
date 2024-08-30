@@ -211,6 +211,7 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 			return typecheck(checker, exp);
 		}
 		case AST_CHAR: return checker.get_numeric();
+		case AST_PATH: return typecheck(checker, node.branch.children[0]);
 	}
 
 	assert(false && "unreachable");

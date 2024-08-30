@@ -122,9 +122,12 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Node args_node = node.branch.children[1];
 
 			Operand* args = new Operand[args_node.branch.children_count];
-			for (size_t i = 0; i < args_node.branch.children_count; i++)
-				args[i] =
-					to_rvalue(chunk, compile(args_node.branch.children[i], pool, chunk));
+			for (size_t i = 0; i < args_node.branch.children_count; i++) {
+				auto& arg_node = args_node.branch.children[i];
+				args[i] = compile(arg_node, pool, chunk);
+
+				if (arg_node.type == AST_PATH) args[i] = to_rvalue(chunk, args[i]);
+			}
 
 			Operand res;
 			if (strcmp(func_name, "write") == 0)
@@ -427,6 +430,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		}
 		case AST_EMPTY: assert(false && "unreachable");
 		case AST_CHAR: return {node.character};
+		case AST_PATH: return compile(node.branch.children[0], pool, chunk);
 	}
 	assert(false);
 }

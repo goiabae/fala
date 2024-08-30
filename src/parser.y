@@ -83,7 +83,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %type <node> let decls
 %type <node> decl params
 %type <node> app func args arg
-%type <node> ass lvalue
+%type <node> ass path
 %type <node> op op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id
@@ -171,9 +171,9 @@ args : %empty   { $$ = new_list_node(); }
 arg : term ;
 
 /* Assignment */
-ass : lvalue "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
+ass : path "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
 
-lvalue : id | id "[" exp "]" { $$ = NODE(AST_AT, $1, $3); }
+path : id | id "[" exp "]" { $$ = NODE(AST_AT, $1, $3); }
 
 /* Operators. Infix and prefix */
 op : op1;
@@ -195,7 +195,7 @@ op15 : term ;
 
 /* Terms */
 term : "(" exp ")" { $$ = $2; }
-     | lvalue
+     | path      { $$ = NODE(AST_PATH, $1); }
      | NUMBER      { $$ = new_number_node(yyloc, $1); };
      | STRING      { $$ = new_string_node(AST_STR, yyloc, pool, $1); }
      | NIL         { $$ = new_nil_node(yyloc); }

@@ -311,6 +311,7 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		}
 		case AST_EMPTY: assert(false && "unreachable");
 		case AST_CHAR: return Value(node.character);
+		case AST_PATH: return inter_eval_node(inter, node.branch.children[0]);
 	}
 	assert(false);
 }
