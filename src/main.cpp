@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bytecode.hpp"
 #include "vm.hpp"
 
 // clang-format off
@@ -162,6 +163,12 @@ int interpret(Options opts) {
 		} else {
 			Compiler comp;
 			Chunk chunk = comp.compile(ast, pool);
+
+			if (opts.verbose) {
+				bytecode::print_chunk(stdout, chunk);
+				printf("\n");
+			}
+
 			vm::run(chunk);
 		}
 
