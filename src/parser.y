@@ -156,9 +156,9 @@ params : %empty    { $$ = new_list_node(); }
        ;
 
 /* Function application */
-app : func arg args     { $$ = NODE(AST_APP, $1, list_prepend_node($3, $2)); }
-    | arg "." func args { $$ = NODE(AST_APP, $3, list_prepend_node($4, $1)); }
-    | app "." func args { $$ = NODE(AST_APP, $3, list_prepend_node($4, $1)); }
+app : func arg args { $$ = NODE(AST_APP, $1, list_prepend_node($3, $2)); }
+    | arg "." func "(" args ")" { $$ = NODE(AST_APP, $3, list_prepend_node($5, $1)); }
+    | app "." func "(" args ")" { $$ = NODE(AST_APP, $3, list_prepend_node($5, $1)); }
     ;
 
 /* TODO: allow application of function expressions to arguments */
