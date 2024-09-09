@@ -1,8 +1,0 @@
-do
-	write (read nil); # string
-	write (read nil); # number
-	write "foobar";   # string
-	write 1337;       # number
-	write nil;        # nil
-	write true;       # true
-end
