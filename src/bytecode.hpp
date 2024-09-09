@@ -117,6 +117,8 @@ size_t opcode_opnd_count(Opcode op);
 void print_chunk(FILE*, const Chunk&);
 int print_inst(FILE*, const Instruction& inst);
 
+Chunk operator+(Chunk x, Chunk y);
+
 } // namespace bytecode
 
 #endif

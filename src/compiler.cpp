@@ -40,20 +40,31 @@ void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 }
 
 Chunk Compiler::compile(AST ast, const StringPool& pool) {
+	Chunk preamble_ {};
 	Chunk chunk;
 
+	this->preamble = &preamble_;
+
+	auto main = make_label();
+
 	auto dyn = make_register();
-	chunk
-		.emit(Opcode::MOV, dyn, {}) // snd will be patched after compilation
+	preamble
+		->emit(Opcode::MOV, dyn, {}) // snd will be patched after compilation
 		.with_comment("contains address to start of the last allocated region");
+
+	chunk.add_label(main);
 
 	compile(ast.root, pool, &chunk);
 
 	Operand start(dyn_alloc_start);
-	chunk.m_vec[0].operands[1] =
+	preamble->m_vec[0].operands[1] =
 		start; // backpatching snd after static allocations
 
-	return chunk;
+	preamble->emit(Opcode::JMP, main);
+
+	Chunk res = *preamble + chunk;
+
+	return res;
 }
 
 Operand Compiler::make_temporary() {

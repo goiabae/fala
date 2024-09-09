@@ -53,11 +53,9 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 	int max = 0;
 	int printed = 0;
 	size_t i = 0;
-	size_t li = 0;
 	for (const auto& inst : chunk.m_vec) {
-		if (li < chunk.label_indexes.size() && i == chunk.label_indexes.at(li)) {
-			fprintf(fd, "L%03zu:\n", li++);
-		}
+		for (auto l : chunk.label_indexes)
+			if (l.second == i) fprintf(fd, "L%03zu:\n", l.first);
 		print_inst(fd, inst);
 		if (printed > max) max = printed;
 		if (inst.comment != "") {
@@ -68,9 +66,8 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 		fprintf(fd, "\n");
 		i++;
 	}
-	if (li < chunk.label_indexes.size()) {
-		fprintf(fd, "L%03zu:\n", li++);
-	}
+	for (auto l : chunk.label_indexes)
+		if (l.second == i) fprintf(fd, "L%03zu:\n", l.first);
 }
 
 int print_str(FILE* fd, const char* str) {
@@ -184,6 +181,20 @@ int print_inst(FILE* fd, const Instruction& inst) {
 		}
 		return printed;
 	}
+}
+
+Chunk operator+(Chunk x, Chunk y) {
+	Chunk res {};
+
+	for (auto inst : x.m_vec) res.m_vec.push_back(inst);
+	for (auto inst : y.m_vec) res.m_vec.push_back(inst);
+
+	for (auto p : x.label_indexes) res.label_indexes[p.first] = p.second;
+
+	for (auto p : y.label_indexes)
+		res.label_indexes[p.first] = p.second + x.m_vec.size();
+
+	return res;
 }
 
 } // namespace bytecode
