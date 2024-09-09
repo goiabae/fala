@@ -215,6 +215,12 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		case AST_CHAR: return checker.get_numeric();
 		case AST_PATH: return typecheck(checker, node.branch.children[0]);
 		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
+		case AST_AS: {
+			auto got = typecheck(checker, node.branch.children[0]);
+			auto expected = typecheck(checker, node.branch.children[1]);
+			if (!equiv(got, expected)) err(node.loc, "Type mismatch");
+			return expected;
+		}
 	}
 
 	assert(false && "unreachable");

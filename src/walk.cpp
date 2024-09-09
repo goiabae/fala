@@ -326,6 +326,7 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_CHAR: return Value(node.character);
 		case AST_PATH: return inter_eval_node(inter, node.branch.children[0]);
 		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
+		case AST_AS: return inter_eval_node(inter, node.branch.children[0]);
 	}
 	assert(false);
 }

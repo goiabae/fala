@@ -499,6 +499,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_CHAR: return {node.character};
 		case AST_PATH: return compile(node.branch.children[0], pool, chunk);
 		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
+		case AST_AS: return compile(node.branch.children[0], pool, chunk);
 	}
 	assert(false);
 }

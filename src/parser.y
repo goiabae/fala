@@ -55,7 +55,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token <character> CHAR
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN BOOL INT UINT
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN BOOL INT UINT AS
 %token NIL TRUE
 
 /* pontuation */
@@ -84,7 +84,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %type <node> decl params opt-type
 %type <node> app func args arg
 %type <node> ass path
-%type <node> op op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
+%type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id int
 %type <node> type-literal type-primitive
@@ -180,8 +180,9 @@ ass : path "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
 path : id | id "[" exp "]" { $$ = NODE(AST_AT, $1, $3); }
 
 /* Operators. Infix and prefix */
-op : op1;
+op : op0;
 
+op0  : op1  | op1 AS type-literal { $$ = NODE(AST_AS, $1, $3); }
 op1  : op2  | op1 OR   op2  { $$ = NODE(AST_OR,  $1, $3); }
 op2  : op3  | op2 AND  op3  { $$ = NODE(AST_AND, $1, $3); }
 op3  : op4  | op3 ">"  op4  { $$ = NODE(AST_GTN, $1, $3); }

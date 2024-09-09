@@ -47,6 +47,7 @@ typedef enum NodeType {
 	AST_CHAR,
 	AST_PATH,
 	AST_PRIMITIVE_TYPE,
+	AST_AS,
 } NodeType;
 
 typedef struct Location {
