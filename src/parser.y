@@ -55,13 +55,13 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %token <character> CHAR
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN BOOL INT UINT
 %token NIL TRUE
 
 /* pontuation */
 %token PAREN_OPEN "(" PAREN_CLOSE ")"
 %token BRACKET_OPEN "[" BRACKET_CLOSE "]"
-%token SEMICOL ";"
+%token SEMICOL ";" COLON ":"
 %token COMMA ","
 %token DOT "."
 
@@ -81,12 +81,13 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 %type <node> loop step
 %type <node> jump
 %type <node> let decls
-%type <node> decl params
+%type <node> decl params opt-type
 %type <node> app func args arg
 %type <node> ass path
 %type <node> op op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
-%type <node> term id
+%type <node> term id int
+%type <node> type-literal type-primitive
 
 %%
 
@@ -146,9 +147,13 @@ decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
       ;
 
 /* Declarations */
-decl : VAR id "=" exp        { $$ = NODE(AST_DECL, $2, $4); }
-     | FUN id params "=" exp { $$ = NODE(AST_DECL, $2, $3, $5); }
+decl : VAR id opt-type "=" exp        { $$ = NODE(AST_DECL, $2, $3, $5); }
+     | FUN id params opt-type "=" exp { $$ = NODE(AST_DECL, $2, $3, $4, $6); }
      ;
+
+opt-type : %empty { $$ = new_empty_node(); }
+         | ":" type-literal { $$ = $2; }
+         ;
 
 params : %empty    { $$ = new_list_node(); }
        | params id { $$ = list_append_node($$, $2);}
@@ -195,7 +200,7 @@ op15 : term ;
 /* Terms */
 term : "(" exp ")" { $$ = $2; }
      | path      { $$ = NODE(AST_PATH, $1); }
-     | NUMBER      { $$ = new_number_node(yyloc, $1); };
+     | int
      | STRING      { $$ = new_string_node(AST_STR, yyloc, pool, $1); }
      | NIL         { $$ = new_nil_node(yyloc); }
      | TRUE        { $$ = new_true_node(yyloc); }
@@ -203,6 +208,18 @@ term : "(" exp ")" { $$ = $2; }
      ;
 
 id : ID { $$ = new_string_node(AST_ID, yyloc, pool, $1); }
+
+int : NUMBER { $$ = new_number_node(yyloc, $1); }
+
+type-literal : type-primitive ;
+
+type-primitive :
+  INT int    { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 0), $2); }
+  | UINT int { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 1), $2); }
+  | BOOL     { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 2)); }
+  | NIL      { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 3)); }
+  ;
+
 
 %%
 void error_report(FILE* fd, Location* yyloc, const char* msg) {

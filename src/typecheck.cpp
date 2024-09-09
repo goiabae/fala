@@ -194,10 +194,12 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		case AST_ID: return checker.make_var();
 		case AST_STR: return checker.make_slice(checker.get_character());
 		case AST_DECL: {
-			if (node.branch.children_count == 2)
-				typecheck(checker, node.branch.children[1]);
 			if (node.branch.children_count == 3)
 				typecheck(checker, node.branch.children[2]);
+			else if (node.branch.children_count == 4)
+				typecheck(checker, node.branch.children[3]);
+			else
+				assert(false);
 			return checker.get_nil();
 		}
 		case AST_NIL: return checker.get_nil();
@@ -212,6 +214,7 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		}
 		case AST_CHAR: return checker.get_numeric();
 		case AST_PATH: return typecheck(checker, node.branch.children[0]);
+		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
 	}
 
 	assert(false && "unreachable");

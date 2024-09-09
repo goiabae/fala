@@ -156,29 +156,42 @@ Value eval_ass(Interpreter* inter, Node node) {
 }
 
 Value eval_decl(Interpreter* inter, Node node) {
-	Node id = node.branch.children[0];
-	Value* cell = inter->env.insert(id.str_id);
+	const auto& id_node = node.branch.children[0];
+
+	Value* cell = inter->env.insert(id_node.str_id);
 	if (!cell) err2(node.loc, "Could not initialize variable");
 
-	// fun id id+ = exp
-	if (node.branch.children_count == 3) {
-		Node params = node.branch.children[1];
-		for (size_t i = 0; i < params.branch.children_count; i++)
-			if (params.branch.children[i].type != AST_ID)
+	// "fun" id params opt-type "=" body
+	if (node.branch.children_count == 4) {
+		const auto& params_node = node.branch.children[1];
+		const auto& opt_type_node = node.branch.children[2];
+		const auto& body_node = node.branch.children[3];
+
+		(void)opt_type_node;
+
+		for (size_t i = 0; i < params_node.branch.children_count; i++)
+			if (params_node.branch.children[i].type != AST_ID)
 				err("Function parameter must be a valid identifier");
-		Node exp = node.branch.children[2];
-		return *cell = Value(
-						 Function(exp, params.branch.children, params.branch.children_count)
-					 );
+		return *cell = Value(Function(
+						 body_node,
+						 params_node.branch.children,
+						 params_node.branch.children_count
+					 ));
 	}
 
-	Value res(cell);
+	// "var" id opt-type "=" exp
+	if (node.branch.children_count == 3) {
+		const auto& opt_type_node = node.branch.children[1];
+		const auto& exp_node = node.branch.children[2];
 
-	// if has initial value
-	if (node.branch.children_count == 2)
-		*cell = inter_eval_node(inter, node.branch.children[1]).to_rvalue();
+		(void)opt_type_node;
 
-	return res;
+		Value res(cell);
+		*cell = inter_eval_node(inter, exp_node).to_rvalue();
+		return res;
+	}
+
+	assert(false);
 }
 
 Value inter_eval_node(Interpreter* inter, Node node) {
@@ -312,6 +325,7 @@ Value inter_eval_node(Interpreter* inter, Node node) {
 		case AST_EMPTY: assert(false && "unreachable");
 		case AST_CHAR: return Value(node.character);
 		case AST_PATH: return inter_eval_node(inter, node.branch.children[0]);
+		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
 	}
 	assert(false);
 }

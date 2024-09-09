@@ -46,6 +46,9 @@ enum {
 	KW_NOT,
 	KW_NIL,
 	KW_TRUE,
+	KW_INT,
+	KW_UINT,
+	KW_BOOL,
 	KW_COUNT,
 };
 
@@ -73,6 +76,9 @@ const char* keyword_repr(size_t i) {
 		case KW_NOT: return "not";
 		case KW_NIL: return "nil";
 		case KW_TRUE: return "true";
+		case KW_INT: return "int";
+		case KW_UINT: return "uint";
+		case KW_BOOL: return "bool";
 	}
 	assert(false);
 }
@@ -102,6 +108,9 @@ int keyword_to_bison(size_t i) {
 		case KW_NOT: return NOT;
 		case KW_NIL: return NIL;
 		case KW_TRUE: return TRUE;
+		case KW_INT: return INT;
+		case KW_UINT: return UINT;
+		case KW_BOOL: return BOOL;
 	}
 	assert(false);
 }
@@ -193,6 +202,7 @@ int Lexer::lex() {
 		case '[': return BRACKET_OPEN;
 		case ']': return BRACKET_CLOSE;
 		case ';': return SEMICOL;
+		case ':': return COLON;
 		case ',': return COMMA;
 		case '=': return match('=') ? EQ_EQ : EQ;
 		case '>': return match('=') ? GREATER_EQ : GREATER;

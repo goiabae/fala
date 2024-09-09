@@ -439,31 +439,41 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			// return Operand(pool.find(node.str_id));
 		}
 		case AST_DECL: {
-			Node id = node.branch.children[0];
+			// "fun" id params opt-type "=" body
+			if (node.branch.children_count == 4) {
+				const auto& id_node = node.branch.children[0];
+				const auto& params_node = node.branch.children[1];
+				const auto& opt_type_node = node.branch.children[2];
+				const auto& body_node = node.branch.children[3];
 
-			// fun f args = exp
-			if (node.branch.children_count == 3) {
-				Node args = node.branch.children[1];
-				Node body = node.branch.children[2];
+				(void)opt_type_node;
 
-				Operand* opnd = env.insert(id.str_id, make_register());
+				Operand* opnd = env.insert(id_node.str_id, make_register());
 				*opnd = Operand(bytecode::Funktion {
-					args.branch.children_count, args.branch.children, body
+					params_node.branch.children_count,
+					params_node.branch.children,
+					body_node
 				});
 				return *opnd;
 			}
 
-			// var id = exp
-			if (node.branch.children_count == 2) {
-				Operand initial = compile(node.branch.children[1], pool, chunk);
+			// "var" id opt-type "=" exp
+			if (node.branch.children_count == 3) {
+				const auto& id_node = node.branch.children[0];
+				const auto& opt_type_node = node.branch.children[1];
+				const auto& exp_node = node.branch.children[2];
+
+				(void)opt_type_node;
+
+				Operand initial = compile(exp_node, pool, chunk);
 
 				// initial is an array
 				if (initial.type == Operand::Type::REG && initial.reg.has_addr())
-					return *env.insert(id.str_id, initial);
+					return *env.insert(id_node.str_id, initial);
 
 				// anything else
 				initial = to_rvalue(chunk, initial);
-				Operand* var = env.insert(id.str_id, make_register());
+				Operand* var = env.insert(id_node.str_id, make_register());
 				if (initial.is_register()) var->reg.type = initial.reg.type;
 				chunk->emit(Opcode::MOV, *var, initial)
 					.with_comment("creating variable");
@@ -488,6 +498,7 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 		case AST_EMPTY: assert(false && "unreachable");
 		case AST_CHAR: return {node.character};
 		case AST_PATH: return compile(node.branch.children[0], pool, chunk);
+		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
 	}
 	assert(false);
 }
