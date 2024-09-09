@@ -60,6 +60,16 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 	} else if (node.type == AST_CHAR) {
 		printf("'%c'", node.character);
 		return;
+	} else if (node.type == AST_PRIMITIVE_TYPE) {
+		switch (node.branch.children[0].num) {
+			case 0: printf("int %d", node.branch.children[1].num); break;
+			case 1: printf("uint %d", node.branch.children[1].num); break;
+			case 2: printf("bool"); break;
+			case 3: printf("nil"); break;
+		}
+		return;
+	} else if (node.type == AST_EMPTY) {
+		return;
 	}
 
 	printf("(");
