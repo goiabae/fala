@@ -243,11 +243,20 @@ int Lexer::lex() {
 		}
 		case '\'': {
 			char character = advance();
-			if (!match('\''))
-				assert(
-					false && "LEXER: Character literal must have a single character"
-				);
-			value->character = character;
+			if (character == '\\') {
+				if (match('n'))
+					value->character = '\n';
+				else if (match('t'))
+					value->character = '\t';
+				else if (match('r'))
+					value->character = '\r';
+				else
+					assert(false && "LEXER: Unknown espace sequence");
+			} else {
+				value->character = character;
+			}
+
+			if (!match('\'')) assert(false && "LEXER: Invalid character literal");
 			return CHAR;
 		}
 		default: {
