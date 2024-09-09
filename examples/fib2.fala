@@ -1,5 +1,5 @@
 let
-	var max = read nil,
+	var max = read_int nil,
 	var minus2 = do do write 0; write "\n" end; 0; end,
 	var minus1 = do do write 1; write "\n" end; 1; end,
 	var cur

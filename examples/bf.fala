@@ -24,11 +24,11 @@ in do
 
 	# read instructions
 	var len = 0;
-	op = read nil;
+	op = read_int nil;
   while op >= 0 and op <= 7 then do
 		inst [len] = op;
 		len = len + 1;
-		op = read nil;
+		op = read_int nil;
 	end;
 
 	write "brainfuck program:\n  ";
@@ -53,7 +53,7 @@ in do
 		else if op == DOT then
 			do write data[dp]; write "\n" end
 		else if op == COMMA then
-			do write (data [dp] = read nil); write "\n" end
+			do write (data [dp] = read_int nil); write "\n" end
 		else if op == OPEN then
 			when data [dp] == 0 then do
 				while not inst [next] == CLOSE then

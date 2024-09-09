@@ -57,7 +57,8 @@ struct Compiler {
 
 	Env<Operand> env;
 
-	Operand builtin_read(Chunk* chunk, size_t argc, Operand args[]);
+	Operand builtin_read_int(Chunk* chunk, size_t argc, Operand args[]);
+	Operand builtin_read_char(Chunk* chunk, size_t argc, Operand args[]);
 	Operand builtin_write(Chunk* chunk, size_t argc, Operand args[]);
 	Operand builtin_array(Chunk* chunk, size_t argc, Operand args[]);
 };

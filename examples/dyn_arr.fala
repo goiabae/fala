@@ -1,5 +1,5 @@
 let
-	var x = read nil,
+	var x = read_int nil,
 	var sz = x * 3
 in do
 	var xs = array sz;

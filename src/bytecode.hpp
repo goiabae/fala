@@ -15,7 +15,8 @@ using Number = int;
 enum class Opcode {
 	PRINTF,
 	PRINTV,
-	READ,
+	READV,
+	READC,
 	MOV,
 	ADD,
 	SUB,

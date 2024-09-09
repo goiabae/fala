@@ -22,7 +22,8 @@ size_t opcode_opnd_count(Opcode op) {
 	switch (op) {
 		case Opcode::PRINTF: return 1;
 		case Opcode::PRINTV: return 1;
-		case Opcode::READ: return 1;
+		case Opcode::READV: return 1;
+		case Opcode::READC: return 1;
 		case Opcode::MOV: return 2;
 		case Opcode::ADD: return 3;
 		case Opcode::SUB: return 3;
@@ -106,7 +107,8 @@ const char* opcode_repr(Opcode op) {
 	switch (op) {
 		case Opcode::PRINTF: return "printf";
 		case Opcode::PRINTV: return "printv";
-		case Opcode::READ: return "read";
+		case Opcode::READV: return "readv";
+		case Opcode::READC: return "readc";
 		case Opcode::MOV: return "mov";
 		case Opcode::ADD: return "add";
 		case Opcode::SUB: return "sub";

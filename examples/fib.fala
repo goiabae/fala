@@ -1,5 +1,5 @@
 let
-	var max = read nil,
+	var max = read_int nil,
 	var fs = array max
 in do
 	do write (fs [0] = 0); write "\n" end;

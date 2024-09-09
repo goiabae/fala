@@ -55,7 +55,7 @@ void run(const Chunk& code) {
 				printf("%ld", FETCH(inst.operands[0]));
 				break;
 			}
-			case Opcode::READ: {
+			case Opcode::READV: {
 				if (fgets(read_buffer, read_buffer_cap, stdin) == nullptr)
 					err("Couldn't read input");
 				const size_t len = strlen(read_buffer);
@@ -69,6 +69,11 @@ void run(const Chunk& code) {
 					err("First argument must be a register");
 
 				DEREF(inst.operands[0]) = num;
+				break;
+			}
+			case Opcode::READC: {
+				char c = (char)fgetc(stdin);
+				DEREF(inst.operands[0]) = (c == EOF) ? -1 : c;
 				break;
 			}
 			case Opcode::MOV: {

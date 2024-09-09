@@ -2,7 +2,7 @@ let
 	var xs = array 100
 in do
 	for var i = 0 to 100 then
-		xs[i] = read nil;
+		xs[i] = read_int nil;
 
 	# insertion sort xs
 	# impl took from https://pt.wikipedia.org/wiki/Insertion_sort

@@ -81,9 +81,15 @@ Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
 	return {};
 }
 
-Operand Compiler::builtin_read(Chunk* chunk, size_t, Operand[]) {
+Operand Compiler::builtin_read_int(Chunk* chunk, size_t, Operand[]) {
 	Operand tmp = make_temporary();
-	chunk->emit(Opcode::READ, tmp);
+	chunk->emit(Opcode::READV, tmp);
+	return tmp;
+}
+
+Operand Compiler::builtin_read_char(Chunk* chunk, size_t, Operand[]) {
+	Operand tmp = make_temporary();
+	chunk->emit(Opcode::READC, tmp);
 	return tmp;
 }
 
@@ -138,8 +144,10 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			Operand res;
 			if (strcmp(func_name, "write") == 0)
 				res = builtin_write(chunk, args_node.branch.children_count, args);
-			else if (strcmp(func_name, "read") == 0)
-				res = builtin_read(chunk, args_node.branch.children_count, args);
+			else if (strcmp(func_name, "read_int") == 0)
+				res = builtin_read_int(chunk, args_node.branch.children_count, args);
+			else if (strcmp(func_name, "read_char") == 0)
+				res = builtin_read_char(chunk, args_node.branch.children_count, args);
 			else if (strcmp(func_name, "array") == 0)
 				res = builtin_array(chunk, args_node.branch.children_count, args);
 			else {
