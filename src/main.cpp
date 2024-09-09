@@ -146,7 +146,7 @@ int interpret(Options opts) {
 
 	while (!fd.at_eof()) {
 		AST ast = parse(fd, pool);
-		typecheck(ast);
+		typecheck(ast, pool);
 
 		if (opts.verbose) {
 			ast_print(ast, &pool);
@@ -190,7 +190,7 @@ int compile(Options opts) {
 		printf("\n");
 	}
 
-	typecheck(ast);
+	typecheck(ast, pool);
 
 	Compiler comp;
 	Chunk chunk = comp.compile(ast, pool);

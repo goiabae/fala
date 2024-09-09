@@ -37,7 +37,8 @@ struct Env<T>::Scope {
 	Scope(Env<T>* env) : m_env {env} { m_env->m_vec.push_back({}); }
 	~Scope() {
 		if (m_owned) {
-			for (auto& v : m_env->m_vec.back()) v.second.deinit();
+			// FIXME
+			// for (auto& v : m_env->m_vec.back()) v.second.deinit();
 			m_env->m_vec.pop_back();
 		}
 	}

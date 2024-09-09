@@ -56,13 +56,13 @@ in do
 			do write_int (data [dp] = read_int nil); write_str "\n" end
 		else if op == OPEN then
 			when data [dp] == 0 then do
-				while not inst [next] == CLOSE then
+				while not (inst[next] == CLOSE) then
 					next = (next + 1) % 256;
 				next = (next + 1) % 256;
 			end
 		else if op == CLOSE then
 			when not (data[dp] == 0) then do
-				while not inst [next] == OPEN then
+				while not (inst[next] == OPEN) then
 					next = (next - 1) % 256;
 				next = (next + 1) % 256;
 			end
