@@ -14,7 +14,7 @@ in let
 	var inst = array 512,
 	var dp = 0,
 	var ip = 0,
-	var op
+	var op = 0,
 in do
 	# clear inst and data tapes
 	for var i = 0 to 512 then

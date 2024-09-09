@@ -146,8 +146,7 @@ decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
       ;
 
 /* Declarations */
-decl : VAR id                { $$ = NODE(AST_DECL, $2); }
-     | VAR id "=" exp        { $$ = NODE(AST_DECL, $2, $4); }
+decl : VAR id "=" exp        { $$ = NODE(AST_DECL, $2, $4); }
      | FUN id params "=" exp { $$ = NODE(AST_DECL, $2, $3, $5); }
      ;
 

@@ -470,14 +470,6 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				return *var;
 			}
 
-			// var id
-			if (node.branch.children_count == 1) {
-				Operand* var = env.insert(id.str_id, make_register());
-				chunk->emit(Opcode::MOV, *var, {})
-					.with_comment("creating uninitialized variable");
-				return *var;
-			}
-
 			assert(false && "unreachable");
 		}
 		case AST_NIL: return {};

@@ -2,7 +2,7 @@ let
 	var max = read_int nil,
 	var minus2 = do do write_int 0; write_str "\n" end; 0; end,
 	var minus1 = do do write_int 1; write_str "\n" end; 1; end,
-	var cur
+	var cur = 0
 in for var i = 2 to max-1 then do
 	cur = minus1 + minus2;
 	do write_int cur; write_str "\n" end;
