@@ -55,6 +55,10 @@ void run(const Chunk& code) {
 				printf("%ld", FETCH(inst.operands[0]));
 				break;
 			}
+			case Opcode::PRINTC: {
+				printf("%c", (char)FETCH(inst.operands[0]));
+				break;
+			}
 			case Opcode::READV: {
 				if (fgets(read_buffer, read_buffer_cap, stdin) == nullptr)
 					err("Couldn't read input");

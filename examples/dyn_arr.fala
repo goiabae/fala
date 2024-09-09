@@ -5,6 +5,6 @@ in do
 	var xs = array sz;
 	for var i = 0 to sz then do
 		xs[i] = i*2;
-		do write xs[i]; write "\n" end;
+		do write_int xs[i]; write_str "\n" end;
 	end;
 end

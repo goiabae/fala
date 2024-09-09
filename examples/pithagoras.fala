@@ -3,4 +3,4 @@ let
 	var b = 4,
 	var c = 5
 in
-	write (a*a + b*b == c*c)
+	write_int (a*a + b*b == c*c)

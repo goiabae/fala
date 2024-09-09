@@ -1,5 +1,5 @@
 let var n = read_int nil
 in while not (n == 1) then do
 	n = if n%2 == 0 then n / 2 else 3*n + 1;
-	do write n; write "\n" end;
+	do write_int n; write_str "\n" end;
 end

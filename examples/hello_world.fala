@@ -1,1 +1,1 @@
-write "Hello, world!\n"
+write_str "Hello, world!\n"

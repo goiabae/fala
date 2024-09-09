@@ -19,5 +19,5 @@ in do
 	end;
 
 	for var i = 0 to 100 then
-		do write xs[i]; write "\n" end;
+		do write_int xs[i]; write_str "\n" end;
 end

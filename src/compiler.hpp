@@ -59,7 +59,9 @@ struct Compiler {
 
 	Operand builtin_read_int(Chunk* chunk, size_t argc, Operand args[]);
 	Operand builtin_read_char(Chunk* chunk, size_t argc, Operand args[]);
-	Operand builtin_write(Chunk* chunk, size_t argc, Operand args[]);
+	Operand builtin_write_int(Chunk* chunk, size_t argc, Operand args[]);
+	Operand builtin_write_char(Chunk* chunk, size_t argc, Operand args[]);
+	Operand builtin_write_str(Chunk* chunk, size_t argc, Operand args[]);
 	Operand builtin_array(Chunk* chunk, size_t argc, Operand args[]);
 };
 

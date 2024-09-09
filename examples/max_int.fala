@@ -5,5 +5,5 @@ do
 		let var x = read_int nil in
 		when x > max then
 			max = x;
-	write max;
+	write_int max;
 end

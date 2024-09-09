@@ -29,11 +29,11 @@ in do
 		var next = ((swap+1) % 2) * (side+2);
 
 		for var i = 0 to side+2 then
-			write "-";
-		write "\n";
+			write_str "-";
+		write_str "\n";
 		for var x = 0 to side then do
 			var i = x + base;
-			write "|";
+			write_str "|";
 			for var j = 0 to side then do
 				var neigh =
 					  mat[at (i-1) (j-1)] + mat[at (i-1) j] + mat[at (i-1) (j+1)]
@@ -46,18 +46,18 @@ in do
 					else if neigh == 3 then ALIVE else DEAD;
 
 				if mat[at i j] == ALIVE then
-					write "X"
+					write_str "X"
 				else
-					write " ";
+					write_str " ";
 			end;
-			write "|";
-			write "\n";
+			write_str "|";
+			write_str "\n";
 		end;
 		for var i = 0 to side+2 then
-			write "-";
-		write "\n";
+			write_str "-";
+		write_str "\n";
 
-		write "\n";
+		write_str "\n";
 		swap = ((swap + 1) % 2);
 		iter = iter - 1;
 	end;

@@ -66,18 +66,44 @@ Operand Compiler::make_register() {
 
 Operand Compiler::make_label() { return {bytecode::Label {label_count++}}; }
 
-Operand Compiler::builtin_write(Chunk* chunk, size_t argc, Operand args[]) {
+Operand Compiler::builtin_write_int(Chunk* chunk, size_t argc, Operand args[]) {
 	if (argc != 1)
 		err(
-			"write accepts only a single pointer to character or integer as an "
+			"write_int accepts only a single pointer to character or integer as an "
 			"argument"
 		);
 
 	auto& op = args[0];
-	if (op.is_register() && op.reg.has_addr())
-		chunk->emit(Opcode::PRINTF, op);
-	else
-		chunk->emit(Opcode::PRINTV, op);
+	assert(!(op.is_register() && op.reg.has_addr()));
+	chunk->emit(Opcode::PRINTV, op);
+	return {};
+}
+
+Operand Compiler::builtin_write_char(
+	Chunk* chunk, size_t argc, Operand args[]
+) {
+	if (argc != 1)
+		err(
+			"write_int accepts only a single pointer to character or integer as an "
+			"argument"
+		);
+
+	auto& op = args[0];
+	assert(!(op.is_register() && op.reg.has_addr()));
+	chunk->emit(Opcode::PRINTC, op);
+	return {};
+}
+
+Operand Compiler::builtin_write_str(Chunk* chunk, size_t argc, Operand args[]) {
+	if (argc != 1)
+		err(
+			"write_str accepts only a single pointer to character or integer as an "
+			"argument"
+		);
+
+	auto& op = args[0];
+	assert(op.is_register() && op.reg.has_addr());
+	chunk->emit(Opcode::PRINTF, op);
 	return {};
 }
 
@@ -142,8 +168,12 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			}
 
 			Operand res;
-			if (strcmp(func_name, "write") == 0)
-				res = builtin_write(chunk, args_node.branch.children_count, args);
+			if (strcmp(func_name, "write_int") == 0)
+				res = builtin_write_int(chunk, args_node.branch.children_count, args);
+			else if (strcmp(func_name, "write_char") == 0)
+				res = builtin_write_char(chunk, args_node.branch.children_count, args);
+			else if (strcmp(func_name, "write_str") == 0)
+				res = builtin_write_str(chunk, args_node.branch.children_count, args);
 			else if (strcmp(func_name, "read_int") == 0)
 				res = builtin_read_int(chunk, args_node.branch.children_count, args);
 			else if (strcmp(func_name, "read_char") == 0)
