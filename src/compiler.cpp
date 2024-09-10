@@ -194,20 +194,17 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 			else {
 				Operand* func_opnd = env.find(func_node.str_id);
 				if (!func_opnd) err("Function not found");
-				if (func_opnd->type != Operand::Type::FUN)
+				if (func_opnd->type != Operand::Type::LAB)
 					err("Type of <name> is not function.");
-				auto func = func_opnd->fun;
-				{
-					auto scope = env.make_scope();
-					for (size_t i = 0; i < func.argc; i++) {
-						Node arg = func.args[i];
-						assert(arg.type == AST_ID);
-						Operand* arg_opnd = env.insert(arg.str_id, make_register());
-						*arg_opnd = args[i];
-					}
 
-					res = compile(func.root, pool, chunk);
-				}
+				// push arguments in the reverse order the parameters where declared
+				for (size_t i = args_node.branch.children_count; i > 0; i--)
+					chunk->emit(Opcode::PUSH, args[i - 1]);
+
+				chunk->emit(Opcode::CALL, *func_opnd);
+				res = make_temporary();
+				chunk->emit(Opcode::POP, res);
+				return res;
 			}
 
 			delete[] args;
@@ -460,12 +457,30 @@ Operand Compiler::compile(Node node, const StringPool& pool, Chunk* chunk) {
 				(void)opt_type_node;
 
 				Operand* opnd = env.insert(id_node.str_id, make_register());
-				*opnd = Operand(bytecode::Funktion {
-					params_node.branch.children_count,
-					params_node.branch.children,
-					body_node
-				});
-				return *opnd;
+
+				auto func_name = make_label();
+				*opnd = func_name;
+				auto scope = env.make_scope();
+
+				Chunk func {};
+
+				func.add_label(func_name);
+				func.emit(Opcode::FUNC);
+
+				for (size_t i = 0; i < params_node.branch.children_count; i++) {
+					auto arg = make_register();
+					func.emit(Opcode::POP, arg);
+					env.insert(params_node.branch.children[i].str_id, arg);
+				}
+
+				auto op = compile(body_node, pool, &func);
+
+				func.emit(Opcode::PUSH, op);
+				func.emit(Opcode::RET);
+
+				*chunk = func + *chunk;
+
+				return func_name;
 			}
 
 			// "var" id opt-type "=" exp

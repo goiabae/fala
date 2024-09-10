@@ -38,6 +38,11 @@ enum class Opcode {
 	JMP,
 	JMP_FALSE,
 	JMP_TRUE,
+	PUSH,
+	POP,
+	CALL,
+	RET,
+	FUNC,
 };
 
 struct Register {

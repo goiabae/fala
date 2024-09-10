@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <stack>
 
 #include "bytecode.hpp"
 
@@ -33,8 +34,12 @@ void run(const Chunk& code) {
 	array<int64_t, 2048> t_cells {};
 	array<int64_t, 2048> r_cells {};
 
+	std::stack<int64_t> stack {};
+
 	constexpr auto read_buffer_cap = 50;
 	char read_buffer[read_buffer_cap] {0};
+
+	size_t return_address = 0;
 
 	size_t pc = 0;
 	while (pc < code.m_vec.size()) {
@@ -127,6 +132,17 @@ void run(const Chunk& code) {
 				else
 					pc++;
 				goto dont_inc;
+			case Opcode::PUSH: stack.push(FETCH(inst.operands[0])); break;
+			case Opcode::POP:
+				DEREF(inst.operands[0]) = stack.top();
+				stack.pop();
+				break;
+			case Opcode::CALL:
+				stack.push((int64_t)pc);
+				pc = code.label_indexes.at(inst.operands[0].lab.id) - 1;
+				break;
+			case Opcode::RET: pc = return_address; break;
+			case Opcode::FUNC: return_address = (size_t)stack.top(); stack.pop();
 		}
 		pc++;
 	dont_inc:

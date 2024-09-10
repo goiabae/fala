@@ -45,6 +45,11 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::JMP: return 1;
 		case Opcode::JMP_FALSE: return 2;
 		case Opcode::JMP_TRUE: return 2;
+		case Opcode::PUSH: return 1;
+		case Opcode::POP: return 1;
+		case Opcode::CALL: return 1;
+		case Opcode::RET: return 0;
+		case Opcode::FUNC: return 0;
 	}
 	assert(false);
 };
@@ -128,6 +133,11 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::JMP: return "jump";
 		case Opcode::JMP_FALSE: return "jf";
 		case Opcode::JMP_TRUE: return "jt";
+		case Opcode::PUSH: return "push";
+		case Opcode::POP: return "pop";
+		case Opcode::CALL: return "call";
+		case Opcode::RET: return "ret";
+		case Opcode::FUNC: return "func";
 	}
 	assert(false);
 }
