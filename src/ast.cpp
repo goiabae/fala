@@ -9,24 +9,50 @@
 
 static void node_deinit(Node node);
 
-// clang-format can't format this properly
-// relevant issue https://github.com/llvm/llvm-project/issues/61560
-static const char* node_repr[] = {
-	[AST_APP] = "app",     [AST_NUM] = NULL,      [AST_BLK] = "block",
-	[AST_IF] = "if",       [AST_WHEN] = "when",   [AST_FOR] = "for",
-	[AST_WHILE] = "while", [AST_BREAK] = "break", [AST_CONTINUE] = "continue",
-	[AST_ASS] = "=",       [AST_OR] = "or",       [AST_AND] = "and",
-	[AST_GTN] = ">",       [AST_LTN] = "<",       [AST_GTE] = ">=",
-	[AST_LTE] = "<=",      [AST_EQ] = "==",       [AST_ADD] = "+",
-	[AST_SUB] = "-",       [AST_MUL] = "*",       [AST_DIV] = "/",
-	[AST_MOD] = "%",       [AST_NOT] = "not",     [AST_ID] = NULL,
-	[AST_STR] = NULL,      [AST_DECL] = "decl",   [AST_LET] = "let",
-	[AST_AT] = "at",
-};
+const char* node_repr(enum NodeType type) {
+	switch (type) {
+		case AST_APP: return "app";
+		case AST_BLK: return "block";
+		case AST_IF: return "if";
+		case AST_WHEN: return "when";
+		case AST_FOR: return "for";
+		case AST_WHILE: return "while";
+		case AST_BREAK: return "break";
+		case AST_CONTINUE: return "continue";
+		case AST_ASS: return "=";
+		case AST_OR: return "or";
+		case AST_AND: return "and";
+		case AST_GTN: return ">";
+		case AST_LTN: return "<";
+		case AST_GTE: return ">=";
+		case AST_LTE: return "<=";
+		case AST_EQ: return "==";
+		case AST_ADD: return "+";
+		case AST_SUB: return "-";
+		case AST_MUL: return "*";
+		case AST_DIV: return "/";
+		case AST_MOD: return "%";
+		case AST_NOT: return "not";
+		case AST_DECL: return "decl";
+		case AST_LET: return "let";
+		case AST_AT: return "at";
+		case AST_AS: return "as";
+		case AST_NUM:
+		case AST_ID:
+		case AST_STR:
+		case AST_EMPTY:
+		case AST_NIL:
+		case AST_TRUE:
+		case AST_CHAR:
+		case AST_PATH:
+		case AST_PRIMITIVE_TYPE: assert(false && "unreachable");
+	}
+	assert(false && "unreachable");
+}
 
 AST ast_init(void) {
 	AST ast;
-	ast.root.type = 0;
+	ast.root.type = (enum NodeType)0;
 	ast.root.num = 0;
 	return ast;
 }
@@ -74,7 +100,7 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 
 	printf("(");
 
-	printf("%s", node_repr[node.type]);
+	printf("%s", node_repr(node.type));
 
 	space += 2;
 
@@ -99,7 +125,7 @@ Node new_node(NodeType type, size_t len, Node* children) {
 	node.loc.last_column = children[len - 1].loc.last_column;
 	node.loc.last_line = children[len - 1].loc.last_line;
 	assert(len > 0);
-	node.branch.children = malloc(sizeof(Node) * len);
+	node.branch.children = (Node*)malloc(sizeof(Node) * len);
 	memcpy(node.branch.children, children, sizeof(Node) * len);
 	return node;
 }
@@ -108,7 +134,7 @@ Node new_list_node(void) {
 	Node node;
 	node.type = AST_BLK;
 	node.branch.children_count = 0;
-	node.branch.children = malloc(sizeof(Node) * 100);
+	node.branch.children = (Node*)malloc(sizeof(Node) * 100);
 	return node;
 }
 
@@ -128,16 +154,15 @@ Node new_number_node(Location loc, Number num) {
 	return node;
 }
 
-Node new_nil_node(Location loc) { return (Node) {.type = AST_NIL, .loc = loc}; }
-Node new_true_node(Location loc) {
-	return (Node) {.type = AST_TRUE, .loc = loc};
-}
+Node new_nil_node(Location loc) { return Node {AST_NIL, loc, {}}; }
+
+Node new_true_node(Location loc) { return Node {AST_TRUE, loc, {}}; }
 
 Node new_char_node(Location loc, char character) {
-	return (Node) {.type = AST_CHAR, .loc = loc, .character = character};
+	return Node {AST_CHAR, loc, {character}};
 }
 
-Node new_empty_node(void) { return (Node) {.type = AST_EMPTY}; }
+Node new_empty_node(void) { return Node {AST_EMPTY, {}, {}}; }
 
 Node list_append_node(Node list, Node next) {
 	if (list.branch.children_count == 0) list.loc = next.loc;

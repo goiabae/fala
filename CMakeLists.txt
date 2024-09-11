@@ -30,7 +30,7 @@ add_executable(fala
 	src/main.cpp
 	src/str_pool.cpp
 	src/lexer.cpp
-	src/ast.c
+	src/ast.cpp
 	src/typecheck.cpp
 	src/walk.cpp
 	src/compiler.cpp
