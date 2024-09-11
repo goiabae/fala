@@ -78,8 +78,6 @@ void print_type(FILE* fd, Type* t) {
 	}
 }
 
-bool equiv(Type* x, Type* y) { return ((*x) == y) or ((*y) == x); }
-
 bool typecheck(const AST& ast, StringPool& pool) {
 	Typechecker checker {pool};
 	auto scope = checker.env.make_scope();
@@ -127,26 +125,21 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 			Node& func = node.branch.children[0];
 			Node& args = node.branch.children[1];
 
+			vector<Type*> inputs {};
+
+			for (size_t i = 0; i < args.branch.children_count; i++)
+				inputs.push_back(typecheck(checker, args.branch.children[i]));
+
+			Type* expected_func_type = new Function(inputs, checker.make_var());
 			Type* func_type = typecheck(checker, func);
 
-			if (dynamic_cast<Function*>(func_type) == nullptr)
-				err(node.loc, "Not of type function");
-
-			if (((Function*)func_type)->inputs.size() != args.branch.children_count)
-				err(node.loc, "Not enough arguments supplied");
-
-			for (size_t i = 0; i < args.branch.children_count; i++) {
-				Type* arg = typecheck(checker, args.branch.children[i]);
-				if (not equiv(arg, ((Function*)func_type)->inputs[i])) {
-					assert(func.type == AST_ID);
-					fprintf(stderr, "%zuth argument with type ", i);
-					print_type(stderr, arg);
-					fprintf(stderr, "\n");
-					fprintf(stderr, "%s : ", checker.pool.find(func.str_id));
-					print_type(stderr, func_type);
-					fprintf(stderr, "\n");
-					err(node.loc, "Argument and parameter types don't match");
-				}
+			if (!equiv(func_type, expected_func_type)) {
+				type_mismatch_err(
+					node.loc,
+					"Function and arguments don't match",
+					func_type,
+					expected_func_type
+				);
 			}
 
 			return ((Function*)func_type)->output;
@@ -319,6 +312,7 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 				(void)opt_type_node;
 
 				Function* typ = nullptr;
+				Type** var = checker.env.insert(name.str_id, checker.make_var());
 
 				{
 					auto scope = checker.env.make_scope();
@@ -336,7 +330,7 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 					typ = (Function*)checker.add_type(new Function(param_types, output));
 				}
 
-				*checker.env.insert(name.str_id) = typ;
+				*var = typ;
 
 				return typ;
 			}

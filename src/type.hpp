@@ -15,6 +15,8 @@ struct Type {
 	Type() {}
 };
 
+bool equiv(Type* x, Type* y);
+
 enum Sign { SIGNED, UNSIGNED };
 
 struct Integer : Type {
@@ -45,9 +47,9 @@ struct Function : Type {
 		if (inputs.size() != other_func->inputs.size()) return false;
 
 		for (std::size_t i = 0; i < inputs.size(); i++)
-			if (!((*inputs[i]) == other_func->inputs[i])) return false;
+			if (!equiv(inputs[i], other_func->inputs[i])) return false;
 
-		if (!((*output) == other_func->output)) return false;
+		if (!equiv(output, other_func->output)) return false;
 
 		return true;
 	}
