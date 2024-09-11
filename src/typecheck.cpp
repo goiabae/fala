@@ -309,10 +309,23 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 				const auto& opt_type_node = node.branch.children[2];
 				const auto& body_node = node.branch.children[3];
 
-				(void)opt_type_node;
+				// Start with parameters and output types and variables (or concrete
+				// type, if provided)
+				//   [t1, ..., tn] -> t
+				Function* typ = (Function*)[&]() {
+					vector<Type*> inputs {};
+					for (size_t i = 0; i < params.branch.children_count; i++)
+						inputs.push_back(checker.make_var());
+					Type* output = nullptr;
+					if (opt_type_node.type != AST_EMPTY)
+						output = typecheck(checker, opt_type_node);
+					else
+						output = checker.make_var();
+					return checker.add_type(new Function(inputs, output));
+				}
+				();
 
-				Function* typ = nullptr;
-				Type** var = checker.env.insert(name.str_id, checker.make_var());
+				Type** var = checker.env.insert(name.str_id, typ);
 
 				{
 					auto scope = checker.env.make_scope();
@@ -325,7 +338,22 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 						checker.env.insert(params.branch.children[i].str_id, var);
 					}
 
-					Type* output = typecheck(checker, body_node);
+					Type* output = [&]() {
+						auto body_type = typecheck(checker, body_node);
+						if (opt_type_node.type != AST_EMPTY) {
+							auto opt_type = typecheck(checker, opt_type_node);
+							if (!equiv(body_type, opt_type))
+								type_mismatch_err(
+									node.loc,
+									"Function annotation output type and infered type don't "
+									"match",
+									body_type,
+									opt_type
+								);
+							return opt_type;
+						}
+						return body_type;
+					}();
 
 					typ = (Function*)checker.add_type(new Function(param_types, output));
 				}
