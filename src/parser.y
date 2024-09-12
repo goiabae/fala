@@ -33,9 +33,10 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 #define yyerror(LOC, LEX, AST, POOL, MSG) error_report(stderr, LOC, MSG)
 #define NODE(TYPE, ...) \
   new_node( \
+    ast, \
     TYPE, \
-    sizeof((Node[]){__VA_ARGS__}) / sizeof(Node), \
-    (Node[]) {__VA_ARGS__})
+    sizeof((NodeIndex[]){__VA_ARGS__}) / sizeof(NodeIndex), \
+    (NodeIndex[]) {__VA_ARGS__})
 %}
 
 /* type of symbols ($N and $$) in grammar actions */
@@ -43,7 +44,7 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 	int num;
 	char* str;
 	char character;
-	Node node;
+	NodeIndex node;
 }
 
 %token YYEOF 0 /* old versions of bison don't predefine this */
@@ -93,9 +94,8 @@ void error_report(FILE* fd, Location* yyloc, const char* msg);
 
 %start program ;
 
-program : %empty { ast->root = new_number_node(yyloc, 0);
-                   if (is_interactive(lexer)) YYACCEPT; }
-        | exp    { ast->root = $1; if (is_interactive(lexer)) YYACCEPT; }
+program : %empty { if (is_interactive(lexer)) YYACCEPT; }
+        | exp    { ast_set_root(ast, $1); if (is_interactive(lexer)) YYACCEPT; }
         ;
 
 exp : do
@@ -112,9 +112,9 @@ exp : do
 /* Expression sequences */
 do : DO block END { $$ = $2; }
 
-block : exp           { $$ = new_list_node();
-                        $$ = list_append_node($$, $1); }
-      | block ";" exp { $$ = list_append_node($$, $3); }
+block : exp           { $$ = new_list_node(ast);
+                        $$ = list_append_node(ast, $$, $1); }
+      | block ";" exp { $$ = list_append_node(ast, $$, $3); }
       | block ";"
       ;
 
@@ -128,7 +128,7 @@ loop : WHILE exp THEN exp            { $$ = NODE(AST_WHILE, $2, $4); }
      | FOR decl TO exp step THEN exp { $$ = NODE(AST_FOR, $2, $4, $5, $7); }
      ;
 
-step : %empty   { $$ = new_empty_node(); }
+step : %empty   { $$ = new_empty_node(ast); }
      | STEP exp { $$ = $2; }
      ;
 
@@ -142,8 +142,8 @@ let : LET decls     IN exp { $$ = NODE(AST_LET, $2, $4); }
     | LET decls "," IN exp { $$ = NODE(AST_LET, $2, $5); }
     ;
 
-decls : decl           { $$ = new_list_node(); $$ = list_append_node($$, $1); }
-      | decls "," decl { $$ = list_append_node($$, $3); }
+decls : decl           { $$ = new_list_node(ast); $$ = list_append_node(ast, $$, $1); }
+      | decls "," decl { $$ = list_append_node(ast, $$, $3); }
       ;
 
 /* Declarations */
@@ -151,25 +151,25 @@ decl : VAR id opt-type "=" exp        { $$ = NODE(AST_DECL, $2, $3, $5); }
      | FUN id params opt-type "=" exp { $$ = NODE(AST_DECL, $2, $3, $4, $6); }
      ;
 
-opt-type : %empty { $$ = new_empty_node(); }
+opt-type : %empty { $$ = new_empty_node(ast); }
          | ":" type-literal { $$ = $2; }
          ;
 
-params : %empty    { $$ = new_list_node(); }
-       | params id { $$ = list_append_node($$, $2);}
+params : %empty    { $$ = new_list_node(ast); }
+       | params id { $$ = list_append_node(ast, $$, $2);}
        ;
 
 /* Function application */
-app : func arg args { $$ = NODE(AST_APP, $1, list_prepend_node($3, $2)); }
-    | arg "." func "(" args ")" { $$ = NODE(AST_APP, $3, list_prepend_node($5, $1)); }
-    | app "." func "(" args ")" { $$ = NODE(AST_APP, $3, list_prepend_node($5, $1)); }
+app : func arg args { $$ = NODE(AST_APP, $1, list_prepend_node(ast, $3, $2)); }
+    | arg "." func "(" args ")" { $$ = NODE(AST_APP, $3, list_prepend_node(ast, $5, $1)); }
+    | app "." func "(" args ")" { $$ = NODE(AST_APP, $3, list_prepend_node(ast, $5, $1)); }
     ;
 
 /* TODO: allow application of function expressions to arguments */
 func : id ;
 
-args : %empty   { $$ = new_list_node(); }
-     | args arg { $$ = list_append_node($$, $2); }
+args : %empty   { $$ = new_list_node(ast); }
+     | args arg { $$ = list_append_node(ast, $$, $2); }
      ;
 
 arg : term ;
@@ -202,23 +202,23 @@ op15 : term ;
 term : "(" exp ")" { $$ = $2; }
      | path      { $$ = NODE(AST_PATH, $1); }
      | int
-     | STRING      { $$ = new_string_node(AST_STR, yyloc, pool, $1); }
-     | NIL         { $$ = new_nil_node(yyloc); }
-     | TRUE        { $$ = new_true_node(yyloc); }
-     | CHAR        { $$ = new_char_node(yyloc, $1); }
+     | STRING      { $$ = new_string_node(ast, AST_STR, yyloc, pool, $1); }
+     | NIL         { $$ = new_nil_node(ast, yyloc); }
+     | TRUE        { $$ = new_true_node(ast, yyloc); }
+     | CHAR        { $$ = new_char_node(ast, yyloc, $1); }
      ;
 
-id : ID { $$ = new_string_node(AST_ID, yyloc, pool, $1); }
+id : ID { $$ = new_string_node(ast, AST_ID, yyloc, pool, $1); }
 
-int : NUMBER { $$ = new_number_node(yyloc, $1); }
+int : NUMBER { $$ = new_number_node(ast, yyloc, $1); }
 
 type-literal : type-primitive ;
 
 type-primitive :
-  INT int    { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 0), $2); }
-  | UINT int { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 1), $2); }
-  | BOOL     { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 2)); }
-  | NIL      { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(yyloc, 3)); }
+  INT int    { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 0), $2); }
+  | UINT int { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 1), $2); }
+  | BOOL     { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 2)); }
+  | NIL      { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 3)); }
   ;
 
 

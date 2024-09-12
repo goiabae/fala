@@ -34,6 +34,6 @@ struct Typechecker {
 	StringPool& pool;
 };
 
-bool typecheck(const AST& ast, StringPool& pool);
+bool typecheck(AST& ast, StringPool& pool);
 
 #endif

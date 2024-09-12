@@ -15,8 +15,8 @@ struct Value;
 
 struct Function {
 	struct UserDefined {
-		Node* params;
-		Node root;
+		NodeIndex* params;
+		NodeIndex root;
 	};
 
 	using Builtin = Value (*)(size_t, Value*);
@@ -33,8 +33,8 @@ struct Function {
 	Function(Builtin _builtin, size_t count)
 	: is_builtin(true), builtin(_builtin), param_count(count) {}
 
-	Function(Node _root, Node* _params, size_t count)
-	: is_builtin(false), custom {_params, _root}, param_count(count) {}
+	Function(NodeIndex root, NodeIndex* params, size_t count)
+	: is_builtin(false), custom {params, root}, param_count(count) {}
 };
 
 struct Arr {
@@ -80,7 +80,7 @@ struct Interpreter {
 	bool should_break;
 	bool should_continue;
 
-	Value eval(AST ast);
+	Value eval(AST& ast);
 };
 
 void print_value(Value val);

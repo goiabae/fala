@@ -38,7 +38,7 @@ struct Options {
 
 static AST parse(File& file, StringPool& pool) {
 	Lexer lexer(file);
-	AST ast = ast_init();
+	AST ast {};
 	if (yyparse(&lexer, &ast, &pool)) exit(1); // FIXME propagate error up
 	return ast;
 }
@@ -146,12 +146,13 @@ int interpret(Options opts) {
 
 	while (!fd.at_eof()) {
 		AST ast = parse(fd, pool);
-		typecheck(ast, pool);
 
 		if (opts.verbose) {
-			ast_print(ast, &pool);
+			ast_print(&ast, &pool);
 			printf("\n");
 		}
+
+		typecheck(ast, pool);
 
 		if (opts.use_walk_interpreter) {
 			walk::Interpreter inter {&pool};
@@ -171,8 +172,6 @@ int interpret(Options opts) {
 
 			vm::run(chunk);
 		}
-
-		ast_deinit(ast);
 	}
 
 	return 0;
@@ -186,7 +185,7 @@ int compile(Options opts) {
 	AST ast = parse(input, pool);
 
 	if (opts.verbose) {
-		ast_print(ast, &pool);
+		ast_print(&ast, &pool);
 		printf("\n");
 	}
 
@@ -200,7 +199,6 @@ int compile(Options opts) {
 
 	print_chunk(output.get_descriptor(), chunk);
 
-	ast_deinit(ast);
 	return 0;
 }
 

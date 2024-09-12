@@ -1,16 +1,15 @@
 #ifndef FALA_LEXER_H
 #define FALA_LEXER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdbool.h>
-#include <stdio.h>
 
 #include "ast.h"
 #include "file.hpp"
 #include "ring.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // necessary for lval of GNU bison rule values
 #define YYSTYPE union TokenValue
@@ -19,7 +18,7 @@ union TokenValue {
 	int num;
 	char *str;
 	char character;
-	Node node;
+	NodeIndex node;
 };
 
 typedef struct Lexer *LEXER;

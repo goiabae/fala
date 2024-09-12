@@ -5,6 +5,10 @@
 
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Ring {
 	char* buf;
 	size_t read;
@@ -23,9 +27,17 @@ char ring_peek(Ring* ring);
 void ring_write(Ring* ring, char c);
 void ring_write_many(Ring* ring, char* buf, size_t len);
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 
 #ifdef FALA_RING_IMPL
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 Ring ring_init(void) {
 	Ring ring;
@@ -68,5 +80,9 @@ void ring_write_many(Ring* ring, char* buf, size_t len) {
 	assert(len <= (ring->cap - ring->len));
 	for (size_t i = 0; i < len; i++) ring_write(ring, buf[i]);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

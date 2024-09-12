@@ -10,7 +10,7 @@
 #include "str_pool.h"
 #include "type.hpp"
 
-Type* typecheck(Typechecker& checker, const Node& node);
+Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx);
 
 static void err(Location loc, const char* msg) {
 	fprintf(
@@ -78,7 +78,7 @@ void print_type(FILE* fd, Type* t) {
 	}
 }
 
-bool typecheck(const AST& ast, StringPool& pool) {
+bool typecheck(AST& ast, StringPool& pool) {
 	Typechecker checker {pool};
 	auto scope = checker.env.make_scope();
 
@@ -114,24 +114,26 @@ bool typecheck(const AST& ast, StringPool& pool) {
 		*checker.env.insert(pool.intern(strdup("array"))) = typ;
 	}
 
-	typecheck(checker, ast.root);
+	typecheck(checker, ast, ast.root_index);
 	return true;
 }
 
-Type* typecheck(Typechecker& checker, const Node& node) {
+Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
+	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case AST_EMPTY: return checker.add_type(new Void());
 		case AST_APP: {
-			Node& func = node.branch.children[0];
-			Node& args = node.branch.children[1];
+			auto func_idx = node[0];
+
+			Node& args = ast.at(node[1]);
 
 			vector<Type*> inputs {};
 
 			for (size_t i = 0; i < args.branch.children_count; i++)
-				inputs.push_back(typecheck(checker, args.branch.children[i]));
+				inputs.push_back(typecheck(checker, ast, args[i]));
 
 			Type* expected_func_type = new Function(inputs, checker.make_var());
-			Type* func_type = typecheck(checker, func);
+			Type* func_type = typecheck(checker, ast, func_idx);
 
 			if (!equiv(func_type, expected_func_type)) {
 				type_mismatch_err(
@@ -147,87 +149,86 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		case AST_NUM: return checker.add_type(new Integer(64, SIGNED));
 		case AST_BLK: {
 			for (size_t i = 0; i < node.branch.children_count - 1; i++)
-				typecheck(checker, node.branch.children[i]);
-			return typecheck(
-				checker, node.branch.children[node.branch.children_count - 1]
-			);
+				typecheck(checker, ast, node[i]);
+			return typecheck(checker, ast, node[node.branch.children_count - 1]);
 		}
 		case AST_IF: {
-			const auto t = typecheck(checker, node.branch.children[1]);
-			const auto f = typecheck(checker, node.branch.children[2]);
+			const auto t = typecheck(checker, ast, node[1]);
+			const auto f = typecheck(checker, ast, node[2]);
 			if (!equiv(t, f))
 				err(
-					node.branch.children[1].loc,
+					node.loc,
 					"If expression has \"then\" and \"else\" branches with different "
 					"types"
 				);
 			return t;
 		}
 		case AST_WHEN: {
-			auto tc = typecheck(checker, node.branch.children[0]);
+			auto tc = typecheck(checker, ast, node[0]);
 			if (!equiv(tc, checker.add_type(new Bool())))
 				err(
-					node.branch.children[0].loc,
+					node.loc,
 					"Condition expression of when expression is not of type boolean"
 				);
-			typecheck(checker, node.branch.children[1]);
+			typecheck(checker, ast, node[1]);
 			return checker.add_type(new Nil());
 		}
 		case AST_FOR: {
+			auto decl_idx = node[0];
+			auto to_idx = node[1];
+			auto step_idx = node[2];
+			auto then_idx = node[3];
+
 			auto scope = checker.env.make_scope();
-			typecheck(checker, node.branch.children[0]);
-			typecheck(checker, node.branch.children[1]);
-			if (node.branch.children[2].type != AST_EMPTY)
-				typecheck(checker, node.branch.children[2]);
-			return typecheck(checker, node.branch.children[3]);
+
+			typecheck(checker, ast, decl_idx);
+			typecheck(checker, ast, to_idx);
+
+			if (ast.at(step_idx).type != AST_EMPTY) typecheck(checker, ast, step_idx);
+
+			return typecheck(checker, ast, then_idx);
 		}
 		case AST_WHILE: {
-			typecheck(checker, node.branch.children[0]);
-			return typecheck(checker, node.branch.children[1]);
+			typecheck(checker, ast, node[0]);
+			return typecheck(checker, ast, node[1]);
 		}
 		case AST_BREAK:
-		case AST_CONTINUE: return typecheck(checker, node.branch.children[0]);
+		case AST_CONTINUE: return typecheck(checker, ast, node[0]);
 		case AST_ASS: {
-			auto path = typecheck(checker, node.branch.children[0]);
-			auto val = typecheck(checker, node.branch.children[1]);
+			auto path = typecheck(checker, ast, node[0]);
+			auto val = typecheck(checker, ast, node[1]);
 			if (!equiv(path, val))
 				err(node.loc, "Assignment with value of wrong type");
 			return val;
 		}
 		case AST_EQ: {
-			const auto left = typecheck(checker, node.branch.children[0]);
-			const auto right = typecheck(checker, node.branch.children[1]);
+			const auto left = typecheck(checker, ast, node[0]);
+			const auto right = typecheck(checker, ast, node[1]);
 			if (!equiv(left, right))
 				err(
-					node.branch.children[0].loc,
+					node.loc,
 					"Equality comparison of values of different types is always false"
 				);
 			return checker.add_type(new Bool());
 		}
 		case AST_OR:
 		case AST_AND: {
-			const auto left = typecheck(checker, node.branch.children[0]);
-			const auto right = typecheck(checker, node.branch.children[1]);
+			const auto left = typecheck(checker, ast, node[0]);
+			const auto right = typecheck(checker, ast, node[1]);
 			if (!(equiv(left, checker.add_type(new Bool()))
 			      && equiv(right, checker.add_type(new Bool()))))
-				err(
-					node.branch.children[0].loc,
-					"Logical combinator arguments must be of boolean type"
-				);
+				err(node.loc, "Logical combinator arguments must be of boolean type");
 			return checker.add_type(new Bool());
 		}
 		case AST_GTN:
 		case AST_LTN:
 		case AST_GTE:
 		case AST_LTE: {
-			const auto left = typecheck(checker, node.branch.children[0]);
-			const auto right = typecheck(checker, node.branch.children[1]);
+			const auto left = typecheck(checker, ast, node[0]);
+			const auto right = typecheck(checker, ast, node[1]);
 			if (!(equiv(left, checker.add_type(new Integer(64, SIGNED)))
 			      && equiv(right, checker.add_type(new Integer(64, SIGNED)))))
-				err(
-					node.branch.children[0].loc,
-					"Comparison operator arguments must be of numeric type"
-				);
+				err(node.loc, "Comparison operator arguments must be of numeric type");
 			return checker.add_type(new Bool());
 		}
 		case AST_ADD:
@@ -235,23 +236,22 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		case AST_MUL:
 		case AST_DIV:
 		case AST_MOD: {
-			const auto left = typecheck(checker, node.branch.children[0]);
-			const auto right = typecheck(checker, node.branch.children[1]);
+			const auto left = typecheck(checker, ast, node[0]);
+			const auto right = typecheck(checker, ast, node[1]);
 			const auto num = checker.add_type(new Integer(64, SIGNED));
+			const auto& left_node = ast.at(node[0]);
+			const auto& right_node = ast.at(node[1]);
 			if (!equiv(left, num))
-				err(
-					node.branch.children[0].loc,
-					"Left-hand side of operator is not numeric"
-				);
+				err(left_node.loc, "Left-hand side of operator is not numeric");
 			if (!equiv(right, num))
 				err(
-					node.branch.children[1].loc,
+					right_node.loc,
 					"Arithmetic operator arguments must be of numeric type"
 				);
 			return checker.add_type(new Integer(64, SIGNED));
 		}
 		case AST_AT: {
-			auto index = typecheck(checker, node.branch.children[1]);
+			auto index = typecheck(checker, ast, node[1]);
 			auto inti = checker.add_type(new Integer(64, SIGNED));
 			if (!equiv(index, inti)) {
 				type_mismatch_err(
@@ -259,14 +259,14 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 				);
 			}
 
-			auto arr = typecheck(checker, node.branch.children[0]);
+			auto arr = typecheck(checker, ast, node[0]);
 			if (dynamic_cast<Array*>(arr) == nullptr)
 				err(node.loc, "Cannot index expression which is not of array type");
 
 			return ((Array*)arr)->item_type;
 		}
 		case AST_NOT: {
-			auto exp = typecheck(checker, node.branch.children[0]);
+			auto exp = typecheck(checker, ast, node[0]);
 			auto bull = checker.add_type(new Bool());
 			if (!equiv(exp, bull)) err(node.loc, "Expression is not of type boolean");
 			return bull;
@@ -283,14 +283,15 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		case AST_DECL: {
 			// "var" id opt-type "=" exp
 			if (node.branch.children_count == 3) {
-				const auto& id_node = node.branch.children[0];
-				const auto& opt_type = node.branch.children[1];
-				const auto& exp_node = node.branch.children[2];
+				const auto& id_node = ast.at(node[0]);
+				const auto& opt_type = node[1];
+				const auto& exp_node = node[2];
+				const auto& opt_type_node = ast.at(opt_type);
 
-				Type* exp = typecheck(checker, exp_node);
+				Type* exp = typecheck(checker, ast, exp_node);
 
-				if (opt_type.type != AST_EMPTY) {
-					Type* annot = typecheck(checker, opt_type);
+				if (opt_type_node.type != AST_EMPTY) {
+					Type* annot = typecheck(checker, ast, opt_type);
 					if (!equiv(annot, exp))
 						type_mismatch_err(
 							node.loc,
@@ -304,10 +305,12 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 			}
 			// "fun" id params opt-type "=" exp
 			else if (node.branch.children_count == 4) {
-				const auto& name = node.branch.children[0];
-				const auto& params = node.branch.children[1];
-				const auto& opt_type_node = node.branch.children[2];
-				const auto& body_node = node.branch.children[3];
+				const auto& opt_type_idx = node[2];
+
+				const auto& name = ast.at(node[0]);
+				const auto& params = ast.at(node[1]);
+				const auto& opt_type_node = ast.at(opt_type_idx);
+				const auto& body_node = node[3];
 
 				// Start with parameters and output types and variables (or concrete
 				// type, if provided)
@@ -318,7 +321,7 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 						inputs.push_back(checker.make_var());
 					Type* output = nullptr;
 					if (opt_type_node.type != AST_EMPTY)
-						output = typecheck(checker, opt_type_node);
+						output = typecheck(checker, ast, opt_type_idx);
 					else
 						output = checker.make_var();
 					return checker.add_type(new Function(inputs, output));
@@ -333,15 +336,16 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 					vector<Type*> param_types {};
 
 					for (size_t i = 0; i < params.branch.children_count; i++) {
+						const auto& param = ast.at(params[i]);
 						Type* var = checker.make_var();
 						param_types.push_back(var);
-						checker.env.insert(params.branch.children[i].str_id, var);
+						checker.env.insert(param.str_id, var);
 					}
 
 					Type* output = [&]() {
-						auto body_type = typecheck(checker, body_node);
+						auto body_type = typecheck(checker, ast, body_node);
 						if (opt_type_node.type != AST_EMPTY) {
-							auto opt_type = typecheck(checker, opt_type_node);
+							auto opt_type = typecheck(checker, ast, opt_type_idx);
 							if (!equiv(body_type, opt_type))
 								type_mismatch_err(
 									node.loc,
@@ -368,20 +372,23 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 		case AST_NIL: return checker.add_type(new Nil());
 		case AST_TRUE: return checker.add_type(new Bool());
 		case AST_LET: {
-			const Node& decls = node.branch.children[0];
-			const Node& exp = node.branch.children[1];
+			auto decls_idx = node[0];
+			auto exp_idx = node[1];
+
+			const Node& decls = ast.at(decls_idx);
 
 			auto scope = checker.env.make_scope();
 
 			for (size_t i = 0; i < decls.branch.children_count; i++)
-				typecheck(checker, decls.branch.children[i]);
-			return typecheck(checker, exp);
+				typecheck(checker, ast, decls[i]);
+
+			return typecheck(checker, ast, exp_idx);
 		}
 		case AST_CHAR: return checker.add_type(new Integer(8, UNSIGNED));
-		case AST_PATH: return typecheck(checker, node.branch.children[0]);
+		case AST_PATH: return typecheck(checker, ast, node[0]);
 		case AST_AS: {
-			auto exp = typecheck(checker, node.branch.children[0]);
-			auto typ = typecheck(checker, node.branch.children[1]);
+			auto exp = typecheck(checker, ast, node[0]);
+			auto typ = typecheck(checker, ast, node[1]);
 
 			if (dynamic_cast<Integer*>(exp) != nullptr and dynamic_cast<Integer*>(typ) != nullptr) {
 				return typ;
@@ -396,15 +403,16 @@ Type* typecheck(Typechecker& checker, const Node& node) {
 			break;
 		}
 		case AST_PRIMITIVE_TYPE: {
-			switch (node.branch.children[0].num) {
-				case 0:
-					return checker.add_type(
-						new Integer(node.branch.children[1].num, SIGNED)
-					);
-				case 1:
-					return checker.add_type(
-						new Integer(node.branch.children[1].num, UNSIGNED)
-					);
+			const auto& constructor_keyword_node = ast.at(node[0]);
+			switch (constructor_keyword_node.num) {
+				case 0: {
+					const auto& type_size_node = ast.at(node[1]);
+					return checker.add_type(new Integer(type_size_node.num, SIGNED));
+				}
+				case 1: {
+					const auto& type_size_node = ast.at(node[1]);
+					return checker.add_type(new Integer(type_size_node.num, UNSIGNED));
+				}
 				case 2: return checker.add_type(new Bool());
 				case 3: return checker.add_type(new Nil());
 			}

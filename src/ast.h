@@ -59,12 +59,43 @@ typedef struct Location {
 
 struct Node;
 
+typedef struct NodeIndex {
+	int index;
+} NodeIndex;
+
+typedef struct AST AST;
+
+// AST
+void ast_print(AST* ast, STR_POOL pool);
+void ast_set_root(AST* ast, NodeIndex node_idx);
+
+// nodes
+NodeIndex new_node(AST* ast, NodeType type, size_t len, NodeIndex* children);
+NodeIndex new_list_node(AST* ast);
+NodeIndex new_string_node(
+	AST* ast, NodeType type, Location loc, STR_POOL pool, String str
+);
+NodeIndex new_number_node(AST* ast, Location loc, Number num);
+NodeIndex new_nil_node(AST* ast, Location loc);
+NodeIndex new_true_node(AST* ast, Location loc);
+NodeIndex new_char_node(AST* ast, Location loc, char character);
+NodeIndex new_empty_node(AST* ast);
+NodeIndex list_append_node(AST* ast, NodeIndex list, NodeIndex next);
+NodeIndex list_prepend_node(AST* ast, NodeIndex list, NodeIndex next);
+
+#ifdef __cplusplus
+}
+#endif
+
+#ifdef __cplusplus
+#	include <array>
+
 typedef struct BranchNode {
 	size_t children_count;
-	struct Node* children;
+	NodeIndex* children;
 } BranchNode;
 
-typedef struct Node {
+struct Node {
 	NodeType type;
 	Location loc;
 	union {
@@ -73,31 +104,24 @@ typedef struct Node {
 		char character;
 		BranchNode branch;
 	};
-} Node;
 
-typedef struct AST {
-	Node root;
-} AST;
+	NodeIndex& operator[](size_t index) const;
+};
 
-// AST
-AST ast_init(void);
-void ast_deinit(AST ast);
-void ast_print(AST ast, STR_POOL pool);
+struct AST {
+	~AST();
 
-// nodes
-Node new_node(NodeType type, size_t len, Node* children);
-Node new_list_node(void);
-Node new_string_node(NodeType type, Location loc, STR_POOL pool, String str);
-Node new_number_node(Location loc, Number num);
-Node new_nil_node(Location loc);
-Node new_true_node(Location loc);
-Node new_char_node(Location loc, char character);
-Node new_empty_node(void);
-Node list_append_node(Node list, Node next);
-Node list_prepend_node(Node list, Node next);
+	// constructor initializes to an invalid initial state
+	// after parsing, this should be a proper index
+	NodeIndex root_index {-1};
+	std::array<Node, 2048> nodes {};
 
-#ifdef __cplusplus
-}
+	Node& at(NodeIndex);
+	NodeIndex alloc_node();
+
+ private:
+	NodeIndex next_free_index {0};
+};
 #endif
 
 #endif

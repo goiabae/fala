@@ -21,10 +21,12 @@ using bytecode::Chunk;
 using bytecode::Operand;
 
 struct Compiler {
-	Chunk compile(AST ast, const StringPool& pool);
+	Chunk compile(AST& ast, const StringPool& pool);
 
  private:
-	Operand compile(Node node, const StringPool& pool, Chunk* chunk);
+	Operand compile(
+		AST& ast, NodeIndex node_idx, const StringPool& pool, Chunk* chunk
+	);
 
 	// these are monotonically increasing as the compiler goes on
 	size_t label_count {0};

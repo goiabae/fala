@@ -7,8 +7,6 @@
 
 #include "str_pool.h"
 
-static void node_deinit(Node node);
-
 const char* node_repr(enum NodeType type) {
 	switch (type) {
 		case AST_APP: return "app";
@@ -50,16 +48,10 @@ const char* node_repr(enum NodeType type) {
 	assert(false && "unreachable");
 }
 
-AST ast_init(void) {
-	AST ast;
-	ast.root.type = (enum NodeType)0;
-	ast.root.num = 0;
-	return ast;
-}
-
-void ast_deinit(AST ast) { node_deinit(ast.root); }
-
-static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
+static void ast_node_print(
+	AST* ast, STR_POOL pool, NodeIndex node_idx, unsigned int space
+) {
+	const auto& node = ast->at(node_idx);
 	if (node.type == AST_NUM) {
 		printf("%d", node.num);
 		return;
@@ -87,9 +79,9 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 		printf("'%c'", node.character);
 		return;
 	} else if (node.type == AST_PRIMITIVE_TYPE) {
-		switch (node.branch.children[0].num) {
-			case 0: printf("int %d", node.branch.children[1].num); break;
-			case 1: printf("uint %d", node.branch.children[1].num); break;
+		switch (ast->at(node[0]).num) {
+			case 0: printf("int %d", ast->at(node[1]).num); break;
+			case 1: printf("uint %d", ast->at(node[1]).num); break;
 			case 2: printf("bool"); break;
 			case 3: printf("nil"); break;
 		}
@@ -107,72 +99,134 @@ static void ast_node_print(STR_POOL pool, Node node, unsigned int space) {
 	for (size_t i = 0; i < node.branch.children_count; i++) {
 		printf("\n");
 		for (size_t j = 0; j < space; j++) printf(" ");
-		ast_node_print(pool, node.branch.children[i], space);
+		ast_node_print(ast, pool, node[i], space);
 	}
 
 	printf(")");
 }
 
-void ast_print(AST ast, STR_POOL pool) { ast_node_print(pool, ast.root, 0); }
+void ast_print(AST* ast, STR_POOL pool) {
+	ast_node_print(ast, pool, ast->root_index, 0);
+}
 
-Node new_node(NodeType type, size_t len, Node* children) {
-	Node node;
+NodeIndex new_node(AST* ast, NodeType type, size_t len, NodeIndex* children) {
+	assert(len > 0);
+
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
 	node.type = type;
 	node.branch.children_count = len;
 	node.branch.children = NULL;
-	node.loc.first_column = children[0].loc.first_column;
-	node.loc.first_line = children[0].loc.first_line;
-	node.loc.last_column = children[len - 1].loc.last_column;
-	node.loc.last_line = children[len - 1].loc.last_line;
-	assert(len > 0);
-	node.branch.children = (Node*)malloc(sizeof(Node) * len);
-	memcpy(node.branch.children, children, sizeof(Node) * len);
-	return node;
+
+	{
+		const auto& first = ast->at(children[0]);
+		const auto& last = ast->at(children[len - 1]);
+
+		node.loc.first_column = first.loc.first_column;
+		node.loc.first_line = first.loc.first_line;
+		node.loc.last_column = last.loc.last_column;
+		node.loc.last_line = last.loc.last_line;
+	}
+
+	node.branch.children = new NodeIndex[len];
+	for (size_t i = 0; i < len; i++) node.branch.children[i] = children[i];
+
+	return idx;
 }
 
-Node new_list_node(void) {
-	Node node;
+NodeIndex new_list_node(AST* ast) {
+	constexpr auto max_list_children_count = 100; // FIXME: unhardcode this
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
 	node.type = AST_BLK;
 	node.branch.children_count = 0;
-	node.branch.children = (Node*)malloc(sizeof(Node) * 100);
-	return node;
+	node.branch.children = new NodeIndex[max_list_children_count];
+
+	return idx;
 }
 
-Node new_string_node(NodeType type, Location loc, STR_POOL pool, String str) {
-	Node node;
+NodeIndex new_string_node(
+	AST* ast, NodeType type, Location loc, STR_POOL pool, String str
+) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
 	node.loc = loc;
 	node.str_id = str_pool_intern(pool, str);
 	node.type = type;
-	return node;
+
+	return idx;
 }
 
-Node new_number_node(Location loc, Number num) {
-	Node node;
+NodeIndex new_number_node(AST* ast, Location loc, Number num) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
 	node.type = AST_NUM;
 	node.loc = loc;
 	node.num = num;
-	return node;
+
+	return idx;
 }
 
-Node new_nil_node(Location loc) { return Node {AST_NIL, loc, {}}; }
+NodeIndex new_nil_node(AST* ast, Location loc) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
 
-Node new_true_node(Location loc) { return Node {AST_TRUE, loc, {}}; }
+	node.type = AST_NIL;
+	node.loc = loc;
 
-Node new_char_node(Location loc, char character) {
-	return Node {AST_CHAR, loc, {character}};
+	return idx;
 }
 
-Node new_empty_node(void) { return Node {AST_EMPTY, {}, {}}; }
+NodeIndex new_true_node(AST* ast, Location loc) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
 
-Node list_append_node(Node list, Node next) {
+	node.type = AST_TRUE;
+	node.loc = loc;
+
+	return idx;
+}
+
+NodeIndex new_char_node(AST* ast, Location loc, char character) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
+	node.type = AST_CHAR;
+	node.loc = loc;
+	node.character = character;
+
+	return idx;
+}
+
+NodeIndex new_empty_node(AST* ast) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
+	node.type = AST_EMPTY;
+
+	return idx;
+}
+
+NodeIndex list_append_node(AST* ast, NodeIndex list_idx, NodeIndex next_idx) {
+	auto& list = ast->at(list_idx);
+	const auto& next = ast->at(next_idx);
+
 	if (list.branch.children_count == 0) list.loc = next.loc;
 	list.loc.last_column = next.loc.last_column;
 	list.loc.last_line = next.loc.last_line;
-	list.branch.children[list.branch.children_count++] = next;
-	return list;
+	list.branch.children[list.branch.children_count++] = next_idx;
+
+	return list_idx;
 }
 
-Node list_prepend_node(Node list, Node next) {
+NodeIndex list_prepend_node(AST* ast, NodeIndex list_idx, NodeIndex next_idx) {
+	auto& list = ast->at(list_idx);
+	const auto& next = ast->at(next_idx);
+
 	if (list.branch.children_count != 0)
 		for (size_t i = list.branch.children_count; i > 0; i--)
 			list.branch.children[i] = list.branch.children[i - 1];
@@ -182,14 +236,36 @@ Node list_prepend_node(Node list, Node next) {
 	list.loc.first_column = next.loc.last_column;
 	list.loc.first_line = next.loc.last_line;
 	list.branch.children_count++;
-	list.branch.children[0] = next;
-	return list;
+	list.branch.children[0] = next_idx;
+
+	return list_idx;
 }
 
-static void node_deinit(Node node) {
+// FIXME: maybe put this in a destructor?
+void node_deinit(AST* ast, NodeIndex node_idx) {
+	auto& node = ast->at(node_idx);
+
+	// if it's a terminal node, we don't free the children and children indexes
+	// buffer
 	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR || node.type == AST_CHAR)
 		return;
+
 	for (size_t i = 0; i < node.branch.children_count; i++)
-		node_deinit(node.branch.children[i]);
+		node_deinit(ast, node[i]);
 	free(node.branch.children);
 }
+
+Node& AST::at(NodeIndex node_idx) {
+	assert(node_idx.index >= 0 && node_idx.index < 2048);
+	return nodes[(size_t)node_idx.index];
+}
+
+NodeIndex AST::alloc_node() { return {next_free_index.index++}; }
+
+NodeIndex& Node::operator[](size_t index) const {
+	return branch.children[index];
+}
+
+void ast_set_root(AST* ast, NodeIndex node_idx) { ast->root_index = node_idx; }
+
+AST::~AST() { node_deinit(this, root_index); }
