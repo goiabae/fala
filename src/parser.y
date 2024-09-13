@@ -1,42 +1,32 @@
 %require "3.0.5"
-%language "c"
+%language "c++"
+%skeleton "lalr1.cc"
 
-%define api.pure full
 %define parse.trace
 %define parse.error verbose
 
 %locations
 
-%code requires {
-#define YYLTYPE Location
-}
+%define api.location.type {Location}
 
-%lex-param {LEXER lexer}
-%parse-param {LEXER lexer}{AST* ast}{STR_POOL pool}
+%lex-param {Lexer* lexer}
+%parse-param {Lexer* lexer}{AST* ast}{STR_POOL pool}
 
 /* necessary for node functions */
 %code requires {
 #include "str_pool.h"
-#include "ast.h"
-#include "lexer.h"
+#include "ast.hpp"
+#include "lexer.hpp"
 
 #define yylex lexer_lex
 }
 
 %{
 #include <stdio.h>
-#include <stdbool.h>
 
-#include "parser.h"
+#include "parser.hpp"
 
-void error_report(FILE* fd, Location* yyloc, const char* msg);
-#define yyerror(LOC, LEX, AST, POOL, MSG) error_report(stderr, LOC, MSG)
-#define NODE(TYPE, ...) \
-  new_node( \
-    ast, \
-    TYPE, \
-    sizeof((NodeIndex[]){__VA_ARGS__}) / sizeof(NodeIndex), \
-    (NodeIndex[]) {__VA_ARGS__})
+#define NODE(TYPE, ...) new_node(ast, TYPE, {__VA_ARGS__})
 %}
 
 /* type of symbols ($N and $$) in grammar actions */
@@ -202,35 +192,40 @@ op15 : term ;
 term : "(" exp ")" { $$ = $2; }
      | path      { $$ = NODE(AST_PATH, $1); }
      | int
-     | STRING      { $$ = new_string_node(ast, AST_STR, yyloc, pool, $1); }
-     | NIL         { $$ = new_nil_node(ast, yyloc); }
-     | TRUE        { $$ = new_true_node(ast, yyloc); }
-     | CHAR        { $$ = new_char_node(ast, yyloc, $1); }
+     | STRING      { $$ = new_string_node(ast, AST_STR, @$, pool, $1); }
+     | NIL         { $$ = new_nil_node(ast, @$); }
+     | TRUE        { $$ = new_true_node(ast, @$); }
+     | CHAR        { $$ = new_char_node(ast, @$, $1); }
      ;
 
-id : ID { $$ = new_string_node(ast, AST_ID, yyloc, pool, $1); }
+id : ID { $$ = new_string_node(ast, AST_ID, @$, pool, $1); }
 
-int : NUMBER { $$ = new_number_node(ast, yyloc, $1); }
+int : NUMBER { $$ = new_number_node(ast, @$, $1); }
 
 type-literal : type-primitive ;
 
 type-primitive :
-  INT int    { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 0), $2); }
-  | UINT int { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 1), $2); }
-  | BOOL     { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 2)); }
-  | NIL      { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, yyloc, 3)); }
+  INT int    { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, @$, 0), $2); }
+  | UINT int { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, @$, 1), $2); }
+  | BOOL     { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, @$, 2)); }
+  | NIL      { $$ = NODE(AST_PRIMITIVE_TYPE, new_number_node(ast, @$, 3)); }
   ;
 
-
 %%
-void error_report(FILE* fd, Location* yyloc, const char* msg) {
+
+void yy::parser::error(const location_type& loc, const std::string& msg) {
 	fprintf(
-		fd,
-		"ERROR from (%d, %d) to (%d, %d): %s",
-		yyloc->first_line + 1,
-		yyloc->first_column + 1,
-		yyloc->last_line + 1,
-		yyloc->last_column + 1,
-		msg
+		stderr,
+		"ERROR from byte %d (%d, %d) to byte %d (%d, %d): %s",
+		loc.begin.byte_offset,
+		loc.begin.line + 1,
+		loc.begin.column + 1,
+		loc.end.byte_offset,
+		loc.end.line + 1,
+		loc.end.column + 1,
+		msg.c_str()
 	);
 }
+
+// TODO: not implemented
+std::ostream& operator<<(std::ostream& st, Location) { return st; }

@@ -8,13 +8,11 @@
 
 // clang-format off
 // need to be included in this order
-extern "C" {
-#include "parser.h"
-}
-#include "lexer.h"
+#include "parser.hpp"
+#include "lexer.hpp"
 // clang-format on
 
-#include "ast.h"
+#include "ast.hpp"
 #include "compiler.hpp"
 #include "file.hpp"
 #include "str_pool.h"
@@ -39,7 +37,8 @@ struct Options {
 static AST parse(File& file, StringPool& pool) {
 	Lexer lexer(file);
 	AST ast {};
-	if (yyparse(&lexer, &ast, &pool)) exit(1); // FIXME propagate error up
+	yy::parser parser {&lexer, &ast, &pool};
+	if (parser.parse()) exit(1); // FIXME propagate error up
 	return ast;
 }
 

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ast.h"
+#include "ast.hpp"
 #include "str_pool.h"
 
 namespace walk {
@@ -22,9 +22,9 @@ static void err2(Location loc, const char* msg) {
 	fprintf(
 		stderr,
 		"INTERPRETER ERROR(%d, %d, %d): %s\n",
-		loc.first_line + 1,
-		loc.first_column + 1,
-		loc.last_column + 1,
+		loc.begin.line + 1,
+		loc.begin.column + 1,
+		loc.end.column + 1,
 		msg
 	);
 	exit(1);

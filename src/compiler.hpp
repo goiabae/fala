@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "ast.h"
+#include "ast.hpp"
 #include "bytecode.hpp"
 #include "env.hpp"
 #include "str_pool.h"

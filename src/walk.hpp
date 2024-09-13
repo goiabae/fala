@@ -5,7 +5,7 @@
 
 #include <ostream>
 
-#include "ast.h"
+#include "ast.hpp"
 #include "env.hpp"
 #include "str_pool.h"
 

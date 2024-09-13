@@ -1,11 +1,10 @@
 #ifndef FALA_AST_H
 #define FALA_AST_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stddef.h>
+
+#include <array>
+#include <vector>
 
 #include "str_pool.h"
 
@@ -50,14 +49,16 @@ typedef enum NodeType {
 	AST_AS,
 } NodeType;
 
-typedef struct Location {
-	int first_line;
-	int first_column;
-	int last_line;
-	int last_column;
-} Location;
+struct Position {
+	int byte_offset {0};
+	int line {0};
+	int column {0};
+};
 
-struct Node;
+struct Location {
+	Position begin {};
+	Position end {};
+};
 
 typedef struct NodeIndex {
 	int index;
@@ -70,7 +71,7 @@ void ast_print(AST* ast, STR_POOL pool);
 void ast_set_root(AST* ast, NodeIndex node_idx);
 
 // nodes
-NodeIndex new_node(AST* ast, NodeType type, size_t len, NodeIndex* children);
+NodeIndex new_node(AST* ast, NodeType type, std::vector<NodeIndex> children);
 NodeIndex new_list_node(AST* ast);
 NodeIndex new_string_node(
 	AST* ast, NodeType type, Location loc, STR_POOL pool, String str
@@ -82,13 +83,6 @@ NodeIndex new_char_node(AST* ast, Location loc, char character);
 NodeIndex new_empty_node(AST* ast);
 NodeIndex list_append_node(AST* ast, NodeIndex list, NodeIndex next);
 NodeIndex list_prepend_node(AST* ast, NodeIndex list, NodeIndex next);
-
-#ifdef __cplusplus
-}
-#endif
-
-#ifdef __cplusplus
-#	include <array>
 
 typedef struct BranchNode {
 	size_t children_count;
@@ -122,6 +116,5 @@ struct AST {
  private:
 	NodeIndex next_free_index {0};
 };
-#endif
 
 #endif

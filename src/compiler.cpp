@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-#include "ast.h"
+#include "ast.hpp"
 #include "bytecode.hpp"
 #include "str_pool.h"
 
@@ -271,10 +271,10 @@ Operand Compiler::compile(
 			return res;
 		}
 		case AST_FOR: {
-			auto decl_node = node[0];
-			auto to_node = node[1];
+			auto decl_idx = node[0];
+			auto to_idx = node[1];
 			auto step_idx = node[2];
-			auto exp_node = node[3];
+			auto then_idx = node[3];
 
 			const auto& step_node = ast.at(step_idx);
 
@@ -288,10 +288,10 @@ Operand Compiler::compile(
 
 			auto scope = env.make_scope();
 
-			Operand var = compile(ast, decl_node, pool, chunk);
+			Operand var = compile(ast, decl_idx, pool, chunk);
 			if (!var.is_register()) err("Declaration must be of a number lvalue");
 
-			Operand to = to_rvalue(chunk, compile(ast, to_node, pool, chunk));
+			Operand to = to_rvalue(chunk, compile(ast, to_idx, pool, chunk));
 
 			back_patch_count.push(0);
 			in_loop = true;
@@ -300,7 +300,7 @@ Operand Compiler::compile(
 			chunk->emit(Opcode::EQ, cmp, var, to);
 			chunk->emit(Opcode::JMP_TRUE, cmp, end);
 
-			Operand exp = compile(ast, exp_node, pool, chunk);
+			Operand exp = compile(ast, then_idx, pool, chunk);
 
 			chunk->add_label(inc);
 			chunk->emit(Opcode::ADD, var, var, step);
@@ -453,13 +453,13 @@ Operand Compiler::compile(
 			if (node.branch.children_count == 4) {
 				auto id_idx = node[0];
 				auto params_idx = node[1];
-				auto opt_type_node = node[2];
-				auto body_node = node[3];
+				auto opt_type_idx = node[2];
+				auto body_idx = node[3];
 
 				const auto& id_node = ast.at(id_idx);
 				const auto& params_node = ast.at(params_idx);
 
-				(void)opt_type_node;
+				(void)opt_type_idx;
 
 				Operand* opnd = env.insert(id_node.str_id, make_register());
 
@@ -479,7 +479,7 @@ Operand Compiler::compile(
 					env.insert(param_node.str_id, arg);
 				}
 
-				auto op = compile(ast, body_node, pool, &func);
+				auto op = compile(ast, body_idx, pool, &func);
 
 				func.emit(Opcode::PUSH, op);
 				func.emit(Opcode::RET);
@@ -491,15 +491,15 @@ Operand Compiler::compile(
 
 			// "var" id opt-type "=" exp
 			if (node.branch.children_count == 3) {
-				const auto& id_idx = node[0];
-				const auto& opt_type_node = node[1];
-				const auto& exp_node = node[2];
+				auto id_idx = node[0];
+				auto opt_type_idx = node[1];
+				auto exp_idx = node[2];
 
-				(void)opt_type_node;
+				(void)opt_type_idx;
 
 				const auto& id_node = ast.at(id_idx);
 
-				Operand initial = compile(ast, exp_node, pool, chunk);
+				Operand initial = compile(ast, exp_idx, pool, chunk);
 
 				// initial is an array
 				if (initial.type == Operand::Type::REG && initial.reg.has_addr())
@@ -519,15 +519,16 @@ Operand Compiler::compile(
 		case AST_NIL: return {};
 		case AST_TRUE: return {1};
 		case AST_LET: {
-			auto exp = node[1];
+			auto decls_idx = node[0];
+			auto exp_idx = node[1];
 
-			const auto& decls_node = ast.at(node[0]);
+			const auto& decls_node = ast.at(decls_idx);
 
 			{
 				auto scope = env.make_scope();
 				for (size_t i = 0; i < decls_node.branch.children_count; i++)
 					(void)compile(ast, decls_node[i], pool, chunk);
-				Operand res = compile(ast, exp, pool, chunk);
+				Operand res = compile(ast, exp_idx, pool, chunk);
 				return res;
 			}
 		}

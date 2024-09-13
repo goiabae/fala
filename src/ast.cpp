@@ -1,11 +1,15 @@
-#include "ast.h"
+#include "ast.hpp"
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <vector>
+
 #include "str_pool.h"
+
+using std::vector;
 
 const char* node_repr(enum NodeType type) {
 	switch (type) {
@@ -109,7 +113,9 @@ void ast_print(AST* ast, STR_POOL pool) {
 	ast_node_print(ast, pool, ast->root_index, 0);
 }
 
-NodeIndex new_node(AST* ast, NodeType type, size_t len, NodeIndex* children) {
+NodeIndex new_node(AST* ast, NodeType type, vector<NodeIndex> children) {
+	size_t len = children.size();
+
 	assert(len > 0);
 
 	auto idx = ast->alloc_node();
@@ -123,10 +129,10 @@ NodeIndex new_node(AST* ast, NodeType type, size_t len, NodeIndex* children) {
 		const auto& first = ast->at(children[0]);
 		const auto& last = ast->at(children[len - 1]);
 
-		node.loc.first_column = first.loc.first_column;
-		node.loc.first_line = first.loc.first_line;
-		node.loc.last_column = last.loc.last_column;
-		node.loc.last_line = last.loc.last_line;
+		node.loc.begin.column = first.loc.begin.column;
+		node.loc.begin.line = first.loc.begin.line;
+		node.loc.end.column = last.loc.end.column;
+		node.loc.end.line = last.loc.end.line;
 	}
 
 	node.branch.children = new NodeIndex[len];
@@ -216,8 +222,8 @@ NodeIndex list_append_node(AST* ast, NodeIndex list_idx, NodeIndex next_idx) {
 	const auto& next = ast->at(next_idx);
 
 	if (list.branch.children_count == 0) list.loc = next.loc;
-	list.loc.last_column = next.loc.last_column;
-	list.loc.last_line = next.loc.last_line;
+	list.loc.end.column = next.loc.end.column;
+	list.loc.end.line = next.loc.end.line;
 	list.branch.children[list.branch.children_count++] = next_idx;
 
 	return list_idx;
@@ -233,8 +239,8 @@ NodeIndex list_prepend_node(AST* ast, NodeIndex list_idx, NodeIndex next_idx) {
 	else
 		list.loc = next.loc;
 	// FIXME might be out of order
-	list.loc.first_column = next.loc.last_column;
-	list.loc.first_line = next.loc.last_line;
+	list.loc.begin.column = next.loc.end.column;
+	list.loc.begin.line = next.loc.end.line;
 	list.branch.children_count++;
 	list.branch.children[0] = next_idx;
 

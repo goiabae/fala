@@ -6,7 +6,7 @@
 
 #include <cstring>
 
-#include "ast.h"
+#include "ast.hpp"
 #include "str_pool.h"
 #include "type.hpp"
 
@@ -16,9 +16,9 @@ static void err(Location loc, const char* msg) {
 	fprintf(
 		stderr,
 		"TYPECHECK ERROR at line %d, from %d to %d: %s\n",
-		loc.first_line + 1,
-		loc.first_column + 1,
-		loc.last_column + 1,
+		loc.begin.line + 1,
+		loc.begin.column + 1,
+		loc.end.column + 1,
 		msg
 	);
 	exit(1);
@@ -32,9 +32,9 @@ static void type_mismatch_err(
 	fprintf(
 		stderr,
 		"TYPE ERROR(%d, %d-%d): %s. Expected type ",
-		loc.first_line + 1,
-		loc.first_column + 1,
-		loc.last_column + 1,
+		loc.begin.line + 1,
+		loc.begin.column + 1,
+		loc.end.column + 1,
 		msg
 	);
 	print_type(stderr, expected);
@@ -125,7 +125,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 		case AST_APP: {
 			auto func_idx = node[0];
 
-			Node& args = ast.at(node[1]);
+			const auto& args = ast.at(node[1]);
 
 			vector<Type*> inputs {};
 
@@ -283,15 +283,17 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 		case AST_DECL: {
 			// "var" id opt-type "=" exp
 			if (node.branch.children_count == 3) {
-				const auto& id_node = ast.at(node[0]);
-				const auto& opt_type = node[1];
-				const auto& exp_node = node[2];
-				const auto& opt_type_node = ast.at(opt_type);
+				auto id_idx = node[0];
+				auto opt_type_idx = node[1];
+				auto exp_idx = node[2];
 
-				Type* exp = typecheck(checker, ast, exp_node);
+				const auto& id_node = ast.at(id_idx);
+				const auto& opt_type_node = ast.at(opt_type_idx);
+
+				Type* exp = typecheck(checker, ast, exp_idx);
 
 				if (opt_type_node.type != AST_EMPTY) {
-					Type* annot = typecheck(checker, ast, opt_type);
+					Type* annot = typecheck(checker, ast, opt_type_idx);
 					if (!equiv(annot, exp))
 						type_mismatch_err(
 							node.loc,
@@ -305,19 +307,19 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 			}
 			// "fun" id params opt-type "=" exp
 			else if (node.branch.children_count == 4) {
-				const auto& opt_type_idx = node[2];
+				auto opt_type_idx = node[2];
+				auto body_idx = node[3];
 
-				const auto& name = ast.at(node[0]);
-				const auto& params = ast.at(node[1]);
+				const auto& id_node = ast.at(node[0]);
+				const auto& params_node = ast.at(node[1]);
 				const auto& opt_type_node = ast.at(opt_type_idx);
-				const auto& body_node = node[3];
 
 				// Start with parameters and output types and variables (or concrete
 				// type, if provided)
 				//   [t1, ..., tn] -> t
 				Function* typ = (Function*)[&]() {
 					vector<Type*> inputs {};
-					for (size_t i = 0; i < params.branch.children_count; i++)
+					for (size_t i = 0; i < params_node.branch.children_count; i++)
 						inputs.push_back(checker.make_var());
 					Type* output = nullptr;
 					if (opt_type_node.type != AST_EMPTY)
@@ -328,22 +330,22 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 				}
 				();
 
-				Type** var = checker.env.insert(name.str_id, typ);
+				Type** var = checker.env.insert(id_node.str_id, typ);
 
 				{
 					auto scope = checker.env.make_scope();
 
 					vector<Type*> param_types {};
 
-					for (size_t i = 0; i < params.branch.children_count; i++) {
-						const auto& param = ast.at(params[i]);
+					for (size_t i = 0; i < params_node.branch.children_count; i++) {
+						const auto& param = ast.at(params_node[i]);
 						Type* var = checker.make_var();
 						param_types.push_back(var);
 						checker.env.insert(param.str_id, var);
 					}
 
 					Type* output = [&]() {
-						auto body_type = typecheck(checker, ast, body_node);
+						auto body_type = typecheck(checker, ast, body_idx);
 						if (opt_type_node.type != AST_EMPTY) {
 							auto opt_type = typecheck(checker, ast, opt_type_idx);
 							if (!equiv(body_type, opt_type))
@@ -375,7 +377,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];
 
-			const Node& decls = ast.at(decls_idx);
+			const auto& decls = ast.at(decls_idx);
 
 			auto scope = checker.env.make_scope();
 
