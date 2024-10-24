@@ -2,7 +2,7 @@ let
 	var x = read_int nil,
 	var sz = x * 3
 in do
-	var xs = array sz;
+	var xs = make_array sz;
 	for var i = 0 to sz then do
 		xs[i] = i*2;
 		do write_int xs[i]; write_str "\n" end;

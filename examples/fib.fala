@@ -1,6 +1,6 @@
 let
 	var max = read_int nil,
-	var fs = array max
+	var fs = make_array max
 in do
 	do write_int (fs [0] = 0); write_str "\n" end;
 	do write_int (fs [1] = 1); write_str "\n" end;

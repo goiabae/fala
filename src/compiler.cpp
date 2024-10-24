@@ -28,7 +28,7 @@ Operand read_char(Compiler& comp, Chunk* chunk, vector<Operand> args);
 Operand write_int(Compiler& comp, Chunk* chunk, vector<Operand> args);
 Operand write_char(Compiler& comp, Chunk* chunk, vector<Operand> args);
 Operand write_str(Compiler& comp, Chunk* chunk, vector<Operand> args);
-Operand array(Compiler& comp, Chunk* chunk, vector<Operand> args);
+Operand make_array(Compiler& comp, Chunk* chunk, vector<Operand> args);
 
 struct Builtin {
 	Operand (*ptr)(Compiler& comp, Chunk* chunk, vector<Operand> args);
@@ -41,7 +41,7 @@ constexpr auto builtins = {
 	Builtin {write_int, "write_int"},
 	Builtin {write_char, "write_char"},
 	Builtin {write_str, "write_str"},
-	Builtin {array, "array"}
+	Builtin {make_array, "make_array"}
 };
 
 Operand write_int(Compiler&, Chunk* chunk, vector<Operand> args) {
@@ -95,7 +95,7 @@ Operand read_char(Compiler& comp, Chunk* chunk, vector<Operand>) {
 	return tmp;
 }
 
-Operand array(Compiler& comp, Chunk* chunk, vector<Operand> args) {
+Operand make_array(Compiler& comp, Chunk* chunk, vector<Operand> args) {
 	if (args.size() != 1)
 		err("The `array' builtin expects a size as the first and only argument.");
 

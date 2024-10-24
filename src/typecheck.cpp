@@ -111,7 +111,7 @@ bool typecheck(AST& ast, StringPool& pool) {
 		Type* typ = new Function(
 			{new Integer(64, SIGNED)}, new Array(new Integer(64, SIGNED))
 		);
-		*checker.env.insert(pool.intern(strdup("array"))) = typ;
+		*checker.env.insert(pool.intern(strdup("make_array"))) = typ;
 	}
 
 	typecheck(checker, ast, ast.root_index);

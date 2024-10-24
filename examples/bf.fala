@@ -10,8 +10,8 @@ let
 	var OPEN  = 6, # [
 	var CLOSE = 7 # ]
 in let
-	var data = array 256,
-	var inst = array 512,
+	var data = make_array 256,
+	var inst = make_array 512,
 	var dp = 0,
 	var ip = 0,
 	var op = 0,

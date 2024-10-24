@@ -1,5 +1,5 @@
 let
-	var xs = array 100
+	var xs = make_array 100
 in do
 	for var i = 0 to 100 then
 		xs[i] = read_int nil;
