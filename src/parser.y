@@ -67,7 +67,7 @@
 /* non-terminals */
 %type <node> exp
 
-%type <node> do block
+%type <node> do block stmts
 %type <node> cond
 %type <node> loop step
 %type <node> jump
@@ -93,7 +93,6 @@ exp : do
     | loop
     | jump
     | let
-    | decl
     | app
     | ass
     | op
@@ -102,10 +101,13 @@ exp : do
 /* Expression sequences */
 do : DO block END { $$ = $2; }
 
-block : exp           { $$ = new_list_node(ast);
-                        $$ = list_append_node(ast, $$, $1); }
-      | block ";" exp { $$ = list_append_node(ast, $$, $3); }
-      | block ";"
+block : stmts exp opt-semicol { $$ = list_append_node(ast, $1, $2); } ;
+
+opt-semicol : %empty | ";" ;
+
+stmts : %empty { $$ = new_list_node(ast); }
+      | stmts exp ";" { $$ = list_append_node(ast, $$, $2); }
+      | stmts decl ";" { $$ = list_append_node(ast, $$, $2); }
       ;
 
 /* Conditionals */
