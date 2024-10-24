@@ -9,16 +9,16 @@
 #include <vector>
 
 #include "ast.hpp"
-#include "bytecode.hpp"
 #include "env.hpp"
+#include "lir.hpp"
 #include "str_pool.h"
 
 using std::stack;
 using std::string;
 using std::vector;
 
-using bytecode::Chunk;
-using bytecode::Operand;
+using lir::Chunk;
+using lir::Operand;
 
 struct Compiler {
 	Chunk compile(AST& ast, const StringPool& pool);

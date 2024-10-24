@@ -5,13 +5,13 @@
 #include <cstring>
 #include <stack>
 
-#include "bytecode.hpp"
+#include "lir.hpp"
 
 using std::array;
 
-using bytecode::Chunk;
-using bytecode::Opcode;
-using bytecode::Operand;
+using lir::Chunk;
+using lir::Opcode;
+using lir::Operand;
 
 namespace vm {
 

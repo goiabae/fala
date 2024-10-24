@@ -10,11 +10,11 @@
 #include <vector>
 
 #include "ast.hpp"
-#include "bytecode.hpp"
+#include "lir.hpp"
 #include "str_pool.h"
 
-using bytecode::Opcode;
-using bytecode::Register;
+using lir::Opcode;
+using lir::Register;
 using std::vector;
 
 void err(const char* msg) {
@@ -174,7 +174,7 @@ Operand Compiler::make_register() {
 	return Operand(Register(reg_count++).as_num()).as_reg();
 }
 
-Operand Compiler::make_label() { return {bytecode::Label {label_count++}}; }
+Operand Compiler::make_label() { return {lir::Label {label_count++}}; }
 
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
 	if (opnd.is_register() && opnd.reg.has_addr()) {

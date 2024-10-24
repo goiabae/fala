@@ -1,8 +1,8 @@
-#include "bytecode.hpp"
-
 #include <cassert>
 
-namespace bytecode {
+#include "lir.hpp"
+
+namespace lir {
 
 Chunk& Chunk::emit(Opcode opcode, Operand fst, Operand snd, Operand trd) {
 	m_vec.push_back(Instruction {opcode, {fst, snd, trd}, ""});
@@ -185,7 +185,7 @@ int print_inst(FILE* fd, const Instruction& inst) {
 		int printed = 0;
 		fprintf(fd, "    ");
 		printed += fprintf(fd, "%s", opcode_repr(inst.opcode));
-		for (size_t i = 0; i < bytecode::opcode_opnd_count(inst.opcode); i++) {
+		for (size_t i = 0; i < lir::opcode_opnd_count(inst.opcode); i++) {
 			printed += fprintf(fd, "%s", separators[i]);
 			printed += print_operand(fd, inst.operands[i]);
 		}
@@ -207,4 +207,4 @@ Chunk operator+(Chunk x, Chunk y) {
 	return res;
 }
 
-} // namespace bytecode
+} // namespace lir

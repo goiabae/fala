@@ -34,7 +34,7 @@ add_executable(fala
 	src/typecheck.cpp
 	src/walk.cpp
 	src/compiler.cpp
-	src/bytecode.cpp
+	src/lir.cpp
 	src/vm.cpp
 	src/type.cpp
 	${BISON_PARSER_OUTPUTS})
