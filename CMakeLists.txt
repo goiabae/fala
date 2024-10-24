@@ -40,7 +40,7 @@ add_executable(fala
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)
-set_property(TARGET fala PROPERTY CXX_STANDARD 11)
+set_property(TARGET fala PROPERTY CXX_STANDARD 20)
 target_include_directories(fala PRIVATE src/)
 target_include_directories(fala PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
