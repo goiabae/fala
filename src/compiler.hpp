@@ -23,7 +23,6 @@ using bytecode::Operand;
 struct Compiler {
 	Chunk compile(AST& ast, const StringPool& pool);
 
- private:
 	Operand compile(
 		AST& ast, NodeIndex node_idx, const StringPool& pool, Chunk* chunk
 	);
@@ -58,13 +57,6 @@ struct Compiler {
 	Number dyn_alloc_start {2047};
 
 	Env<Operand> env;
-
-	Operand builtin_read_int(Chunk* chunk, size_t argc, Operand args[]);
-	Operand builtin_read_char(Chunk* chunk, size_t argc, Operand args[]);
-	Operand builtin_write_int(Chunk* chunk, size_t argc, Operand args[]);
-	Operand builtin_write_char(Chunk* chunk, size_t argc, Operand args[]);
-	Operand builtin_write_str(Chunk* chunk, size_t argc, Operand args[]);
-	Operand builtin_array(Chunk* chunk, size_t argc, Operand args[]);
 
 	Chunk* preamble {nullptr};
 };
