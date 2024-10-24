@@ -46,6 +46,7 @@ enum {
 	KW_NOT,
 	KW_NIL,
 	KW_TRUE,
+	KW_FALSE,
 	KW_INT,
 	KW_UINT,
 	KW_BOOL,
@@ -77,6 +78,7 @@ const char* keyword_repr(size_t i) {
 		case KW_NOT: return "not";
 		case KW_NIL: return "nil";
 		case KW_TRUE: return "true";
+		case KW_FALSE: return "false";
 		case KW_INT: return "int";
 		case KW_UINT: return "uint";
 		case KW_BOOL: return "bool";
@@ -110,6 +112,7 @@ int keyword_to_bison(size_t i) {
 		case KW_NOT: return tk::NOT;
 		case KW_NIL: return tk::NIL;
 		case KW_TRUE: return tk::TRUE;
+		case KW_FALSE: return tk::FALSE;
 		case KW_INT: return tk::INT;
 		case KW_UINT: return tk::UINT;
 		case KW_BOOL: return tk::BOOL;

@@ -45,6 +45,7 @@ const char* node_repr(enum NodeType type) {
 		case AST_EMPTY:
 		case AST_NIL:
 		case AST_TRUE:
+		case AST_FALSE:
 		case AST_CHAR:
 		case AST_PATH:
 		case AST_PRIMITIVE_TYPE: assert(false && "unreachable");
@@ -78,6 +79,9 @@ static void ast_node_print(
 		return;
 	} else if (node.type == AST_TRUE) {
 		printf("true");
+		return;
+	} else if (node.type == AST_FALSE) {
+		printf("false");
 		return;
 	} else if (node.type == AST_CHAR) {
 		printf("'%c'", node.character);
@@ -192,6 +196,16 @@ NodeIndex new_true_node(AST* ast, Location loc) {
 	auto& node = ast->at(idx);
 
 	node.type = AST_TRUE;
+	node.loc = loc;
+
+	return idx;
+}
+
+NodeIndex new_false_node(AST* ast, Location loc) {
+	auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+
+	node.type = AST_FALSE;
 	node.loc = loc;
 
 	return idx;

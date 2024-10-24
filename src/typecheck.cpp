@@ -373,6 +373,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 		}
 		case AST_NIL: return checker.add_type(new Nil());
 		case AST_TRUE: return checker.add_type(new Bool());
+		case AST_FALSE: return checker.add_type(new Bool());
 		case AST_LET: {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];

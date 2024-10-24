@@ -47,7 +47,7 @@
 
 /* keywords and constants */
 %token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN BOOL INT UINT AS
-%token NIL TRUE
+%token NIL TRUE FALSE
 
 /* pontuation */
 %token PAREN_OPEN "(" PAREN_CLOSE ")"
@@ -193,6 +193,7 @@ term : "(" exp ")" { $$ = $2; }
      | int
      | STRING      { $$ = new_string_node(ast, AST_STR, @$, pool, $1); }
      | NIL         { $$ = new_nil_node(ast, @$); }
+     | FALSE       { $$ = new_false_node(ast, @$); }
      | TRUE        { $$ = new_true_node(ast, @$); }
      | CHAR        { $$ = new_char_node(ast, @$, $1); }
      ;

@@ -313,6 +313,7 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 		case AST_DECL: return eval_decl(inter, ast, node);
 		case AST_NIL: return {};
 		case AST_TRUE: return Value(true);
+		case AST_FALSE: return Value(false);
 		case AST_LET: {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];

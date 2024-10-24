@@ -531,6 +531,7 @@ Operand Compiler::compile(
 		}
 		case AST_NIL: return {};
 		case AST_TRUE: return {1};
+		case AST_FALSE: return {0};
 		case AST_LET: {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];

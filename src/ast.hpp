@@ -42,6 +42,7 @@ typedef enum NodeType {
 	AST_DECL,
 	AST_NIL,
 	AST_TRUE,
+	AST_FALSE,
 	AST_LET,
 	AST_CHAR,
 	AST_PATH,
@@ -79,6 +80,7 @@ NodeIndex new_string_node(
 NodeIndex new_number_node(AST* ast, Location loc, Number num);
 NodeIndex new_nil_node(AST* ast, Location loc);
 NodeIndex new_true_node(AST* ast, Location loc);
+NodeIndex new_false_node(AST* ast, Location loc);
 NodeIndex new_char_node(AST* ast, Location loc, char character);
 NodeIndex new_empty_node(AST* ast);
 NodeIndex list_append_node(AST* ast, NodeIndex list, NodeIndex next);
