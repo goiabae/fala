@@ -23,15 +23,15 @@ void err(const char* msg) {
 }
 
 namespace builtin {
-Operand read_int(Compiler& comp, Chunk* chunk, vector<Operand> args);
-Operand read_char(Compiler& comp, Chunk* chunk, vector<Operand> args);
-Operand write_int(Compiler& comp, Chunk* chunk, vector<Operand> args);
-Operand write_char(Compiler& comp, Chunk* chunk, vector<Operand> args);
-Operand write_str(Compiler& comp, Chunk* chunk, vector<Operand> args);
-Operand make_array(Compiler& comp, Chunk* chunk, vector<Operand> args);
+Operand read_int(Compiler& comp, Chunk& chunk, vector<Operand> args);
+Operand read_char(Compiler& comp, Chunk& chunk, vector<Operand> args);
+Operand write_int(Compiler& comp, Chunk& chunk, vector<Operand> args);
+Operand write_char(Compiler& comp, Chunk& chunk, vector<Operand> args);
+Operand write_str(Compiler& comp, Chunk& chunk, vector<Operand> args);
+Operand make_array(Compiler& comp, Chunk& chunk, vector<Operand> args);
 
 struct Builtin {
-	Operand (*ptr)(Compiler& comp, Chunk* chunk, vector<Operand> args);
+	Operand (*ptr)(Compiler& comp, Chunk& chunk, vector<Operand> args);
 	const char* name;
 };
 
@@ -44,7 +44,7 @@ constexpr auto builtins = {
 	Builtin {make_array, "make_array"}
 };
 
-Operand write_int(Compiler&, Chunk* chunk, vector<Operand> args) {
+Operand write_int(Compiler&, Chunk& chunk, vector<Operand> args) {
 	if (args.size() != 1)
 		err(
 			"write_int accepts only a single pointer to character or integer as an "
@@ -53,11 +53,11 @@ Operand write_int(Compiler&, Chunk* chunk, vector<Operand> args) {
 
 	auto& op = args[0];
 	assert(!(op.is_register() && op.reg.has_addr()));
-	chunk->emit(Opcode::PRINTV, op);
+	chunk.emit(Opcode::PRINTV, op);
 	return {};
 }
 
-Operand write_char(Compiler&, Chunk* chunk, vector<Operand> args) {
+Operand write_char(Compiler&, Chunk& chunk, vector<Operand> args) {
 	if (args.size() != 1)
 		err(
 			"write_int accepts only a single pointer to character or integer as an "
@@ -66,11 +66,11 @@ Operand write_char(Compiler&, Chunk* chunk, vector<Operand> args) {
 
 	auto& op = args[0];
 	assert(!(op.is_register() && op.reg.has_addr()));
-	chunk->emit(Opcode::PRINTC, op);
+	chunk.emit(Opcode::PRINTC, op);
 	return {};
 }
 
-Operand write_str(Compiler&, Chunk* chunk, vector<Operand> args) {
+Operand write_str(Compiler&, Chunk& chunk, vector<Operand> args) {
 	if (args.size() != 1)
 		err(
 			"write_str accepts only a single pointer to character or integer as an "
@@ -79,23 +79,23 @@ Operand write_str(Compiler&, Chunk* chunk, vector<Operand> args) {
 
 	auto& op = args[0];
 	assert(op.is_register() && op.reg.has_addr());
-	chunk->emit(Opcode::PRINTF, op);
+	chunk.emit(Opcode::PRINTF, op);
 	return {};
 }
 
-Operand read_int(Compiler& comp, Chunk* chunk, vector<Operand>) {
+Operand read_int(Compiler& comp, Chunk& chunk, vector<Operand>) {
 	Operand tmp = comp.make_temporary();
-	chunk->emit(Opcode::READV, tmp);
+	chunk.emit(Opcode::READV, tmp);
 	return tmp;
 }
 
-Operand read_char(Compiler& comp, Chunk* chunk, vector<Operand>) {
+Operand read_char(Compiler& comp, Chunk& chunk, vector<Operand>) {
 	Operand tmp = comp.make_temporary();
-	chunk->emit(Opcode::READC, tmp);
+	chunk.emit(Opcode::READC, tmp);
 	return tmp;
 }
 
-Operand make_array(Compiler& comp, Chunk* chunk, vector<Operand> args) {
+Operand make_array(Compiler& comp, Chunk& chunk, vector<Operand> args) {
 	if (args.size() != 1)
 		err("The `array' builtin expects a size as the first and only argument.");
 
@@ -104,15 +104,15 @@ Operand make_array(Compiler& comp, Chunk* chunk, vector<Operand> args) {
 		auto addr = Operand(Register(comp.reg_count++).as_addr()).as_reg();
 		auto dyn = Operand(comp.dyn_alloc_start -= args[0].num);
 
-		chunk->emit(Opcode::MOV, addr, dyn).with_comment("static array");
+		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");
 		return addr;
 
 	} else {
 		auto addr = Operand(Register(comp.reg_count++).as_addr()).as_reg();
 		auto dyn = Operand(Register(0).as_num()).as_reg();
 
-		chunk->emit(Opcode::SUB, dyn, dyn, args[0]);
-		chunk->emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
+		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
+		chunk.emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
 		return addr;
 	}
 }
@@ -213,7 +213,7 @@ Operand Compiler::compile(
 			// user-defined function
 			for (const auto& builtin : builtin::builtins)
 				if (strcmp(func_name, builtin.name) == 0)
-					return builtin.ptr(*this, chunk, args);
+					return builtin.ptr(*this, *chunk, args);
 
 			Operand* func_opnd = env.find(func_node.str_id);
 			if (!func_opnd) err("Function not found");
