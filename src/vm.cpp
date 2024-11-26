@@ -9,7 +9,6 @@
 
 using std::array;
 
-using lir::Chunk;
 using lir::Opcode;
 using lir::Operand;
 
@@ -30,7 +29,7 @@ void err(const char* msg) {
 
 #define INDIRECT_LOAD(BASE, OFF) r_cells[(size_t)(FETCH(BASE) + FETCH(OFF))]
 
-void run(const Chunk& code) {
+void run(const lir::Chunk& code) {
 	array<int64_t, 2048> t_cells {};
 	array<int64_t, 2048> r_cells {};
 

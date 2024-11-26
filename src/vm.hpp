@@ -3,11 +3,11 @@
 #ifndef VM_HPP
 #define VM_HPP
 
-#include "bytecode.hpp"
+#include "lir.hpp"
 
 namespace vm {
 
-void run(const bytecode::Chunk& code);
+void run(const lir::Chunk&);
 
 }
 
