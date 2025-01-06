@@ -13,52 +13,50 @@ let
 	var mat = make_array (2*(side+2)*(side+2)),
 	fun at x y = (x+1)*(8+2) + (y+1)
 in do
-	for var i = 0 to (2*(side+2)*(side+2)) then mat[i] = DEAD;
+	for var i = 0 to (2*(side+2)*(side+2)) then mat[i] = DEAD
 
 	# write glider
-	mat[at 1 0] = ALIVE;
-	mat[at 2 1] = ALIVE;
-	mat[at 0 2] = ALIVE;
-	mat[at 1 2] = ALIVE;
-	mat[at 2 2] = ALIVE;
+	mat[at 1 0] = ALIVE
+	mat[at 2 1] = ALIVE
+	mat[at 0 2] = ALIVE
+	mat[at 1 2] = ALIVE
+	mat[at 2 2] = ALIVE
 
-	var swap = 0;
-	var iter = ((side+2)*2 + 1);
+	var swap = 0
+	var iter = ((side+2)*2 + 1)
 	while iter > 0 then do
-		var base = swap * (side+2);
-		var next = ((swap+1) % 2) * (side+2);
+		var base = swap * (side+2)
+		var next = ((swap+1) % 2) * (side+2)
 
 		for var i = 0 to side+2 then
-			write_str "-";
-		write_str "\n";
+			write_str "-"
+		write_str "\n"
 		for var x = 0 to side then do
-			var i = x + base;
-			write_str "|";
+			var i = x + base
+			write_str "|"
 			for var j = 0 to side then do
 				var neigh =
-					  mat[at (i-1) (j-1)] + mat[at (i-1) j] + mat[at (i-1) (j+1)]
-					+ mat[at  i    (j-1)]                   + mat[at  i    (j+1)]
-					+ mat[at (i+1) (j-1)] + mat[at (i+1) j] + mat[at (i+1) (j+1)];
+					  mat[at (i-1) (j-1)] + mat[at (i-1) j] + mat[at (i-1) (j+1)] + mat[at  i    (j-1)] + mat[at  i    (j+1)] + mat[at (i+1) (j-1)] + mat[at (i+1) j] + mat[at (i+1) (j+1)]
 
 				mat[at (next + x) j] =
 					if mat[at i j] == ALIVE
 					then if neigh < 2 or neigh > 3 then DEAD else ALIVE
-					else if neigh == 3 then ALIVE else DEAD;
+					else if neigh == 3 then ALIVE else DEAD
 
 				if mat[at i j] == ALIVE then
 					write_str "X"
 				else
-					write_str " ";
-			end;
-			write_str "|";
-			write_str "\n";
-		end;
+					write_str " "
+			end
+			write_str "|"
+			write_str "\n"
+		end
 		for var i = 0 to side+2 then
-			write_str "-";
-		write_str "\n";
+			write_str "-"
+		write_str "\n"
 
-		write_str "\n";
-		swap = ((swap + 1) % 2);
-		iter = iter - 1;
-	end;
+		write_str "\n"
+		swap = ((swap + 1) % 2)
+		iter = iter - 1
+	end
 end

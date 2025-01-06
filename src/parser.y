@@ -55,6 +55,7 @@
 %token SEMICOL ";" COLON ":"
 %token COMMA ","
 %token DOT "."
+%token NEWLINE "\n"
 
 /* binary operators */
 %token EQ "="
@@ -85,7 +86,7 @@
 %start program ;
 
 program : %empty { if (is_interactive(lexer)) YYACCEPT; }
-        | exp    { ast_set_root(ast, $1); if (is_interactive(lexer)) YYACCEPT; }
+        | nls exp nls  { ast_set_root(ast, $2); if (is_interactive(lexer)) YYACCEPT; }
         ;
 
 exp : do
@@ -98,26 +99,32 @@ exp : do
     | op
     ;
 
+nls : %empty | nls NEWLINE ;
+
 /* Expression sequences */
-do : DO block END { $$ = $2; }
+do : DO nls block END { $$ = $block; }
 
-block : stmts exp opt-semicol { $$ = list_append_node(ast, $1, $2); } ;
+block : stmts exp opt-seps { $$ = list_append_node(ast, $1, $2); } ;
 
-opt-semicol : %empty | ";" ;
+opt-seps : %empty | stmt-seps ;
 
 stmts : %empty { $$ = new_list_node(ast); }
-      | stmts exp ";" { $$ = list_append_node(ast, $$, $2); }
-      | stmts decl ";" { $$ = list_append_node(ast, $$, $2); }
+      | stmts exp stmt-seps { $$ = list_append_node(ast, $$, $2); }
+      | stmts decl stmt-seps { $$ = list_append_node(ast, $$, $2); }
       ;
 
+stmt-seps : stmt-sep | stmt-seps stmt-sep ;
+
+stmt-sep : "\n" | ";" ;
+
 /* Conditionals */
-cond : IF exp THEN exp ELSE exp { $$ = NODE(AST_IF, $2, $4, $6); }
-     | WHEN exp THEN exp        { $$ = NODE(AST_WHEN, $2, $4); }
+cond : IF exp nls THEN nls exp[then] nls ELSE nls exp[else] { $$ = NODE(AST_IF, $2, $then, $else); }
+     | WHEN exp  THEN nls exp[then]        { $$ = NODE(AST_WHEN, $2, $then); }
      ;
 
 /* Loops */
-loop : WHILE exp THEN exp            { $$ = NODE(AST_WHILE, $2, $4); }
-     | FOR decl TO exp step THEN exp { $$ = NODE(AST_FOR, $2, $4, $5, $7); }
+loop : WHILE exp THEN nls exp[then]            { $$ = NODE(AST_WHILE, $2, $then); }
+     | FOR decl TO exp step THEN nls exp[then] { $$ = NODE(AST_FOR, $2, $4, $5, $then); }
      ;
 
 step : %empty   { $$ = new_empty_node(ast); }
@@ -130,17 +137,17 @@ jump : BREAK exp    { $$ = NODE(AST_BREAK, $2); }
      ;
 
 /* Let bindings */
-let : LET decls     IN exp { $$ = NODE(AST_LET, $2, $4); }
-    | LET decls "," IN exp { $$ = NODE(AST_LET, $2, $5); }
+let : LET nls decls nls IN nls exp { $$ = NODE(AST_LET, $decls, $exp); }
+    | LET nls decls nls "," nls IN nls exp { $$ = NODE(AST_LET, $decls, $exp); }
     ;
 
 decls : decl           { $$ = new_list_node(ast); $$ = list_append_node(ast, $$, $1); }
-      | decls "," decl { $$ = list_append_node(ast, $$, $3); }
+      | decls nls "," nls decl { $$ = list_append_node(ast, $$, $decl); }
       ;
 
 /* Declarations */
-decl : VAR id opt-type "=" exp        { $$ = NODE(AST_DECL, $2, $3, $5); }
-     | FUN id params opt-type "=" exp { $$ = NODE(AST_DECL, $2, $3, $4, $6); }
+decl : VAR id opt-type "=" nls exp        { $$ = NODE(AST_DECL, $2, $3, $exp); }
+     | FUN id params opt-type "=" nls exp { $$ = NODE(AST_DECL, $2, $3, $4, $exp); }
      ;
 
 opt-type : %empty { $$ = new_empty_node(ast); }
@@ -164,7 +171,7 @@ args : %empty   { $$ = new_list_node(ast); }
 arg : term ;
 
 /* Assignment */
-ass : path "=" exp { $$ = NODE(AST_ASS, $1, $3); } ;
+ass : path "=" nls exp { $$ = NODE(AST_ASS, $1, $exp); } ;
 
 path : id | id "[" exp "]" { $$ = NODE(AST_AT, $1, $3); }
 

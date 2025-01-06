@@ -232,7 +232,7 @@ int Lexer::lex() {
 				return EOF;
 			else
 #endif
-				return lex();
+				return tk::NEWLINE;
 		}
 
 		case '#': {
