@@ -178,24 +178,24 @@ path : id | id "[" exp "]" { $$ = NODE(AST_AT, $1, $3); }
 /* Operators. Infix and prefix */
 op : op0;
 
-op0  : op1  | op1 AS type-literal { $$ = NODE(AST_AS, $1, $3); }
-op1  : op2  | op1 OR   op2  { $$ = NODE(AST_OR,  $1, $3); }
-op2  : op3  | op2 AND  op3  { $$ = NODE(AST_AND, $1, $3); }
-op3  : op4  | op3 ">"  op4  { $$ = NODE(AST_GTN, $1, $3); }
-op4  : op5  | op4 "<"  op5  { $$ = NODE(AST_LTN, $1, $3); }
-op5  : op6  | op5 ">=" op6  { $$ = NODE(AST_GTE, $1, $3); }
-op6  : op7  | op6 "<=" op7  { $$ = NODE(AST_LTE, $1, $3); }
-op7  : op9  | op7 "==" op9  { $$ = NODE(AST_EQ,  $1, $3); }
-op9  : op10 | op9  "+" op10 { $$ = NODE(AST_ADD, $1, $3); }
-op10 : op11 | op10 "-" op11 { $$ = NODE(AST_SUB, $1, $3); }
-op11 : op12 | op11 "*" op12 { $$ = NODE(AST_MUL, $1, $3); }
-op12 : op13 | op12 "/" op13 { $$ = NODE(AST_DIV, $1, $3); }
-op13 : op14 | op13 "%" op14 { $$ = NODE(AST_MOD, $1, $3); }
-op14 : op15 | NOT op15      { $$ = NODE(AST_NOT, $2); }
+op0  : op1  | op1[lft] AS type-literal[rgt] { $$ = NODE(AST_AS, $lft, $rgt); }
+op1  : op2  | op1[lft] OR   nls op2[rgt]  { $$ = NODE(AST_OR,  $lft, $rgt); }
+op2  : op3  | op2[lft] AND  nls op3[rgt]  { $$ = NODE(AST_AND, $lft, $rgt); }
+op3  : op4  | op3[lft] ">"  nls op4[rgt]  { $$ = NODE(AST_GTN, $lft, $rgt); }
+op4  : op5  | op4[lft] "<"  nls op5[rgt]  { $$ = NODE(AST_LTN, $lft, $rgt); }
+op5  : op6  | op5[lft] ">=" nls op6[rgt]  { $$ = NODE(AST_GTE, $lft, $rgt); }
+op6  : op7  | op6[lft] "<=" nls op7[rgt]  { $$ = NODE(AST_LTE, $lft, $rgt); }
+op7  : op9  | op7[lft] "==" nls op9[rgt]  { $$ = NODE(AST_EQ,  $lft, $rgt); }
+op9  : op10 | op9[lft] "+" nls op10[rgt] { $$ = NODE(AST_ADD, $lft, $rgt); }
+op10 : op11 | op10[lft] "-" nls op11[rgt] { $$ = NODE(AST_SUB, $lft, $rgt); }
+op11 : op12 | op11[lft] "*" nls op12[rgt] { $$ = NODE(AST_MUL, $lft, $rgt); }
+op12 : op13 | op12[lft] "/" nls op13[rgt] { $$ = NODE(AST_DIV, $lft, $rgt); }
+op13 : op14 | op13[lft] "%" nls op14[rgt] { $$ = NODE(AST_MOD, $lft, $rgt); }
+op14 : op15 | NOT op15[rgt]      { $$ = NODE(AST_NOT, $rgt); }
 op15 : term ;
 
 /* Terms */
-term : "(" exp ")" { $$ = $2; }
+term : "(" nls exp nls ")" { $$ = $exp; }
      | path      { $$ = NODE(AST_PATH, $1); }
      | int
      | STRING      { $$ = new_string_node(ast, AST_STR, @$, pool, $1); }
