@@ -14,8 +14,7 @@ typedef char* String;
 typedef enum NodeType {
 	AST_EMPTY, // node for saying there is no node
 	AST_APP,   // function application
-	AST_NUM,
-	AST_BLK, // block
+	AST_BLK,   // block
 	AST_IF,
 	AST_WHEN,
 	AST_FOR,
@@ -23,6 +22,15 @@ typedef enum NodeType {
 	AST_BREAK,
 	AST_CONTINUE,
 	AST_ASS,
+	AST_AT,
+	AST_DECL,
+	AST_LET,
+	AST_PATH,
+	AST_PRIMITIVE_TYPE,
+	AST_AS,
+
+	// boolean logic and comparison operators
+	AST_NOT,
 	AST_OR,
 	AST_AND,
 	AST_GTN, // greater than
@@ -30,24 +38,24 @@ typedef enum NodeType {
 	AST_GTE, // greater or eq to
 	AST_LTE, // lesser or eq to
 	AST_EQ,
-	AST_AT,
+
+	// arithmetic operators
 	AST_ADD,
 	AST_SUB,
 	AST_MUL,
 	AST_DIV,
 	AST_MOD,
-	AST_NOT,
-	AST_ID,
-	AST_STR,
-	AST_DECL,
+
+	// keyword constants
 	AST_NIL,
 	AST_TRUE,
 	AST_FALSE,
-	AST_LET,
+
+	// identifiers and constants
+	AST_ID,
+	AST_STR,
+	AST_NUM,
 	AST_CHAR,
-	AST_PATH,
-	AST_PRIMITIVE_TYPE,
-	AST_AS,
 } NodeType;
 
 struct Position {
