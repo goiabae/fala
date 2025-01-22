@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.1.0)
 
 project(fala)
 
+include(CTest)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -47,3 +49,11 @@ target_include_directories(fala PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 if (WITH_READLINE)
 	target_link_libraries(fala readline history)
 endif()
+
+enable_testing()
+
+add_test(
+	NAME test_script
+	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
