@@ -36,7 +36,9 @@ in do
 			write_str "|"
 			for var j = 0 to side then do
 				var neigh =
-					  mat[at (i-1) (j-1)] + mat[at (i-1) j] + mat[at (i-1) (j+1)] + mat[at  i    (j-1)] + mat[at  i    (j+1)] + mat[at (i+1) (j-1)] + mat[at (i+1) j] + mat[at (i+1) (j+1)]
+					  mat[at (i-1) (j-1)] + mat[at (i-1) j] + mat[at (i-1) (j+1)] +
+						mat[at  i    (j-1)] +                   mat[at  i    (j+1)] +
+						mat[at (i+1) (j-1)] + mat[at (i+1) j] + mat[at (i+1) (j+1)]
 
 				mat[at (next + x) j] =
 					if mat[at i j] == ALIVE
