@@ -2,3 +2,7 @@ build/
 src/parser.c
 src/parser.h
 .gdb_history
+.cache
+.direnv/
+.envrc
+Testing/
