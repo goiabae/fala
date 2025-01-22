@@ -10,6 +10,9 @@
 #include "str_pool.h"
 #include "type.hpp"
 
+// whether PTR points to an instance fo class CLS
+#define IS(PTR, CLS) (dynamic_cast<CLS*>(PTR) != nullptr)
+
 Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx);
 
 static void err(Location loc, const char* msg) {
@@ -44,19 +47,19 @@ static void type_mismatch_err(
 }
 
 void print_type(FILE* fd, Type* t) {
-	if (dynamic_cast<Integer*>(t) != nullptr) {
+	if (IS(t, Integer)) {
 		auto i = dynamic_cast<Integer*>(t);
 		if (i->sign == SIGNED)
 			fprintf(fd, "Int %d", i->bit_count);
 		else
 			fprintf(fd, "UInt %d", i->bit_count);
-	} else if (dynamic_cast<Nil*>(t) != nullptr) {
+	} else if (IS(t, Nil)) {
 		fprintf(fd, "Nil");
-	} else if (dynamic_cast<Bool*>(t) != nullptr) {
+	} else if (IS(t, Bool)) {
 		fprintf(fd, "Bool");
-	} else if (dynamic_cast<Void*>(t) != nullptr) {
+	} else if (IS(t, Void)) {
 		fprintf(fd, "Void");
-	} else if (dynamic_cast<Function*>(t) != nullptr) {
+	} else if (IS(t, Function)) {
 		auto f = dynamic_cast<Function*>(t);
 		fprintf(fd, "[");
 		for (size_t i = 0; i < f->inputs.size() - 1; i++) {
@@ -67,10 +70,10 @@ void print_type(FILE* fd, Type* t) {
 		fprintf(fd, "]");
 		fprintf(fd, " -> ");
 		print_type(fd, f->output);
-	} else if (dynamic_cast<TypeVariable*>(t) != nullptr) {
+	} else if (IS(t, TypeVariable)) {
 		auto v = dynamic_cast<TypeVariable*>(t);
 		fprintf(fd, "t%zu", v->name);
-	} else if (dynamic_cast<Array*>(t) != nullptr) {
+	} else if (IS(t, Array)) {
 		auto a = dynamic_cast<Array*>(t);
 		fprintf(fd, "[: ");
 		print_type(fd, a->item_type);
@@ -260,7 +263,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 			}
 
 			auto arr = typecheck(checker, ast, node[0]);
-			if (dynamic_cast<Array*>(arr) == nullptr)
+			if (not IS(arr, Array))
 				err(node.loc, "Cannot index expression which is not of array type");
 
 			return ((Array*)arr)->item_type;
@@ -393,9 +396,9 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 			auto exp = typecheck(checker, ast, node[0]);
 			auto typ = typecheck(checker, ast, node[1]);
 
-			if (dynamic_cast<Integer*>(exp) != nullptr and dynamic_cast<Integer*>(typ) != nullptr) {
+			if (IS(exp, Integer) and IS(typ, Integer)) {
 				return typ;
-			} else if (dynamic_cast<Bool*>(exp) != nullptr and dynamic_cast<Integer*>(typ) != nullptr) {
+			} else if (IS(exp, Bool) and IS(typ, Integer)) {
 				return typ;
 			} else if (equiv(exp, typ)) {
 				return typ;
