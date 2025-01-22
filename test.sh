@@ -54,6 +54,9 @@ compare() {
 		cmp $tmp/$f.actual $tmp/$f.expected || fail $test out
 	else
 		warn "Interpreted output file for test \"${test}\" does not exist"
+		echo -en "${purple}"
+		cat $tmp/$test.actual 1>&2
+		echo -en "${reset}"
 	fi
 }
 
