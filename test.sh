@@ -60,9 +60,8 @@ compare() {
 	fi
 }
 
-for f in ./examples/*.fala; do
-	f="${f##*/}" # remove parent component
-	f="${f%.*}"  # remove extension
+if [ $# -gt 0 ]; then
+	f="$1"
 
 	test "INTERPRETED ${f}"
 	interpret $f "$FALA -i" ./examples/$f.fala
@@ -74,7 +73,7 @@ for f in ./examples/*.fala; do
 	if ! [ -f $tmp/$f.rap ]; then
 		fail "Compiled file for test \"${f}\" does not exist" fala
 	fi
-done
+fi
 
 if [ $fail_count -eq '0' ]; then
 	rm -r $tmp

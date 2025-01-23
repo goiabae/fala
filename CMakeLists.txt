@@ -52,8 +52,25 @@ endif()
 
 enable_testing()
 
-add_test(
-	NAME test_script
-	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh
-	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
+function(test_example example)
+	add_test(
+		NAME ${example}
+		COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test.sh ${example}
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endfunction()
+
+test_example(bf)
+test_example(collatz)
+test_example(dyn_arr)
+test_example(fib2)
+test_example(fib)
+test_example(glider)
+test_example(hello_world)
+test_example(if_print)
+test_example(let)
+test_example(max_int)
+test_example(paren_assign)
+test_example(pithagoras)
+test_example(print_int)
+test_example(print_str_int)
+test_example(vec_sort)
