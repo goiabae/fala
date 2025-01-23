@@ -25,15 +25,15 @@ void err(const char* msg) {
 }
 
 namespace builtin {
-Operand read_int(Compiler& comp, Chunk& chunk, vector<Operand> args);
-Operand read_char(Compiler& comp, Chunk& chunk, vector<Operand> args);
-Operand write_int(Compiler& comp, Chunk& chunk, vector<Operand> args);
-Operand write_char(Compiler& comp, Chunk& chunk, vector<Operand> args);
-Operand write_str(Compiler& comp, Chunk& chunk, vector<Operand> args);
-Operand make_array(Compiler& comp, Chunk& chunk, vector<Operand> args);
+Result read_int(Compiler& comp, vector<Operand> args);
+Result read_char(Compiler& comp, vector<Operand> args);
+Result write_int(Compiler& comp, vector<Operand> args);
+Result write_char(Compiler& comp, vector<Operand> args);
+Result write_str(Compiler& comp, vector<Operand> args);
+Result make_array(Compiler& comp, vector<Operand> args);
 
 struct Builtin {
-	Operand (*ptr)(Compiler& comp, Chunk& chunk, vector<Operand> args);
+	Result (*ptr)(Compiler& comp, vector<Operand> args);
 	const char* name;
 };
 
@@ -46,68 +46,75 @@ constexpr auto builtins = {
 	Builtin {make_array, "make_array"}
 };
 
-Operand write_int(Compiler&, Chunk& chunk, vector<Operand> args) {
+Result write_int(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
 		err(
 			"write_int accepts only a single pointer to character or integer as an "
 			"argument"
 		);
+
+	Chunk chunk {};
 
 	auto& op = args[0];
 	assert(!(op.is_register() && op.reg.has_addr()));
 	chunk.emit(Opcode::PRINTV, op);
-	return {};
+	return {chunk, {}};
 }
 
-Operand write_char(Compiler&, Chunk& chunk, vector<Operand> args) {
+Result write_char(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
 		err(
 			"write_int accepts only a single pointer to character or integer as an "
 			"argument"
 		);
 
+	Chunk chunk {};
 	auto& op = args[0];
 	assert(!(op.is_register() && op.reg.has_addr()));
 	chunk.emit(Opcode::PRINTC, op);
-	return {};
+	return {chunk, {}};
 }
 
-Operand write_str(Compiler&, Chunk& chunk, vector<Operand> args) {
+Result write_str(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
 		err(
 			"write_str accepts only a single pointer to character or integer as an "
 			"argument"
 		);
 
+	Chunk chunk {};
 	auto& op = args[0];
 	assert(op.is_register() && op.reg.has_addr());
 	chunk.emit(Opcode::PRINTF, op);
-	return {};
+	return {chunk, {}};
 }
 
-Operand read_int(Compiler& comp, Chunk& chunk, vector<Operand>) {
+Result read_int(Compiler& comp, vector<Operand>) {
+	Chunk chunk {};
 	Operand tmp = comp.make_temporary();
 	chunk.emit(Opcode::READV, tmp);
-	return tmp;
+	return {chunk, tmp};
 }
 
-Operand read_char(Compiler& comp, Chunk& chunk, vector<Operand>) {
+Result read_char(Compiler& comp, vector<Operand>) {
+	Chunk chunk {};
 	Operand tmp = comp.make_temporary();
 	chunk.emit(Opcode::READC, tmp);
-	return tmp;
+	return {chunk, tmp};
 }
 
-Operand make_array(Compiler& comp, Chunk& chunk, vector<Operand> args) {
+Result make_array(Compiler& comp, vector<Operand> args) {
 	if (args.size() != 1)
 		err("The `array' builtin expects a size as the first and only argument.");
 
+	Chunk chunk {};
 	// if size if constant we subtract the allocation start at compile time
 	if (args[0].type == Operand::Type::NUM) {
 		auto addr = Operand(Register(comp.reg_count++).as_addr()).as_reg();
 		auto dyn = Operand(comp.dyn_alloc_start -= args[0].num);
 
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");
-		return addr;
+		return {chunk, addr};
 
 	} else {
 		auto addr = Operand(Register(comp.reg_count++).as_addr()).as_reg();
@@ -115,7 +122,7 @@ Operand make_array(Compiler& comp, Chunk& chunk, vector<Operand> args) {
 
 		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
-		return addr;
+		return {chunk, addr};
 	}
 }
 
@@ -189,48 +196,64 @@ Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
 	}
 }
 
+Result Compiler::compile_app(
+	AST& ast, NodeIndex node_idx, const StringPool& pool
+) {
+	Chunk chunk {};
+
+	const auto& node = ast.at(node_idx);
+	const auto& func_node = ast.at(node[0]);
+	const auto& args_node = ast.at(node[1]);
+
+	vector<Operand> args {};
+
+	for (size_t i = 0; i < args_node.branch.children_count; i++) {
+		auto arg_idx = args_node[i];
+		const auto& arg_node = ast.at(arg_idx);
+
+		args.push_back(compile(ast, arg_idx, pool, &chunk));
+
+		if (arg_node.type == AST_PATH) args[i] = to_rvalue(&chunk, args[i]);
+	}
+
+	const char* func_name = pool.find(func_node.str_id);
+
+	// try to match function name with any builtin. otherwise, call it as a
+	// user-defined function
+	for (const auto& builtin : builtin::builtins)
+		if (strcmp(func_name, builtin.name) == 0) {
+			auto result = builtin.ptr(*this, args);
+			return {chunk + result.code, result.opnd};
+		};
+
+	Operand* func_opnd = env.find(func_node.str_id);
+	if (!func_opnd) err("Function not found");
+	if (func_opnd->type != Operand::Type::LAB)
+		err("Type of <name> is not function.");
+
+	// push arguments in the reverse order the parameters where declared
+	for (size_t i = args_node.branch.children_count; i > 0; i--)
+		chunk.emit(Opcode::PUSH, args[i - 1]);
+
+	chunk.emit(Opcode::CALL, *func_opnd);
+	Operand res = make_temporary();
+	chunk.emit(Opcode::POP, res);
+
+	return {chunk, res};
+}
+
 Operand Compiler::compile(
 	AST& ast, NodeIndex node_idx, const StringPool& pool, Chunk* chunk
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case AST_APP: {
-			const auto& func_node = ast.at(node[0]);
-			const auto& args_node = ast.at(node[1]);
+			auto result = compile_app(ast, node_idx, pool);
+			auto prev = *chunk;
+			auto next = prev + result.code;
 
-			vector<Operand> args {};
-
-			for (size_t i = 0; i < args_node.branch.children_count; i++) {
-				auto arg_idx = args_node[i];
-				const auto& arg_node = ast.at(arg_idx);
-
-				args.push_back(compile(ast, arg_idx, pool, chunk));
-
-				if (arg_node.type == AST_PATH) args[i] = to_rvalue(chunk, args[i]);
-			}
-
-			const char* func_name = pool.find(func_node.str_id);
-
-			// try to match function name with any builtin. otherwise, call it as a
-			// user-defined function
-			for (const auto& builtin : builtin::builtins)
-				if (strcmp(func_name, builtin.name) == 0)
-					return builtin.ptr(*this, *chunk, args);
-
-			Operand* func_opnd = env.find(func_node.str_id);
-			if (!func_opnd) err("Function not found");
-			if (func_opnd->type != Operand::Type::LAB)
-				err("Type of <name> is not function.");
-
-			// push arguments in the reverse order the parameters where declared
-			for (size_t i = args_node.branch.children_count; i > 0; i--)
-				chunk->emit(Opcode::PUSH, args[i - 1]);
-
-			chunk->emit(Opcode::CALL, *func_opnd);
-			Operand res = make_temporary();
-			chunk->emit(Opcode::POP, res);
-
-			return res;
+			*chunk = next;
+			return result.opnd;
 		}
 		case AST_NUM: return Operand(node.num);
 		case AST_BLK: {

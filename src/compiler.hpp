@@ -22,6 +22,11 @@ using std::vector;
 using lir::Chunk;
 using lir::Operand;
 
+struct Result {
+	Chunk code;
+	Operand opnd;
+};
+
 struct Compiler {
 	Chunk compile(AST& ast, const StringPool& pool);
 
@@ -59,8 +64,9 @@ struct Compiler {
 	Number dyn_alloc_start {2047};
 
 	Env<Operand> env;
-
 	Chunk* preamble {nullptr};
+
+	Result compile_app(AST& ast, NodeIndex node_idx, const StringPool& pool);
 };
 
 } // namespace compiler
