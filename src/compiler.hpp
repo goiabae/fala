@@ -13,6 +13,8 @@
 #include "lir.hpp"
 #include "str_pool.h"
 
+namespace compiler {
+
 using std::stack;
 using std::string;
 using std::vector;
@@ -60,5 +62,7 @@ struct Compiler {
 
 	Chunk* preamble {nullptr};
 };
+
+} // namespace compiler
 
 #endif

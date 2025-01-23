@@ -161,8 +161,8 @@ int interpret(Options opts) {
 				printf("\n");
 			}
 		} else {
-			Compiler comp;
-			Chunk chunk = comp.compile(ast, pool);
+			compiler::Compiler comp;
+			auto chunk = comp.compile(ast, pool);
 
 			if (opts.verbose) {
 				lir::print_chunk(stdout, chunk);
@@ -190,8 +190,8 @@ int compile(Options opts) {
 
 	typecheck(ast, pool);
 
-	Compiler comp;
-	Chunk chunk = comp.compile(ast, pool);
+	compiler::Compiler comp;
+	auto chunk = comp.compile(ast, pool);
 
 	File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
 	if (!output) return 1;

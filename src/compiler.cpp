@@ -13,6 +13,8 @@
 #include "lir.hpp"
 #include "str_pool.h"
 
+namespace compiler {
+
 using lir::Opcode;
 using lir::Register;
 using std::vector;
@@ -554,3 +556,5 @@ Operand Compiler::compile(
 	}
 	assert(false);
 }
+
+} // namespace compiler
