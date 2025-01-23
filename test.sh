@@ -43,7 +43,7 @@ interpret() {
 	else
 		touch $tmp/$test.in
 	fi
-	timeout 30s $inter $file < $tmp/$test.in > $tmp/$test.actual
+	timeout 10s $inter $file < $tmp/$test.in > $tmp/$test.actual
 }
 
 compare() {
@@ -79,7 +79,6 @@ if [ $fail_count -eq '0' ]; then
 	rm -r $tmp
 	exit 0
 else
-	echo -e "${fail_count} tests failed"
 	echo -e "Test files available at ${tmp}"
 	exit 1
 fi
