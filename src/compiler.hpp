@@ -23,14 +23,41 @@ using lir::Chunk;
 using lir::Operand;
 
 struct Result {
+	enum class Signal {
+		NOSIGNAL, // FIXME: remove this
+		BREAK,
+		CONTINUE,
+		RETURN,
+		EXCEPTION,
+	};
 	Chunk code;
 	Operand opnd;
+	Signal signal {Signal::NOSIGNAL};
+	bool has_signal {false};
+};
+
+struct Handler {
+	lir::Label destination_label;
+	Operand result_register;
+};
+
+// They are called handlers, but are really just labels
+struct SignalHandlers {
+	Handler continue_handler {};
+	Handler break_handler {};
+	Handler return_handler {};
+	bool has_continue_handler {false};
+	bool has_break_handler {false};
+	bool has_return_handler {false};
 };
 
 struct Compiler {
 	Chunk compile(AST& ast, const StringPool& pool);
 
-	Result compile(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile(
+		AST& ast, NodeIndex node_idx, const StringPool& pool,
+		SignalHandlers handlers
+	);
 
 	// these are monotonically increasing as the compiler goes on
 	size_t label_count {0};
@@ -43,21 +70,6 @@ struct Compiler {
 
 	Operand to_rvalue(Chunk* chunk, Operand opnd);
 
-	bool in_loop {false};
-	Operand cnt_lab; // jump to on continue
-	Operand brk_lab; // jump to on break
-
-	// these are used to backpatch the destination of MOVs generated when
-	// compiling BREAK and CONTINUE nodes
-	// back_patch contains the indexes in the chunk of MOVs that need patching,
-	// while back_patch_count stores the amount of MOVs for each loop that needs
-	// patching. This could also be a stack of vectors
-	stack<size_t> back_patch_count;
-	stack<size_t> back_patch;
-
-	void push_to_back_patch(size_t idx);
-	void back_patch_jumps(Chunk* chunk, Operand dest);
-
 	// used to backpatch the location of the dynamic allocation region start
 	Number dyn_alloc_start {2047};
 
@@ -65,16 +77,24 @@ struct Compiler {
 
 	vector<Chunk> functions;
 
-	Result compile_app(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_if(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_for(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_when(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_while(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_let(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_decl(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_ass(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_str(AST& ast, NodeIndex node_idx, const StringPool& pool);
-	Result compile_at(AST& ast, NodeIndex node_idx, const StringPool& pool);
+#define DECLARE_NODE_HANDLER(NAME) \
+	Result compile_##NAME(           \
+		AST& ast,                      \
+		NodeIndex node_idx,            \
+		const StringPool& pool,        \
+		SignalHandlers handlers        \
+	)
+
+	DECLARE_NODE_HANDLER(app);
+	DECLARE_NODE_HANDLER(if);
+	DECLARE_NODE_HANDLER(for);
+	DECLARE_NODE_HANDLER(when);
+	DECLARE_NODE_HANDLER(while);
+	DECLARE_NODE_HANDLER(let);
+	DECLARE_NODE_HANDLER(decl);
+	DECLARE_NODE_HANDLER(ass);
+	DECLARE_NODE_HANDLER(str);
+	DECLARE_NODE_HANDLER(at);
 };
 
 } // namespace compiler

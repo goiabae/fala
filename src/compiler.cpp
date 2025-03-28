@@ -128,25 +128,6 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 
 } // namespace builtin
 
-// push instruction at index id of a chunk to back patch
-void Compiler::push_to_back_patch(size_t idx) {
-	back_patch_count.top()++;
-	back_patch.push(idx - 1);
-}
-
-// back patch destination of MOVs in control-flow jump expressions
-void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
-	// for the inner-most loop (top of the "stack"):
-	//   patch the destination operand of MOV instructions
-	size_t to_patch = back_patch_count.top();
-	back_patch_count.pop();
-	for (size_t i = 0; i < to_patch; i++) {
-		size_t idx = back_patch.top();
-		back_patch.pop();
-		chunk->m_vec[idx].operands[0] = dest;
-	}
-}
-
 Chunk Compiler::compile(AST& ast, const StringPool& pool) {
 	Chunk preamble {};
 	Chunk chunk;
@@ -160,7 +141,9 @@ Chunk Compiler::compile(AST& ast, const StringPool& pool) {
 
 	chunk.add_label(main);
 
-	auto res_ = compile(ast, ast.root_index, pool);
+	SignalHandlers handlers {};
+
+	auto res_ = compile(ast, ast.root_index, pool, handlers);
 	chunk = chunk + res_.code;
 
 	Operand start(dyn_alloc_start);
@@ -201,7 +184,7 @@ Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
 }
 
 Result Compiler::compile_app(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 
@@ -215,7 +198,7 @@ Result Compiler::compile_app(
 		auto arg_idx = args_node[i];
 		const auto& arg_node = ast.at(arg_idx);
 
-		auto res = compile(ast, arg_idx, pool);
+		auto res = compile(ast, arg_idx, pool, handlers);
 		chunk = chunk + res.code;
 		args.push_back(res.opnd);
 
@@ -249,7 +232,7 @@ Result Compiler::compile_app(
 }
 
 Result Compiler::compile_if(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
@@ -262,13 +245,13 @@ Result Compiler::compile_if(
 	Operand l2 = make_label();
 	Operand res = make_temporary();
 
-	auto cond_res = compile(ast, cond_idx, pool);
+	auto cond_res = compile(ast, cond_idx, pool, handlers);
 	chunk = chunk + cond_res.code;
 	Operand cond_opnd = to_rvalue(&chunk, cond_res.opnd);
 
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1).with_comment("if branch");
 
-	auto yes_res = compile(ast, then_idx, pool);
+	auto yes_res = compile(ast, then_idx, pool, handlers);
 	chunk = chunk + yes_res.code;
 	Operand yes_opnd = yes_res.opnd;
 
@@ -276,7 +259,7 @@ Result Compiler::compile_if(
 	chunk.emit(Opcode::JMP, l2);
 	chunk.add_label(l1);
 
-	auto no_res = compile(ast, else_idx, pool);
+	auto no_res = compile(ast, else_idx, pool, handlers);
 	chunk = chunk + no_res.code;
 	Operand no_opnd = no_res.opnd;
 
@@ -287,7 +270,7 @@ Result Compiler::compile_if(
 }
 
 Result Compiler::compile_for(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
@@ -300,13 +283,24 @@ Result Compiler::compile_for(
 	const auto& step_node = ast.at(step_idx);
 
 	Operand beg = make_label();
-	Operand inc = cnt_lab = make_label();
-	Operand end = brk_lab = make_label();
+	Operand inc = make_label();
+	Operand end = make_label();
 	Operand cmp = make_temporary();
+
+	Operand result_register = make_temporary();
+
+	SignalHandlers new_handlers {
+		{inc.lab, result_register},
+		{end.lab, result_register},
+		handlers.return_handler,
+		true,
+		true,
+		handlers.has_return_handler
+	};
 
 	Operand step = [&]() {
 		if (step_node.type != AST_EMPTY) {
-			auto step_res = compile(ast, step_idx, pool);
+			auto step_res = compile(ast, step_idx, pool, handlers);
 			chunk = chunk + step_res.code;
 			return to_rvalue(&chunk, step_res.opnd);
 		} else {
@@ -316,39 +310,35 @@ Result Compiler::compile_for(
 
 	auto scope = env.make_scope();
 
-	auto var_res = compile(ast, decl_idx, pool);
+	auto var_res = compile(ast, decl_idx, pool, handlers);
 	chunk = chunk + var_res.code;
 	Operand var = var_res.opnd;
 	if (!var.is_register()) err("Declaration must be of a number lvalue");
 
-	auto to_res = compile(ast, to_idx, pool);
+	auto to_res = compile(ast, to_idx, pool, handlers);
 	chunk = chunk + to_res.code;
 	Operand to = to_rvalue(&chunk, to_res.opnd);
-
-	back_patch_count.push(0);
-	in_loop = true;
 
 	chunk.add_label(beg);
 	chunk.emit(Opcode::EQ, cmp, var, to);
 	chunk.emit(Opcode::JMP_TRUE, cmp, end);
 
-	auto exp_res = compile(ast, then_idx, pool);
+	auto exp_res = compile(ast, then_idx, pool, new_handlers);
 	chunk = chunk + exp_res.code;
 	Operand exp = exp_res.opnd;
+
+	chunk.emit(Opcode::MOV, result_register, exp);
 
 	chunk.add_label(inc);
 	chunk.emit(Opcode::ADD, var, var, step);
 	chunk.emit(Opcode::JMP, beg);
 	chunk.add_label(end);
 
-	back_patch_jumps(&chunk, exp);
-	in_loop = false;
-
-	return {chunk, exp};
+	return {chunk, result_register};
 }
 
 Result Compiler::compile_when(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
@@ -359,14 +349,14 @@ Result Compiler::compile_when(
 	Operand l1 = make_label();
 	Operand res = make_temporary();
 
-	auto cond_res = compile(ast, cond_idx, pool);
+	auto cond_res = compile(ast, cond_idx, pool, handlers);
 	chunk = chunk + cond_res.code;
 	Operand cond_opnd = to_rvalue(&chunk, cond_res.opnd);
 
 	chunk.emit(Opcode::MOV, res, {}).with_comment("when conditional");
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1);
 
-	auto yes_res = compile(ast, then_idx, pool);
+	auto yes_res = compile(ast, then_idx, pool, handlers);
 	chunk = chunk + yes_res.code;
 	Operand yes_opnd = yes_res.opnd;
 
@@ -377,36 +367,43 @@ Result Compiler::compile_when(
 }
 
 Result Compiler::compile_while(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	Operand beg = cnt_lab = make_label();
-	Operand end = brk_lab = make_label();
+	Operand beg = make_label();
+	Operand end = make_label();
 
-	back_patch_count.push(0);
-	in_loop = true;
+	Operand result_register = make_temporary();
+
+	SignalHandlers new_handlers {
+		{beg.lab, result_register},
+		{end.lab, result_register},
+		handlers.return_handler,
+		true,
+		true,
+		handlers.has_return_handler
+	};
 
 	chunk.add_label(beg);
 
-	auto cond_res = compile(ast, node[0], pool);
+	auto cond_res = compile(ast, node[0], pool, handlers);
 	chunk = chunk + cond_res.code;
 	Operand cond = to_rvalue(&chunk, cond_res.opnd);
 
 	chunk.emit(Opcode::JMP_FALSE, cond, end);
 
-	auto exp_res = compile(ast, node[1], pool);
+	auto exp_res = compile(ast, node[1], pool, new_handlers);
 	chunk = chunk + exp_res.code;
 	Operand exp = to_rvalue(&chunk, exp_res.opnd);
+
+	chunk.emit(Opcode::MOV, result_register, exp);
 
 	chunk.emit(Opcode::JMP, beg);
 	chunk.add_label(end);
 
-	back_patch_jumps(&chunk, exp);
-	in_loop = false;
-
-	return {chunk, exp};
+	return {chunk, result_register};
 }
 
 #if 0
@@ -421,7 +418,7 @@ Result Compiler::compile_app(
 #endif
 
 Result Compiler::compile_decl(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
@@ -456,7 +453,7 @@ Result Compiler::compile_decl(
 			env.insert(param_node.str_id, arg);
 		}
 
-		auto op_res = compile(ast, body_idx, pool);
+		auto op_res = compile(ast, body_idx, pool, handlers);
 		func = func + op_res.code;
 		auto op = op_res.opnd;
 
@@ -478,7 +475,7 @@ Result Compiler::compile_decl(
 
 		const auto& id_node = ast.at(id_idx);
 
-		auto initial_res = compile(ast, exp_idx, pool);
+		auto initial_res = compile(ast, exp_idx, pool, handlers);
 		chunk = chunk + initial_res.code;
 		Operand initial = initial_res.opnd;
 
@@ -498,18 +495,18 @@ Result Compiler::compile_decl(
 }
 
 Result Compiler::compile_ass(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	auto cell_res = compile(ast, node[0], pool);
+	auto cell_res = compile(ast, node[0], pool, handlers);
 	chunk = chunk + cell_res.code;
 	Operand cell = cell_res.opnd;
 	if (!cell.is_register())
 		err("Left-hand side of assignment must be an lvalue");
 
-	auto exp_res = compile(ast, node[1], pool);
+	auto exp_res = compile(ast, node[1], pool, handlers);
 	chunk = chunk + exp_res.code;
 	Operand exp = to_rvalue(&chunk, exp_res.opnd);
 
@@ -523,7 +520,7 @@ Result Compiler::compile_ass(
 }
 
 Result Compiler::compile_let(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
@@ -536,10 +533,10 @@ Result Compiler::compile_let(
 	{
 		auto scope = env.make_scope();
 		for (size_t i = 0; i < decls_node.branch.children_count; i++) {
-			auto res = compile(ast, decls_node[i], pool);
+			auto res = compile(ast, decls_node[i], pool, handlers);
 			chunk = chunk + res.code;
 		}
-		auto res_res = compile(ast, exp_idx, pool);
+		auto res_res = compile(ast, exp_idx, pool, handlers);
 		chunk = chunk + res_res.code;
 		Operand res = res_res.opnd;
 		return {chunk, res};
@@ -547,7 +544,7 @@ Result Compiler::compile_let(
 }
 
 Result Compiler::compile_str(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
@@ -575,17 +572,17 @@ Result Compiler::compile_str(
 }
 
 Result Compiler::compile_at(
-	AST& ast, NodeIndex node_idx, const StringPool& pool
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	// evaluates to a temporary register containing the address of the lvalue
 
-	auto base_res = compile(ast, node[0], pool);
+	auto base_res = compile(ast, node[0], pool, handlers);
 	chunk = chunk + base_res.code;
 	Operand base = base_res.opnd;
-	auto off_res = compile(ast, node[1], pool);
+	auto off_res = compile(ast, node[1], pool, handlers);
 	chunk = chunk + off_res.code;
 	Operand off = to_rvalue(&chunk, off_res.opnd);
 
@@ -600,9 +597,11 @@ Result Compiler::compile_at(
 }
 
 // FIXME: Temporary workaround
-#define COMPILE_WITH_HANDLER(METH) return METH(ast, node_idx, pool);
+#define COMPILE_WITH_HANDLER(METH) return METH(ast, node_idx, pool, handlers);
 
-Result Compiler::compile(AST& ast, NodeIndex node_idx, const StringPool& pool) {
+Result Compiler::compile(
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers
+) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case AST_APP: COMPILE_WITH_HANDLER(compile_app)
@@ -612,7 +611,7 @@ Result Compiler::compile(AST& ast, NodeIndex node_idx, const StringPool& pool) {
 			auto scope = env.make_scope();
 			Operand opnd;
 			for (size_t i = 0; i < node.branch.children_count; i++) {
-				auto opnd_res = compile(ast, node[i], pool);
+				auto opnd_res = compile(ast, node[i], pool, handlers);
 				chunk = chunk + opnd_res.code;
 				opnd = opnd_res.opnd;
 			}
@@ -625,51 +624,51 @@ Result Compiler::compile(AST& ast, NodeIndex node_idx, const StringPool& pool) {
 		case AST_WHILE: COMPILE_WITH_HANDLER(compile_while)
 		case AST_BREAK: {
 			Chunk chunk {};
-			if (!in_loop) err("Can't break outside of loops");
+			if (!handlers.has_break_handler) err("Can't break outside of loops");
 			if (!(node.branch.children_count == 1))
 				err("`break' requires a expression to evaluate the loop to");
 
-			auto res_res = compile(ast, node[0], pool);
+			auto res_res = compile(ast, node[0], pool, handlers);
 			chunk = chunk + res_res.code;
 			Operand res = to_rvalue(&chunk, res_res.opnd);
-			chunk.emit(Opcode::MOV, {}, res);
-			push_to_back_patch(chunk.m_vec.size() - 1);
-			chunk.emit(Opcode::JMP, brk_lab).with_comment("break out of loop");
+			chunk.emit(Opcode::MOV, handlers.break_handler.result_register, res);
+			chunk.emit(Opcode::JMP, handlers.break_handler.destination_label)
+				.with_comment("break out of loop");
 			return {chunk, {}};
 		}
 		case AST_CONTINUE: {
 			Chunk chunk {};
-			if (!in_loop) err("can't continue outside of loops");
+			if (!handlers.has_continue_handler)
+				err("can't continue outside of loops");
 			if (!(node.branch.children_count == 1))
 				err("continue requires a expression to evaluate the loop to");
 
-			auto res_res = compile(ast, node[0], pool);
+			auto res_res = compile(ast, node[0], pool, handlers);
 			chunk = chunk + res_res.code;
 			Operand res = to_rvalue(&chunk, res_res.opnd);
-			chunk.emit(Opcode::MOV, {}, res);
-			push_to_back_patch(chunk.m_vec.size() - 1);
-			chunk.emit(Opcode::JMP, cnt_lab)
+			chunk.emit(Opcode::MOV, handlers.continue_handler.result_register, res);
+			chunk.emit(Opcode::JMP, handlers.continue_handler.destination_label)
 				.with_comment("continue to next iteration of loop");
 			return {chunk, {}};
 		}
 		case AST_ASS: COMPILE_WITH_HANDLER(compile_ass)
 
-#define BINARY_ARITH(OPCODE)                           \
-	{                                                    \
-		Chunk chunk {};                                    \
-		auto left_node = node[0];                          \
-		auto right_node = node[1];                         \
-                                                       \
-		auto left_res = compile(ast, left_node, pool);     \
-		chunk = chunk + left_res.code;                     \
-		auto right_res = compile(ast, right_node, pool);   \
-		chunk = chunk + right_res.code;                    \
-		Operand left = to_rvalue(&chunk, left_res.opnd);   \
-		Operand right = to_rvalue(&chunk, right_res.opnd); \
-		Operand res = make_temporary();                    \
-                                                       \
-		chunk.emit(OPCODE, res, left, right);              \
-		return {chunk, res};                               \
+#define BINARY_ARITH(OPCODE)                                   \
+	{                                                            \
+		Chunk chunk {};                                            \
+		auto left_node = node[0];                                  \
+		auto right_node = node[1];                                 \
+                                                               \
+		auto left_res = compile(ast, left_node, pool, handlers);   \
+		chunk = chunk + left_res.code;                             \
+		auto right_res = compile(ast, right_node, pool, handlers); \
+		chunk = chunk + right_res.code;                            \
+		Operand left = to_rvalue(&chunk, left_res.opnd);           \
+		Operand right = to_rvalue(&chunk, right_res.opnd);         \
+		Operand res = make_temporary();                            \
+                                                               \
+		chunk.emit(OPCODE, res, left, right);                      \
+		return {chunk, res};                                       \
 	}
 
 		case AST_OR: BINARY_ARITH(Opcode::OR);
@@ -687,7 +686,7 @@ Result Compiler::compile(AST& ast, NodeIndex node_idx, const StringPool& pool) {
 		case AST_NOT: {
 			Chunk chunk {};
 			Operand res = make_temporary();
-			auto inverse_res = compile(ast, node[0], pool);
+			auto inverse_res = compile(ast, node[0], pool, handlers);
 			chunk = chunk + inverse_res.code;
 			Operand inverse = to_rvalue(&chunk, inverse_res.opnd);
 			chunk.emit(Opcode::NOT, res, inverse);
@@ -707,9 +706,9 @@ Result Compiler::compile(AST& ast, NodeIndex node_idx, const StringPool& pool) {
 		case AST_LET: COMPILE_WITH_HANDLER(compile_let)
 		case AST_EMPTY: assert(false && "unreachable");
 		case AST_CHAR: return {{}, {node.character}};
-		case AST_PATH: return compile(ast, node[0], pool);
+		case AST_PATH: return compile(ast, node[0], pool, handlers);
 		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
-		case AST_AS: return compile(ast, node[0], pool);
+		case AST_AS: return compile(ast, node[0], pool, handlers);
 	}
 	assert(false);
 }
