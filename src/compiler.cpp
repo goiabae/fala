@@ -168,7 +168,12 @@ Chunk Compiler::compile(AST& ast, const StringPool& pool) {
 
 	preamble.emit(Opcode::JMP, main);
 
-	Chunk res = preamble + chunk;
+	Chunk all_functions {};
+	for (const auto& f : functions) {
+		all_functions = all_functions + f;
+	}
+
+	Chunk res = preamble + all_functions + chunk;
 
 	return res;
 }
@@ -552,7 +557,7 @@ Operand Compiler::compile(
 				func.emit(Opcode::PUSH, op);
 				func.emit(Opcode::RET);
 
-				*chunk = func + *chunk;
+				functions.push_back(func);
 
 				return func_name;
 			}
