@@ -379,6 +379,169 @@ Result Compiler::compile_while(
 	return {chunk, exp};
 }
 
+Result Compiler::compile_decl(
+	AST& ast, NodeIndex node_idx, const StringPool& pool
+) {
+	Chunk chunk {};
+	const auto& node = ast.at(node_idx);
+
+	// "fun" id params opt-type "=" body
+	if (node.branch.children_count == 4) {
+		auto id_idx = node[0];
+		auto params_idx = node[1];
+		auto opt_type_idx = node[2];
+		auto body_idx = node[3];
+
+		const auto& id_node = ast.at(id_idx);
+		const auto& params_node = ast.at(params_idx);
+
+		(void)opt_type_idx;
+
+		Operand* opnd = env.insert(id_node.str_id, make_register());
+
+		auto func_name = make_label();
+		*opnd = func_name;
+		auto scope = env.make_scope();
+
+		Chunk func {};
+
+		func.add_label(func_name);
+		func.emit(Opcode::FUNC);
+
+		for (size_t i = 0; i < params_node.branch.children_count; i++) {
+			const auto& param_node = ast.at(params_node[i]);
+			auto arg = make_register();
+			func.emit(Opcode::POP, arg);
+			env.insert(param_node.str_id, arg);
+		}
+
+		auto op = compile(ast, body_idx, pool, &func);
+
+		func.emit(Opcode::PUSH, op);
+		func.emit(Opcode::RET);
+
+		functions.push_back(func);
+
+		return {chunk, func_name};
+	}
+
+	// "var" id opt-type "=" exp
+	if (node.branch.children_count == 3) {
+		auto id_idx = node[0];
+		auto opt_type_idx = node[1];
+		auto exp_idx = node[2];
+
+		(void)opt_type_idx;
+
+		const auto& id_node = ast.at(id_idx);
+
+		Operand initial = compile(ast, exp_idx, pool, &chunk);
+
+		// initial is an array
+		if (initial.type == Operand::Type::REG && initial.reg.has_addr())
+			return {chunk, *env.insert(id_node.str_id, initial)};
+
+		// anything else
+		initial = to_rvalue(&chunk, initial);
+		Operand* var = env.insert(id_node.str_id, make_register());
+		if (initial.is_register()) var->reg.type = initial.reg.type;
+		chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
+		return {chunk, *var};
+	}
+
+	assert(false && "unreachable");
+}
+
+Result Compiler::compile_ass(
+	AST& ast, NodeIndex node_idx, const StringPool& pool
+) {
+	Chunk chunk {};
+	const auto& node = ast.at(node_idx);
+
+	Operand cell = compile(ast, node[0], pool, &chunk);
+	if (!cell.is_register())
+		err("Left-hand side of assignment must be an lvalue");
+
+	Operand exp = to_rvalue(&chunk, compile(ast, node[1], pool, &chunk));
+
+	if (cell.reg.has_addr())
+		chunk.emit(Opcode::STORE, exp, Operand(0), cell)
+			.with_comment("assigning to array variable");
+	else // contains number
+		chunk.emit(Opcode::MOV, cell, exp).with_comment("assigning to variable");
+
+	return {chunk, exp};
+}
+
+Result Compiler::compile_let(
+	AST& ast, NodeIndex node_idx, const StringPool& pool
+) {
+	Chunk chunk {};
+	const auto& node = ast.at(node_idx);
+
+	auto decls_idx = node[0];
+	auto exp_idx = node[1];
+
+	const auto& decls_node = ast.at(decls_idx);
+
+	{
+		auto scope = env.make_scope();
+		for (size_t i = 0; i < decls_node.branch.children_count; i++)
+			(void)compile(ast, decls_node[i], pool, &chunk);
+		Operand res = compile(ast, exp_idx, pool, &chunk);
+		return {chunk, res};
+	}
+}
+
+Result Compiler::compile_str(
+	AST& ast, NodeIndex node_idx, const StringPool& pool
+) {
+	Chunk chunk {};
+	const auto& node = ast.at(node_idx);
+
+	// allocates a static buffer for the string characters, ending in a
+	// sentinel null character and returns a pointer to the start
+
+	const char* str = pool.find(node.str_id);
+	auto str_len = strlen(str);
+	auto buf = make_temporary();
+	buf.reg = buf.reg.as_addr();
+	dyn_alloc_start -= (Number)str_len + 1;
+
+	chunk.emit(Opcode::MOV, buf, Operand(dyn_alloc_start));
+
+	for (size_t i = 0; i < str_len + 1; i++)
+		chunk.emit(
+			Opcode::MOV,
+			Operand(Register((size_t)dyn_alloc_start + i).as_num()).as_reg(),
+			Operand((Number)str[i])
+		);
+
+	return {chunk, buf};
+	// return Operand(pool.find(node.str_id));
+}
+
+Result Compiler::compile_at(
+	AST& ast, NodeIndex node_idx, const StringPool& pool
+) {
+	Chunk chunk {};
+	const auto& node = ast.at(node_idx);
+
+	// evaluates to a temporary register containing the address of the lvalue
+
+	Operand base = compile(ast, node[0], pool, &chunk);
+	Operand off = to_rvalue(&chunk, compile(ast, node[1], pool, &chunk));
+
+	if (!base.is_register()) err("Base must be an lvalue");
+	if (base.type == Operand::Type::TMP) err("Not an array");
+
+	Operand tmp = make_temporary();
+	chunk.emit(Opcode::ADD, tmp, base, off)
+		.with_comment("accessing allocated array");
+
+	return {chunk, Operand(tmp.reg.as_addr()).as_temp()};
+}
+
 // FIXME: Temporary workaround
 #define COMPILE_WITH_HANDLER(METH)           \
 	{                                          \
@@ -431,22 +594,7 @@ Operand Compiler::compile(
 				.with_comment("continue to next iteration of loop");
 			return {};
 		}
-		case AST_ASS: {
-			Operand cell = compile(ast, node[0], pool, chunk);
-			if (!cell.is_register())
-				err("Left-hand side of assignment must be an lvalue");
-
-			Operand exp = to_rvalue(chunk, compile(ast, node[1], pool, chunk));
-
-			if (cell.reg.has_addr())
-				chunk->emit(Opcode::STORE, exp, Operand(0), cell)
-					.with_comment("assigning to array variable");
-			else // contains number
-				chunk->emit(Opcode::MOV, cell, exp)
-					.with_comment("assigning to variable");
-
-			return exp;
-		}
+		case AST_ASS: COMPILE_WITH_HANDLER(compile_ass)
 
 #define BINARY_ARITH(OPCODE)                                                 \
 	{                                                                          \
@@ -479,133 +627,18 @@ Operand Compiler::compile(
 			chunk->emit(Opcode::NOT, res, inverse);
 			return res;
 		}
-		case AST_AT: {
-			// evaluates to a temporary register containing the address of the lvalue
-
-			Operand base = compile(ast, node[0], pool, chunk);
-			Operand off = to_rvalue(chunk, compile(ast, node[1], pool, chunk));
-
-			if (!base.is_register()) err("Base must be an lvalue");
-			if (base.type == Operand::Type::TMP) err("Not an array");
-
-			Operand tmp = make_temporary();
-			chunk->emit(Opcode::ADD, tmp, base, off)
-				.with_comment("accessing allocated array");
-
-			return Operand(tmp.reg.as_addr()).as_temp();
-		}
+		case AST_AT: COMPILE_WITH_HANDLER(compile_at)
 		case AST_ID: {
 			Operand* opnd = env.find(node.str_id);
 			if (opnd == nullptr) err("Variable not found");
 			return *opnd;
 		}
-		case AST_STR: {
-			// allocates a static buffer for the string characters, ending in a
-			// sentinel null character and returns a pointer to the start
-
-			const char* str = pool.find(node.str_id);
-			auto str_len = strlen(str);
-			auto buf = make_temporary();
-			buf.reg = buf.reg.as_addr();
-			dyn_alloc_start -= (Number)str_len + 1;
-
-			chunk->emit(Opcode::MOV, buf, Operand(dyn_alloc_start));
-
-			for (size_t i = 0; i < str_len + 1; i++)
-				chunk->emit(
-					Opcode::MOV,
-					Operand(Register((size_t)dyn_alloc_start + i).as_num()).as_reg(),
-					Operand((Number)str[i])
-				);
-
-			return buf;
-			// return Operand(pool.find(node.str_id));
-		}
-		case AST_DECL: {
-			// "fun" id params opt-type "=" body
-			if (node.branch.children_count == 4) {
-				auto id_idx = node[0];
-				auto params_idx = node[1];
-				auto opt_type_idx = node[2];
-				auto body_idx = node[3];
-
-				const auto& id_node = ast.at(id_idx);
-				const auto& params_node = ast.at(params_idx);
-
-				(void)opt_type_idx;
-
-				Operand* opnd = env.insert(id_node.str_id, make_register());
-
-				auto func_name = make_label();
-				*opnd = func_name;
-				auto scope = env.make_scope();
-
-				Chunk func {};
-
-				func.add_label(func_name);
-				func.emit(Opcode::FUNC);
-
-				for (size_t i = 0; i < params_node.branch.children_count; i++) {
-					const auto& param_node = ast.at(params_node[i]);
-					auto arg = make_register();
-					func.emit(Opcode::POP, arg);
-					env.insert(param_node.str_id, arg);
-				}
-
-				auto op = compile(ast, body_idx, pool, &func);
-
-				func.emit(Opcode::PUSH, op);
-				func.emit(Opcode::RET);
-
-				functions.push_back(func);
-
-				return func_name;
-			}
-
-			// "var" id opt-type "=" exp
-			if (node.branch.children_count == 3) {
-				auto id_idx = node[0];
-				auto opt_type_idx = node[1];
-				auto exp_idx = node[2];
-
-				(void)opt_type_idx;
-
-				const auto& id_node = ast.at(id_idx);
-
-				Operand initial = compile(ast, exp_idx, pool, chunk);
-
-				// initial is an array
-				if (initial.type == Operand::Type::REG && initial.reg.has_addr())
-					return *env.insert(id_node.str_id, initial);
-
-				// anything else
-				initial = to_rvalue(chunk, initial);
-				Operand* var = env.insert(id_node.str_id, make_register());
-				if (initial.is_register()) var->reg.type = initial.reg.type;
-				chunk->emit(Opcode::MOV, *var, initial)
-					.with_comment("creating variable");
-				return *var;
-			}
-
-			assert(false && "unreachable");
-		}
+		case AST_STR: COMPILE_WITH_HANDLER(compile_str)
+		case AST_DECL: COMPILE_WITH_HANDLER(compile_decl)
 		case AST_NIL: return {};
 		case AST_TRUE: return {1};
 		case AST_FALSE: return {0};
-		case AST_LET: {
-			auto decls_idx = node[0];
-			auto exp_idx = node[1];
-
-			const auto& decls_node = ast.at(decls_idx);
-
-			{
-				auto scope = env.make_scope();
-				for (size_t i = 0; i < decls_node.branch.children_count; i++)
-					(void)compile(ast, decls_node[i], pool, chunk);
-				Operand res = compile(ast, exp_idx, pool, chunk);
-				return res;
-			}
-		}
+		case AST_LET: COMPILE_WITH_HANDLER(compile_let)
 		case AST_EMPTY: assert(false && "unreachable");
 		case AST_CHAR: return {node.character};
 		case AST_PATH: return compile(ast, node[0], pool, chunk);

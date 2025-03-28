@@ -73,6 +73,10 @@ struct Compiler {
 	Result compile_when(AST& ast, NodeIndex node_idx, const StringPool& pool);
 	Result compile_while(AST& ast, NodeIndex node_idx, const StringPool& pool);
 	Result compile_let(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_decl(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_ass(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_str(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_at(AST& ast, NodeIndex node_idx, const StringPool& pool);
 };
 
 } // namespace compiler
