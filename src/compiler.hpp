@@ -64,7 +64,6 @@ struct Compiler {
 	Number dyn_alloc_start {2047};
 
 	Env<Operand> env;
-	Chunk* preamble {nullptr};
 
 	Result compile_app(AST& ast, NodeIndex node_idx, const StringPool& pool);
 	Result compile_if(AST& ast, NodeIndex node_idx, const StringPool& pool);

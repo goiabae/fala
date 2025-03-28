@@ -148,16 +148,14 @@ void Compiler::back_patch_jumps(Chunk* chunk, Operand dest) {
 }
 
 Chunk Compiler::compile(AST& ast, const StringPool& pool) {
-	Chunk preamble_ {};
+	Chunk preamble {};
 	Chunk chunk;
-
-	this->preamble = &preamble_;
 
 	auto main = make_label();
 
 	auto dyn = make_register();
 	preamble
-		->emit(Opcode::MOV, dyn, {}) // snd will be patched after compilation
+		.emit(Opcode::MOV, dyn, {}) // snd will be patched after compilation
 		.with_comment("contains address to start of the last allocated region");
 
 	chunk.add_label(main);
@@ -165,12 +163,12 @@ Chunk Compiler::compile(AST& ast, const StringPool& pool) {
 	compile(ast, ast.root_index, pool, &chunk);
 
 	Operand start(dyn_alloc_start);
-	preamble->m_vec[0].operands[1] =
+	preamble.m_vec[0].operands[1] =
 		start; // backpatching snd after static allocations
 
-	preamble->emit(Opcode::JMP, main);
+	preamble.emit(Opcode::JMP, main);
 
-	Chunk res = *preamble + chunk;
+	Chunk res = preamble + chunk;
 
 	return res;
 }
