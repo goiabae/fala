@@ -498,7 +498,7 @@ Operand Compiler::compile(
 		}
 		case AST_STR: {
 			// allocates a static buffer for the string characters, ending in a
-			// setinel null character and returns a pointer to the start
+			// sentinel null character and returns a pointer to the start
 
 			const char* str = pool.find(node.str_id);
 			auto str_len = strlen(str);
