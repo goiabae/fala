@@ -67,6 +67,11 @@ struct Compiler {
 	Chunk* preamble {nullptr};
 
 	Result compile_app(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_if(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_for(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_when(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_while(AST& ast, NodeIndex node_idx, const StringPool& pool);
+	Result compile_let(AST& ast, NodeIndex node_idx, const StringPool& pool);
 };
 
 } // namespace compiler
