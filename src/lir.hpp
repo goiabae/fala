@@ -101,9 +101,11 @@ struct Operand {
 	void deinit() { return; }
 };
 
+#define INSTRUCTION_MAX_OPERANDS 3
+
 struct Instruction {
 	Opcode opcode;
-	Operand operands[3];
+	Operand operands[INSTRUCTION_MAX_OPERANDS];
 	std::string comment;
 };
 
