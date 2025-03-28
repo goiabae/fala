@@ -30,9 +30,7 @@ struct Result {
 struct Compiler {
 	Chunk compile(AST& ast, const StringPool& pool);
 
-	Operand compile(
-		AST& ast, NodeIndex node_idx, const StringPool& pool, Chunk* chunk
-	);
+	Result compile(AST& ast, NodeIndex node_idx, const StringPool& pool);
 
 	// these are monotonically increasing as the compiler goes on
 	size_t label_count {0};
