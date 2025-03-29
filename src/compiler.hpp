@@ -56,7 +56,7 @@ struct Compiler {
 
 	Result compile(
 		AST& ast, NodeIndex node_idx, const StringPool& pool,
-		SignalHandlers handlers
+		SignalHandlers handlers, Env<Operand>::ScopeID scope_id
 	);
 
 	// these are monotonically increasing as the compiler goes on
@@ -82,7 +82,8 @@ struct Compiler {
 		AST& ast,                      \
 		NodeIndex node_idx,            \
 		const StringPool& pool,        \
-		SignalHandlers handlers        \
+		SignalHandlers handlers,       \
+		Env<Operand>::ScopeID scope_id \
 	)
 
 	DECLARE_NODE_HANDLER(app);

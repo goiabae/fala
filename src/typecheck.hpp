@@ -1,7 +1,9 @@
 #ifndef FALA_TYPECHECK_HPP
 #define FALA_TYPECHECK_HPP
 
-#include <utility>
+#include <stdio.h>
+
+#include <map>
 #include <vector>
 
 #include "ast.hpp"
@@ -32,8 +34,12 @@ struct Typechecker {
 	std::vector<Type*> ts {};
 	Env<Type*> env {};
 	StringPool& pool;
+	std::map<NodeIndex, Env<Type*>::ScopeID> node_to_scope_id {};
+	std::map<NodeIndex, Type*> node_to_type {};
 };
 
-bool typecheck(AST& ast, StringPool& pool);
+Typechecker typecheck(AST& ast, StringPool& pool);
+
+void print_type(FILE* fd, Type* t);
 
 #endif

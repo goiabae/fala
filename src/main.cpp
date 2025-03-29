@@ -188,7 +188,7 @@ int compile(Options opts) {
 		printf("\n");
 	}
 
-	typecheck(ast, pool);
+	auto checker = typecheck(ast, pool);
 
 	compiler::Compiler comp;
 	auto chunk = comp.compile(ast, pool);

@@ -119,4 +119,6 @@ struct AST {
 	NodeIndex next_free_index {0};
 };
 
+bool operator<(NodeIndex a, NodeIndex b);
+
 #endif

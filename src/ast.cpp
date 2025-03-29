@@ -291,3 +291,5 @@ NodeIndex& Node::operator[](size_t index) const {
 void ast_set_root(AST* ast, NodeIndex node_idx) { ast->root_index = node_idx; }
 
 AST::~AST() { node_deinit(this, root_index); }
+
+bool operator<(NodeIndex a, NodeIndex b) { return a.index < b.index; }

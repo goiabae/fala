@@ -11,7 +11,9 @@
 
 namespace walk {
 
-Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx);
+Value inter_eval_node(
+	Interpreter* inter, AST& ast, NodeIndex node_idx, Env<Value>::ScopeID scope_id
+);
 
 static void err(const char* msg) {
 	fprintf(stderr, "INTERPRETER ERROR: %s\n", msg);
@@ -31,31 +33,35 @@ static void err2(Location loc, const char* msg) {
 }
 
 Value Interpreter::eval(AST& ast) {
-	return inter_eval_node(this, ast, ast.root_index);
+	return inter_eval_node(this, ast, ast.root_index, env.root_scope_id);
 }
 
 // term term+
-Value eval_app(Interpreter* inter, AST& ast, const Node& node) {
+Value eval_app(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
 	auto func_idx = node[0];
 	auto args_idx = node[1];
 
 	const auto& func_node = ast.at(func_idx);
 	const auto& args_node = ast.at(args_idx);
 
-	if (func_node.type != NodeType::ID) err("Unnamed functions are not implemented");
+	if (func_node.type != NodeType::ID)
+		err("Unnamed functions are not implemented");
 
-	Value* func_ptr = inter->env.find(func_node.str_id);
+	Value* func_ptr = inter->env.find(scope_id, func_node.str_id);
 	if (!func_ptr) err("Function with name <name> not found");
 
 	Function func = func_ptr->func;
-	if (func.param_count != args_node.branch.children_count && func.param_count != 0)
+	if (func.param_count != args_node.branch.children_count
+	    && func.param_count != 0)
 		err("Wrong number of arguments");
 
 	size_t argc = args_node.branch.children_count;
 	Value* args = new Value[argc];
 	for (size_t i = 0; i < argc; i++)
-		args[i] =
-			inter_eval_node(inter, ast, args_node[i]).to_rvalue(); // call-by-value
+		args[i] = inter_eval_node(inter, ast, args_node[i], scope_id)
+		            .to_rvalue(); // call-by-value
 
 	if (func.is_builtin) {
 		Value val = func.builtin(argc, args);
@@ -63,44 +69,52 @@ Value eval_app(Interpreter* inter, AST& ast, const Node& node) {
 		return val;
 	}
 
-	auto scope = inter->env.make_scope();
+	auto new_scope = inter->env.create_child_scope(scope_id);
 
 	// set all parameters to the corresponding arguments
 	for (size_t i = 0; i < argc; i++) {
 		const auto& param = ast.at(func.custom.params[i]);
-		*inter->env.insert(param.str_id) = args[i];
+		*inter->env.insert(new_scope, param.str_id) = args[i];
 	}
 
-	Value val = inter_eval_node(inter, ast, func.custom.root);
+	Value val = inter_eval_node(inter, ast, func.custom.root, new_scope);
 
 	delete[] args;
 	return val;
 }
 
-Value eval_block(Interpreter* inter, AST& ast, const Node& node) {
+Value eval_block(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
 	Value res;
-	auto scope = inter->env.make_scope();
+	auto scope = inter->env.create_child_scope(scope_id);
 	for (size_t i = 0; i < node.branch.children_count; i++)
-		res = inter_eval_node(inter, ast, node[i]);
+		res = inter_eval_node(inter, ast, node[i], scope);
 	return res;
 }
 
 // if exp then exp else exp
-Value eval_if(Interpreter* inter, AST& ast, const Node& node) {
-	Value cond = inter_eval_node(inter, ast, node[0]);
-	return (cond) ? inter_eval_node(inter, ast, node[1])
-	              : inter_eval_node(inter, ast, node[2]);
+Value eval_if(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
+	Value cond = inter_eval_node(inter, ast, node[0], scope_id);
+	return (cond) ? inter_eval_node(inter, ast, node[1], scope_id)
+	              : inter_eval_node(inter, ast, node[2], scope_id);
 }
 
 // when exp then exp
-Value eval_when(Interpreter* inter, AST& ast, const Node& node) {
-	Value cond = inter_eval_node(inter, ast, node[0]);
-	if (cond) inter_eval_node(inter, ast, node[1]);
+Value eval_when(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
+	Value cond = inter_eval_node(inter, ast, node[0], scope_id);
+	if (cond) inter_eval_node(inter, ast, node[1], scope_id);
 	return {};
 }
 
 // "for" decl "from" exp "to" exp ("step" exp)? "then" exp
-Value eval_for(Interpreter* inter, AST& ast, const Node& node) {
+Value eval_for(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
 	auto decl_idx = node[0];
 	auto to_idx = node[1];
 	auto step_idx = node[2];
@@ -110,15 +124,16 @@ Value eval_for(Interpreter* inter, AST& ast, const Node& node) {
 
 	bool with_step = step_node.type != NodeType::EMPTY;
 
-	Value decl = inter_eval_node(inter, ast, decl_idx);
-	Value to = inter_eval_node(inter, ast, to_idx).to_rvalue();
-	Value inc = ((with_step) ? inter_eval_node(inter, ast, step_idx) : Value(1))
-	              .to_rvalue();
+	Value decl = inter_eval_node(inter, ast, decl_idx, scope_id);
+	Value to = inter_eval_node(inter, ast, to_idx, scope_id).to_rvalue();
+	Value inc =
+		((with_step) ? inter_eval_node(inter, ast, step_idx, scope_id) : Value(1))
+			.to_rvalue();
 
 	if (to.type != Value::Type::NUM) err("Type of `to' value is not number");
 	if (inc.type != Value::Type::NUM) err("Type of `inc' value is not number");
 
-	auto scope = inter->env.make_scope();
+	auto scope = inter->env.create_child_scope(scope_id);
 
 	Value* var = decl.var;
 
@@ -126,7 +141,7 @@ Value eval_for(Interpreter* inter, AST& ast, const Node& node) {
 	Value res;
 	for (Number i = var->num; i != to.num; i += inc.num) {
 		*var = Value(i);
-		res = inter_eval_node(inter, ast, then_idx);
+		res = inter_eval_node(inter, ast, then_idx, scope);
 		if (inter->should_break) break;
 		if (inter->should_continue) continue;
 	}
@@ -136,14 +151,16 @@ Value eval_for(Interpreter* inter, AST& ast, const Node& node) {
 }
 
 // "while" exp "then" exp
-Value eval_while(Interpreter* inter, AST& ast, const Node& node) {
+Value eval_while(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
 	auto cond_idx = node[0];
 	auto then_idx = node[1];
 
 	inter->in_loop = true;
 	Value res;
-	while (inter_eval_node(inter, ast, cond_idx)) {
-		res = inter_eval_node(inter, ast, then_idx);
+	while (inter_eval_node(inter, ast, cond_idx, scope_id)) {
+		res = inter_eval_node(inter, ast, then_idx, scope_id);
 		if (inter->should_break) break;
 		if (inter->should_continue) continue;
 	}
@@ -153,22 +170,26 @@ Value eval_while(Interpreter* inter, AST& ast, const Node& node) {
 }
 
 // id ([idx])? = exp
-Value eval_ass(Interpreter* inter, AST& ast, const Node& node) {
+Value eval_ass(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
 	auto path_idx = node[0];
 	auto exp_idx = node[1];
 
-	Value lvalue = inter_eval_node(inter, ast, path_idx);
+	Value lvalue = inter_eval_node(inter, ast, path_idx, scope_id);
 	if (lvalue.type != Value::Type::VAR) err("Can only assign to variable");
 
-	Value right = inter_eval_node(inter, ast, exp_idx).to_rvalue();
+	Value right = inter_eval_node(inter, ast, exp_idx, scope_id).to_rvalue();
 	return *(lvalue.var) = right;
 }
 
-Value eval_decl(Interpreter* inter, AST& ast, const Node& node) {
+Value eval_decl(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
 	auto id_idx = node[0];
 	const auto& id_node = ast.at(id_idx);
 
-	Value* cell = inter->env.insert(id_node.str_id);
+	Value* cell = inter->env.insert(scope_id, id_node.str_id);
 	if (!cell) err2(node.loc, "Could not initialize variable");
 
 	// "fun" id params opt-type "=" body
@@ -199,57 +220,59 @@ Value eval_decl(Interpreter* inter, AST& ast, const Node& node) {
 		(void)opt_type_idx;
 
 		Value res(cell);
-		*cell = inter_eval_node(inter, ast, exp_idx).to_rvalue();
+		*cell = inter_eval_node(inter, ast, exp_idx, scope_id).to_rvalue();
 		return res;
 	}
 
 	assert(false);
 }
 
-Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
+Value inter_eval_node(
+	Interpreter* inter, AST& ast, NodeIndex node_idx, Env<Value>::ScopeID scope_id
+) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::NUM: return Value(node.num);
-		case NodeType::APP: return eval_app(inter, ast, node);
-		case NodeType::BLK: return eval_block(inter, ast, node);
-		case NodeType::IF: return eval_if(inter, ast, node);
-		case NodeType::WHEN: return eval_when(inter, ast, node);
-		case NodeType::FOR: return eval_for(inter, ast, node);
-		case NodeType::WHILE: return eval_while(inter, ast, node);
+		case NodeType::APP: return eval_app(inter, ast, node, scope_id);
+		case NodeType::BLK: return eval_block(inter, ast, node, scope_id);
+		case NodeType::IF: return eval_if(inter, ast, node, scope_id);
+		case NodeType::WHEN: return eval_when(inter, ast, node, scope_id);
+		case NodeType::FOR: return eval_for(inter, ast, node, scope_id);
+		case NodeType::WHILE: return eval_while(inter, ast, node, scope_id);
 		case NodeType::BREAK: {
 			if (!inter->in_loop) err("Can't break outside of a loop");
 			inter->should_break = true;
-			return inter_eval_node(inter, ast, node[0]);
+			return inter_eval_node(inter, ast, node[0], scope_id);
 		}
 		case NodeType::CONTINUE: {
 			if (!inter->in_loop) err("Can't continue outside of a loop");
 			inter->should_continue = true;
-			return inter_eval_node(inter, ast, node[0]);
+			return inter_eval_node(inter, ast, node[0], scope_id);
 		}
-		case NodeType::ASS: return eval_ass(inter, ast, node);
+		case NodeType::ASS: return eval_ass(inter, ast, node, scope_id);
 		case NodeType::OR: {
-			Value left = inter_eval_node(inter, ast, node[0]);
+			Value left = inter_eval_node(inter, ast, node[0], scope_id);
 			if (left) return Value(true);
 
-			Value right = inter_eval_node(inter, ast, node[1]);
+			Value right = inter_eval_node(inter, ast, node[1], scope_id);
 			return (right) ? Value(true) : Value();
 		}
 		case NodeType::AND: {
-			Value left = inter_eval_node(inter, ast, node[0]);
+			Value left = inter_eval_node(inter, ast, node[0], scope_id);
 			if (!left) return Value();
 
-			Value right = inter_eval_node(inter, ast, node[1]);
+			Value right = inter_eval_node(inter, ast, node[1], scope_id);
 			return (right) ? Value(true) : Value();
 		}
-#define ARITH_OP(OP)                                                  \
-	{                                                                   \
-		Value left = inter_eval_node(inter, ast, node[0]).to_rvalue();    \
-		Value right = inter_eval_node(inter, ast, node[1]).to_rvalue();   \
-		if (left.type != Value::Type::NUM)                                \
-			err("Left-hand side of arithmentic operator is not a number");  \
-		if (right.type != Value::Type::NUM)                               \
-			err("Right-hand side of arithmentic operator is not a number"); \
-		return Value(left.num OP right.num);                              \
+#define ARITH_OP(OP)                                                          \
+	{                                                                           \
+		Value left = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();  \
+		Value right = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue(); \
+		if (left.type != Value::Type::NUM)                                        \
+			err("Left-hand side of arithmentic operator is not a number");          \
+		if (right.type != Value::Type::NUM)                                       \
+			err("Right-hand side of arithmentic operator is not a number");         \
+		return Value(left.num OP right.num);                                      \
 	}
 		case NodeType::ADD: ARITH_OP(+);
 		case NodeType::SUB: ARITH_OP(-);
@@ -259,8 +282,8 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 #undef ARITH_OP
 #define CMP_OP(OP)                                                             \
 	{                                                                            \
-		Value left = inter_eval_node(inter, ast, node[0]).to_rvalue();             \
-		Value right = inter_eval_node(inter, ast, node[1]).to_rvalue();            \
+		Value left = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();   \
+		Value right = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue();  \
 		if (left.type != Value::Type::NUM || right.type != Value::Type::NUM) {     \
 			err2(node.loc, "Arithmetic comparison is allowed only between numbers"); \
 		}                                                                          \
@@ -273,8 +296,8 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 		case NodeType::LTE: CMP_OP(<=);
 #undef CMP_OP
 		case NodeType::EQ: { // exp == exp
-			Value left = inter_eval_node(inter, ast, node[0]).to_rvalue();
-			Value right = inter_eval_node(inter, ast, node[1]).to_rvalue();
+			Value left = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();
+			Value right = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue();
 
 			if (left.type == Value::Type::NIL && right.type == Value::Type::NIL)
 				return Value(true);
@@ -288,19 +311,19 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 			return {};
 		}
 		case NodeType::NOT: { // not exp
-			Value val = inter_eval_node(inter, ast, node[0]);
+			Value val = inter_eval_node(inter, ast, node[0], scope_id);
 			return (val) ? Value() : Value(true);
 		}
 		case NodeType::AT: {
-			Value base = inter_eval_node(inter, ast, node[0]).to_rvalue();
+			Value base = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();
 			if (base.type != Value::Type::ARR) err("Can only index arrays");
-			Value off = inter_eval_node(inter, ast, node[1]).to_rvalue();
+			Value off = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue();
 			if (off.type != Value::Type::NUM) err("Index must be a number");
 			Value res(&base.arr.data[off.num]);
 			return res;
 		}
 		case NodeType::ID: {
-			Value* addr = inter->env.find(node.str_id);
+			Value* addr = inter->env.find(scope_id, node.str_id);
 			if (!addr) err2(node.loc, "Variable not previously declared.");
 
 			Value res(addr);
@@ -310,7 +333,7 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 			const char* str = str_pool_find(inter->pool, node.str_id);
 			return Value(strdup(str));
 		}
-		case NodeType::DECL: return eval_decl(inter, ast, node);
+		case NodeType::DECL: return eval_decl(inter, ast, node, scope_id);
 		case NodeType::NIL: return {};
 		case NodeType::TRUE: return Value(true);
 		case NodeType::FALSE: return Value(false);
@@ -320,18 +343,18 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 
 			const auto& decls = ast.at(decls_idx);
 
-			auto scope = inter->env.make_scope();
+			auto new_scope = inter->env.create_child_scope(scope_id);
 			for (size_t i = 0; i < decls.branch.children_count; i++)
-				inter_eval_node(inter, ast, decls[i]);
+				inter_eval_node(inter, ast, decls[i], new_scope);
 
-			Value res = inter_eval_node(inter, ast, exp_idx);
+			Value res = inter_eval_node(inter, ast, exp_idx, new_scope);
 			return res;
 		}
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: return Value(node.character);
-		case NodeType::PATH: return inter_eval_node(inter, ast, node[0]);
+		case NodeType::PATH: return inter_eval_node(inter, ast, node[0], scope_id);
 		case NodeType::PRIMITIVE_TYPE: assert(false && "TODO");
-		case NodeType::AS: return inter_eval_node(inter, ast, node[0]);
+		case NodeType::AS: return inter_eval_node(inter, ast, node[0], scope_id);
 	}
 	assert(false);
 }
@@ -415,12 +438,14 @@ static Value builtin_exit(size_t argc, Value* args) {
 }
 
 // if COUNT is 0 the function takes a variable amount of arguments
-#define PUSH_BUILTIN(STR, FUNC, COUNT) \
-	*env.insert(pool->intern(strdup(STR))) = Value(Function(FUNC, COUNT))
+#define PUSH_BUILTIN(STR, FUNC, COUNT)               \
+	*env.insert(scope_id, pool->intern(strdup(STR))) = \
+		Value(Function(FUNC, COUNT))
 
 Interpreter::Interpreter(STR_POOL _pool)
 : pool(_pool), in_loop(false), should_break(false), should_continue(false) {
 	// arbitrary choice
+	auto scope_id = env.root_scope_id;
 	PUSH_BUILTIN("read", builtin_read, 1);
 	PUSH_BUILTIN("write", builtin_write, 0);
 	PUSH_BUILTIN("array", builtin_array, 1);
