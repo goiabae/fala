@@ -42,7 +42,7 @@ Value eval_app(Interpreter* inter, AST& ast, const Node& node) {
 	const auto& func_node = ast.at(func_idx);
 	const auto& args_node = ast.at(args_idx);
 
-	if (func_node.type != AST_ID) err("Unnamed functions are not implemented");
+	if (func_node.type != NodeType::ID) err("Unnamed functions are not implemented");
 
 	Value* func_ptr = inter->env.find(func_node.str_id);
 	if (!func_ptr) err("Function with name <name> not found");
@@ -108,7 +108,7 @@ Value eval_for(Interpreter* inter, AST& ast, const Node& node) {
 
 	const auto& step_node = ast.at(step_idx);
 
-	bool with_step = step_node.type != AST_EMPTY;
+	bool with_step = step_node.type != NodeType::EMPTY;
 
 	Value decl = inter_eval_node(inter, ast, decl_idx);
 	Value to = inter_eval_node(inter, ast, to_idx).to_rvalue();
@@ -182,7 +182,7 @@ Value eval_decl(Interpreter* inter, AST& ast, const Node& node) {
 
 		for (size_t i = 0; i < params_node.branch.children_count; i++) {
 			const auto& param = ast.at(params_node[i]);
-			if (param.type != AST_ID)
+			if (param.type != NodeType::ID)
 				err("Function parameter must be a valid identifier");
 			auto value = Value(Function(
 				body_idx, params_node.branch.children, params_node.branch.children_count
@@ -209,32 +209,32 @@ Value eval_decl(Interpreter* inter, AST& ast, const Node& node) {
 Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case AST_NUM: return Value(node.num);
-		case AST_APP: return eval_app(inter, ast, node);
-		case AST_BLK: return eval_block(inter, ast, node);
-		case AST_IF: return eval_if(inter, ast, node);
-		case AST_WHEN: return eval_when(inter, ast, node);
-		case AST_FOR: return eval_for(inter, ast, node);
-		case AST_WHILE: return eval_while(inter, ast, node);
-		case AST_BREAK: {
+		case NodeType::NUM: return Value(node.num);
+		case NodeType::APP: return eval_app(inter, ast, node);
+		case NodeType::BLK: return eval_block(inter, ast, node);
+		case NodeType::IF: return eval_if(inter, ast, node);
+		case NodeType::WHEN: return eval_when(inter, ast, node);
+		case NodeType::FOR: return eval_for(inter, ast, node);
+		case NodeType::WHILE: return eval_while(inter, ast, node);
+		case NodeType::BREAK: {
 			if (!inter->in_loop) err("Can't break outside of a loop");
 			inter->should_break = true;
 			return inter_eval_node(inter, ast, node[0]);
 		}
-		case AST_CONTINUE: {
+		case NodeType::CONTINUE: {
 			if (!inter->in_loop) err("Can't continue outside of a loop");
 			inter->should_continue = true;
 			return inter_eval_node(inter, ast, node[0]);
 		}
-		case AST_ASS: return eval_ass(inter, ast, node);
-		case AST_OR: {
+		case NodeType::ASS: return eval_ass(inter, ast, node);
+		case NodeType::OR: {
 			Value left = inter_eval_node(inter, ast, node[0]);
 			if (left) return Value(true);
 
 			Value right = inter_eval_node(inter, ast, node[1]);
 			return (right) ? Value(true) : Value();
 		}
-		case AST_AND: {
+		case NodeType::AND: {
 			Value left = inter_eval_node(inter, ast, node[0]);
 			if (!left) return Value();
 
@@ -251,11 +251,11 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 			err("Right-hand side of arithmentic operator is not a number"); \
 		return Value(left.num OP right.num);                              \
 	}
-		case AST_ADD: ARITH_OP(+);
-		case AST_SUB: ARITH_OP(-);
-		case AST_MUL: ARITH_OP(*);
-		case AST_DIV: ARITH_OP(/);
-		case AST_MOD: ARITH_OP(%);
+		case NodeType::ADD: ARITH_OP(+);
+		case NodeType::SUB: ARITH_OP(-);
+		case NodeType::MUL: ARITH_OP(*);
+		case NodeType::DIV: ARITH_OP(/);
+		case NodeType::MOD: ARITH_OP(%);
 #undef ARITH_OP
 #define CMP_OP(OP)                                                             \
 	{                                                                            \
@@ -267,12 +267,12 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
                                                                                \
 		return (left.num OP right.num) ? Value(true) : Value();                    \
 	}
-		case AST_GTN: CMP_OP(>);
-		case AST_LTN: CMP_OP(<);
-		case AST_GTE: CMP_OP(>=);
-		case AST_LTE: CMP_OP(<=);
+		case NodeType::GTN: CMP_OP(>);
+		case NodeType::LTN: CMP_OP(<);
+		case NodeType::GTE: CMP_OP(>=);
+		case NodeType::LTE: CMP_OP(<=);
 #undef CMP_OP
-		case AST_EQ: { // exp == exp
+		case NodeType::EQ: { // exp == exp
 			Value left = inter_eval_node(inter, ast, node[0]).to_rvalue();
 			Value right = inter_eval_node(inter, ast, node[1]).to_rvalue();
 
@@ -287,11 +287,11 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 
 			return {};
 		}
-		case AST_NOT: { // not exp
+		case NodeType::NOT: { // not exp
 			Value val = inter_eval_node(inter, ast, node[0]);
 			return (val) ? Value() : Value(true);
 		}
-		case AST_AT: {
+		case NodeType::AT: {
 			Value base = inter_eval_node(inter, ast, node[0]).to_rvalue();
 			if (base.type != Value::Type::ARR) err("Can only index arrays");
 			Value off = inter_eval_node(inter, ast, node[1]).to_rvalue();
@@ -299,22 +299,22 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 			Value res(&base.arr.data[off.num]);
 			return res;
 		}
-		case AST_ID: {
+		case NodeType::ID: {
 			Value* addr = inter->env.find(node.str_id);
 			if (!addr) err2(node.loc, "Variable not previously declared.");
 
 			Value res(addr);
 			return res;
 		}
-		case AST_STR: {
+		case NodeType::STR: {
 			const char* str = str_pool_find(inter->pool, node.str_id);
 			return Value(strdup(str));
 		}
-		case AST_DECL: return eval_decl(inter, ast, node);
-		case AST_NIL: return {};
-		case AST_TRUE: return Value(true);
-		case AST_FALSE: return Value(false);
-		case AST_LET: {
+		case NodeType::DECL: return eval_decl(inter, ast, node);
+		case NodeType::NIL: return {};
+		case NodeType::TRUE: return Value(true);
+		case NodeType::FALSE: return Value(false);
+		case NodeType::LET: {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];
 
@@ -327,11 +327,11 @@ Value inter_eval_node(Interpreter* inter, AST& ast, NodeIndex node_idx) {
 			Value res = inter_eval_node(inter, ast, exp_idx);
 			return res;
 		}
-		case AST_EMPTY: assert(false && "unreachable");
-		case AST_CHAR: return Value(node.character);
-		case AST_PATH: return inter_eval_node(inter, ast, node[0]);
-		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
-		case AST_AS: return inter_eval_node(inter, ast, node[0]);
+		case NodeType::EMPTY: assert(false && "unreachable");
+		case NodeType::CHAR: return Value(node.character);
+		case NodeType::PATH: return inter_eval_node(inter, ast, node[0]);
+		case NodeType::PRIMITIVE_TYPE: assert(false && "TODO");
+		case NodeType::AS: return inter_eval_node(inter, ast, node[0]);
 	}
 	assert(false);
 }

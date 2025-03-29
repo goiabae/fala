@@ -11,52 +11,44 @@
 typedef int Number;
 typedef char* String;
 
-typedef enum NodeType {
-	AST_EMPTY, // node for saying there is no node
-	AST_APP,   // function application
-	AST_BLK,   // block
-	AST_IF,
-	AST_WHEN,
-	AST_FOR,
-	AST_WHILE,
-	AST_BREAK,
-	AST_CONTINUE,
-	AST_ASS,
-	AST_AT,
-	AST_DECL,
-	AST_LET,
-	AST_PATH,
-	AST_PRIMITIVE_TYPE,
-	AST_AS,
-
-	// boolean logic and comparison operators
-	AST_NOT,
-	AST_OR,
-	AST_AND,
-	AST_GTN, // greater than
-	AST_LTN, // lesser than
-	AST_GTE, // greater or eq to
-	AST_LTE, // lesser or eq to
-	AST_EQ,
-
-	// arithmetic operators
-	AST_ADD,
-	AST_SUB,
-	AST_MUL,
-	AST_DIV,
-	AST_MOD,
-
-	// keyword constants
-	AST_NIL,
-	AST_TRUE,
-	AST_FALSE,
-
-	// identifiers and constants
-	AST_ID,
-	AST_STR,
-	AST_NUM,
-	AST_CHAR,
-} NodeType;
+enum class NodeType {
+	EMPTY, // node for saying there is no node
+	APP,   // function application
+	NUM,
+	BLK, // block
+	IF,
+	WHEN,
+	FOR,
+	WHILE,
+	BREAK,
+	CONTINUE,
+	ASS,
+	OR,
+	AND,
+	GTN, // greater than
+	LTN, // lesser than
+	GTE, // greater or eq to
+	LTE, // lesser or eq to
+	EQ,
+	AT,
+	ADD,
+	SUB,
+	MUL,
+	DIV,
+	MOD,
+	NOT,
+	ID,
+	STR,
+	DECL,
+	NIL,
+	TRUE,
+	FALSE,
+	LET,
+	CHAR,
+	PATH,
+	PRIMITIVE_TYPE,
+	AS,
+};
 
 struct Position {
 	int byte_offset {0};

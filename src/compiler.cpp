@@ -202,7 +202,7 @@ Result Compiler::compile_app(
 		chunk = chunk + res.code;
 		args.push_back(res.opnd);
 
-		if (arg_node.type == AST_PATH) args[i] = to_rvalue(&chunk, args[i]);
+		if (arg_node.type == NodeType::PATH) args[i] = to_rvalue(&chunk, args[i]);
 	}
 
 	const char* func_name = pool.find(func_node.str_id);
@@ -299,7 +299,7 @@ Result Compiler::compile_for(
 	};
 
 	Operand step = [&]() {
-		if (step_node.type != AST_EMPTY) {
+		if (step_node.type != NodeType::EMPTY) {
 			auto step_res = compile(ast, step_idx, pool, handlers);
 			chunk = chunk + step_res.code;
 			return to_rvalue(&chunk, step_res.opnd);
@@ -604,9 +604,9 @@ Result Compiler::compile(
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case AST_APP: COMPILE_WITH_HANDLER(compile_app)
-		case AST_NUM: return {{}, Operand(node.num)};
-		case AST_BLK: {
+		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
+		case NodeType::NUM: return {{}, Operand(node.num)};
+		case NodeType::BLK: {
 			Chunk chunk {};
 			auto scope = env.make_scope();
 			Operand opnd;
@@ -618,11 +618,11 @@ Result Compiler::compile(
 
 			return {chunk, opnd};
 		}
-		case AST_IF: COMPILE_WITH_HANDLER(compile_if)
-		case AST_WHEN: COMPILE_WITH_HANDLER(compile_when)
-		case AST_FOR: COMPILE_WITH_HANDLER(compile_for)
-		case AST_WHILE: COMPILE_WITH_HANDLER(compile_while)
-		case AST_BREAK: {
+		case NodeType::IF: COMPILE_WITH_HANDLER(compile_if)
+		case NodeType::WHEN: COMPILE_WITH_HANDLER(compile_when)
+		case NodeType::FOR: COMPILE_WITH_HANDLER(compile_for)
+		case NodeType::WHILE: COMPILE_WITH_HANDLER(compile_while)
+		case NodeType::BREAK: {
 			Chunk chunk {};
 			if (!handlers.has_break_handler) err("Can't break outside of loops");
 			if (!(node.branch.children_count == 1))
@@ -636,7 +636,7 @@ Result Compiler::compile(
 				.with_comment("break out of loop");
 			return {chunk, {}};
 		}
-		case AST_CONTINUE: {
+		case NodeType::CONTINUE: {
 			Chunk chunk {};
 			if (!handlers.has_continue_handler)
 				err("can't continue outside of loops");
@@ -651,7 +651,7 @@ Result Compiler::compile(
 				.with_comment("continue to next iteration of loop");
 			return {chunk, {}};
 		}
-		case AST_ASS: COMPILE_WITH_HANDLER(compile_ass)
+		case NodeType::ASS: COMPILE_WITH_HANDLER(compile_ass)
 
 #define BINARY_ARITH(OPCODE)                                   \
 	{                                                            \
@@ -671,19 +671,19 @@ Result Compiler::compile(
 		return {chunk, res};                                       \
 	}
 
-		case AST_OR: BINARY_ARITH(Opcode::OR);
-		case AST_AND: BINARY_ARITH(Opcode::AND);
-		case AST_GTN: BINARY_ARITH(Opcode::GREATER);
-		case AST_LTN: BINARY_ARITH(Opcode::LESS);
-		case AST_GTE: BINARY_ARITH(Opcode::GREATER_EQ);
-		case AST_LTE: BINARY_ARITH(Opcode::LESS_EQ);
-		case AST_EQ: BINARY_ARITH(Opcode::EQ);
-		case AST_ADD: BINARY_ARITH(Opcode::ADD);
-		case AST_SUB: BINARY_ARITH(Opcode::SUB);
-		case AST_MUL: BINARY_ARITH(Opcode::MUL);
-		case AST_DIV: BINARY_ARITH(Opcode::DIV);
-		case AST_MOD: BINARY_ARITH(Opcode::MOD);
-		case AST_NOT: {
+		case NodeType::OR: BINARY_ARITH(Opcode::OR);
+		case NodeType::AND: BINARY_ARITH(Opcode::AND);
+		case NodeType::GTN: BINARY_ARITH(Opcode::GREATER);
+		case NodeType::LTN: BINARY_ARITH(Opcode::LESS);
+		case NodeType::GTE: BINARY_ARITH(Opcode::GREATER_EQ);
+		case NodeType::LTE: BINARY_ARITH(Opcode::LESS_EQ);
+		case NodeType::EQ: BINARY_ARITH(Opcode::EQ);
+		case NodeType::ADD: BINARY_ARITH(Opcode::ADD);
+		case NodeType::SUB: BINARY_ARITH(Opcode::SUB);
+		case NodeType::MUL: BINARY_ARITH(Opcode::MUL);
+		case NodeType::DIV: BINARY_ARITH(Opcode::DIV);
+		case NodeType::MOD: BINARY_ARITH(Opcode::MOD);
+		case NodeType::NOT: {
 			Chunk chunk {};
 			Operand res = make_temporary();
 			auto inverse_res = compile(ast, node[0], pool, handlers);
@@ -692,23 +692,23 @@ Result Compiler::compile(
 			chunk.emit(Opcode::NOT, res, inverse);
 			return {chunk, res};
 		}
-		case AST_AT: COMPILE_WITH_HANDLER(compile_at)
-		case AST_ID: {
+		case NodeType::AT: COMPILE_WITH_HANDLER(compile_at)
+		case NodeType::ID: {
 			Operand* opnd = env.find(node.str_id);
 			if (opnd == nullptr) err("Variable not found");
 			return {{}, *opnd};
 		}
-		case AST_STR: COMPILE_WITH_HANDLER(compile_str)
-		case AST_DECL: COMPILE_WITH_HANDLER(compile_decl)
-		case AST_NIL: return {{}, {}};
-		case AST_TRUE: return {{}, {1}};
-		case AST_FALSE: return {{}, {0}};
-		case AST_LET: COMPILE_WITH_HANDLER(compile_let)
-		case AST_EMPTY: assert(false && "unreachable");
-		case AST_CHAR: return {{}, {node.character}};
-		case AST_PATH: return compile(ast, node[0], pool, handlers);
-		case AST_PRIMITIVE_TYPE: assert(false && "TODO");
-		case AST_AS: return compile(ast, node[0], pool, handlers);
+		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
+		case NodeType::DECL: COMPILE_WITH_HANDLER(compile_decl)
+		case NodeType::NIL: return {{}, {}};
+		case NodeType::TRUE: return {{}, {1}};
+		case NodeType::FALSE: return {{}, {0}};
+		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
+		case NodeType::EMPTY: assert(false && "unreachable");
+		case NodeType::CHAR: return {{}, {node.character}};
+		case NodeType::PATH: return compile(ast, node[0], pool, handlers);
+		case NodeType::PRIMITIVE_TYPE: assert(false && "TODO");
+		case NodeType::AS: return compile(ast, node[0], pool, handlers);
 	}
 	assert(false);
 }

@@ -124,8 +124,8 @@ bool typecheck(AST& ast, StringPool& pool) {
 Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case AST_EMPTY: return checker.add_type(new Void());
-		case AST_APP: {
+		case NodeType::EMPTY: return checker.add_type(new Void());
+		case NodeType::APP: {
 			auto func_idx = node[0];
 
 			const auto& args = ast.at(node[1]);
@@ -149,13 +149,13 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 			return ((Function*)func_type)->output;
 		}
-		case AST_NUM: return checker.add_type(new Integer(64, SIGNED));
-		case AST_BLK: {
+		case NodeType::NUM: return checker.add_type(new Integer(64, SIGNED));
+		case NodeType::BLK: {
 			for (size_t i = 0; i < node.branch.children_count - 1; i++)
 				typecheck(checker, ast, node[i]);
 			return typecheck(checker, ast, node[node.branch.children_count - 1]);
 		}
-		case AST_IF: {
+		case NodeType::IF: {
 			const auto t = typecheck(checker, ast, node[1]);
 			const auto f = typecheck(checker, ast, node[2]);
 			if (!equiv(t, f))
@@ -166,7 +166,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 				);
 			return t;
 		}
-		case AST_WHEN: {
+		case NodeType::WHEN: {
 			auto tc = typecheck(checker, ast, node[0]);
 			if (!equiv(tc, checker.add_type(new Bool())))
 				err(
@@ -176,7 +176,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 			typecheck(checker, ast, node[1]);
 			return checker.add_type(new Nil());
 		}
-		case AST_FOR: {
+		case NodeType::FOR: {
 			auto decl_idx = node[0];
 			auto to_idx = node[1];
 			auto step_idx = node[2];
@@ -187,24 +187,24 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 			typecheck(checker, ast, decl_idx);
 			typecheck(checker, ast, to_idx);
 
-			if (ast.at(step_idx).type != AST_EMPTY) typecheck(checker, ast, step_idx);
+			if (ast.at(step_idx).type != NodeType::EMPTY) typecheck(checker, ast, step_idx);
 
 			return typecheck(checker, ast, then_idx);
 		}
-		case AST_WHILE: {
+		case NodeType::WHILE: {
 			typecheck(checker, ast, node[0]);
 			return typecheck(checker, ast, node[1]);
 		}
-		case AST_BREAK:
-		case AST_CONTINUE: return typecheck(checker, ast, node[0]);
-		case AST_ASS: {
+		case NodeType::BREAK:
+		case NodeType::CONTINUE: return typecheck(checker, ast, node[0]);
+		case NodeType::ASS: {
 			auto path = typecheck(checker, ast, node[0]);
 			auto val = typecheck(checker, ast, node[1]);
 			if (!equiv(path, val))
 				err(node.loc, "Assignment with value of wrong type");
 			return val;
 		}
-		case AST_EQ: {
+		case NodeType::EQ: {
 			const auto left = typecheck(checker, ast, node[0]);
 			const auto right = typecheck(checker, ast, node[1]);
 			if (!equiv(left, right))
@@ -214,8 +214,8 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 				);
 			return checker.add_type(new Bool());
 		}
-		case AST_OR:
-		case AST_AND: {
+		case NodeType::OR:
+		case NodeType::AND: {
 			const auto left = typecheck(checker, ast, node[0]);
 			const auto right = typecheck(checker, ast, node[1]);
 			if (!(equiv(left, checker.add_type(new Bool()))
@@ -223,10 +223,10 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 				err(node.loc, "Logical combinator arguments must be of boolean type");
 			return checker.add_type(new Bool());
 		}
-		case AST_GTN:
-		case AST_LTN:
-		case AST_GTE:
-		case AST_LTE: {
+		case NodeType::GTN:
+		case NodeType::LTN:
+		case NodeType::GTE:
+		case NodeType::LTE: {
 			const auto left = typecheck(checker, ast, node[0]);
 			const auto right = typecheck(checker, ast, node[1]);
 			if (!(equiv(left, checker.add_type(new Integer(64, SIGNED)))
@@ -234,11 +234,11 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 				err(node.loc, "Comparison operator arguments must be of numeric type");
 			return checker.add_type(new Bool());
 		}
-		case AST_ADD:
-		case AST_SUB:
-		case AST_MUL:
-		case AST_DIV:
-		case AST_MOD: {
+		case NodeType::ADD:
+		case NodeType::SUB:
+		case NodeType::MUL:
+		case NodeType::DIV:
+		case NodeType::MOD: {
 			const auto left = typecheck(checker, ast, node[0]);
 			const auto right = typecheck(checker, ast, node[1]);
 			const auto num = checker.add_type(new Integer(64, SIGNED));
@@ -253,7 +253,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 				);
 			return checker.add_type(new Integer(64, SIGNED));
 		}
-		case AST_AT: {
+		case NodeType::AT: {
 			auto index = typecheck(checker, ast, node[1]);
 			auto inti = checker.add_type(new Integer(64, SIGNED));
 			if (!equiv(index, inti)) {
@@ -268,22 +268,22 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 			return ((Array*)arr)->item_type;
 		}
-		case AST_NOT: {
+		case NodeType::NOT: {
 			auto exp = typecheck(checker, ast, node[0]);
 			auto bull = checker.add_type(new Bool());
 			if (!equiv(exp, bull)) err(node.loc, "Expression is not of type boolean");
 			return bull;
 		}
-		case AST_ID: {
+		case NodeType::ID: {
 			auto typ = checker.env.find(node.str_id);
 			if (typ == nullptr) err(node.loc, "Variable not previously declared");
 			return *typ;
 		}
-		case AST_STR:
+		case NodeType::STR:
 			return checker.add_type(
 				new Array(checker.add_type(new Integer(8, UNSIGNED)))
 			);
-		case AST_DECL: {
+		case NodeType::DECL: {
 			// "var" id opt-type "=" exp
 			if (node.branch.children_count == 3) {
 				auto id_idx = node[0];
@@ -295,7 +295,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 				Type* exp = typecheck(checker, ast, exp_idx);
 
-				if (opt_type_node.type != AST_EMPTY) {
+				if (opt_type_node.type != NodeType::EMPTY) {
 					Type* annot = typecheck(checker, ast, opt_type_idx);
 					if (!equiv(annot, exp))
 						type_mismatch_err(
@@ -325,7 +325,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 					for (size_t i = 0; i < params_node.branch.children_count; i++)
 						inputs.push_back(checker.make_var());
 					Type* output = nullptr;
-					if (opt_type_node.type != AST_EMPTY)
+					if (opt_type_node.type != NodeType::EMPTY)
 						output = typecheck(checker, ast, opt_type_idx);
 					else
 						output = checker.make_var();
@@ -349,7 +349,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 					Type* output = [&]() {
 						auto body_type = typecheck(checker, ast, body_idx);
-						if (opt_type_node.type != AST_EMPTY) {
+						if (opt_type_node.type != NodeType::EMPTY) {
 							auto opt_type = typecheck(checker, ast, opt_type_idx);
 							if (!equiv(body_type, opt_type))
 								type_mismatch_err(
@@ -374,10 +374,10 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 			return checker.add_type(new Nil());
 		}
-		case AST_NIL: return checker.add_type(new Nil());
-		case AST_TRUE: return checker.add_type(new Bool());
-		case AST_FALSE: return checker.add_type(new Bool());
-		case AST_LET: {
+		case NodeType::NIL: return checker.add_type(new Nil());
+		case NodeType::TRUE: return checker.add_type(new Bool());
+		case NodeType::FALSE: return checker.add_type(new Bool());
+		case NodeType::LET: {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];
 
@@ -390,9 +390,9 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 			return typecheck(checker, ast, exp_idx);
 		}
-		case AST_CHAR: return checker.add_type(new Integer(8, UNSIGNED));
-		case AST_PATH: return typecheck(checker, ast, node[0]);
-		case AST_AS: {
+		case NodeType::CHAR: return checker.add_type(new Integer(8, UNSIGNED));
+		case NodeType::PATH: return typecheck(checker, ast, node[0]);
+		case NodeType::AS: {
 			auto exp = typecheck(checker, ast, node[0]);
 			auto typ = typecheck(checker, ast, node[1]);
 
@@ -408,7 +408,7 @@ Type* typecheck(Typechecker& checker, AST& ast, NodeIndex node_idx) {
 
 			break;
 		}
-		case AST_PRIMITIVE_TYPE: {
+		case NodeType::PRIMITIVE_TYPE: {
 			const auto& constructor_keyword_node = ast.at(node[0]);
 			switch (constructor_keyword_node.num) {
 				case 0: {

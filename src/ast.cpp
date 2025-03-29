@@ -13,42 +13,42 @@ using std::vector;
 
 const char* node_repr(enum NodeType type) {
 	switch (type) {
-		case AST_APP: return "app";
-		case AST_BLK: return "block";
-		case AST_IF: return "if";
-		case AST_WHEN: return "when";
-		case AST_FOR: return "for";
-		case AST_WHILE: return "while";
-		case AST_BREAK: return "break";
-		case AST_CONTINUE: return "continue";
-		case AST_ASS: return "=";
-		case AST_OR: return "or";
-		case AST_AND: return "and";
-		case AST_GTN: return ">";
-		case AST_LTN: return "<";
-		case AST_GTE: return ">=";
-		case AST_LTE: return "<=";
-		case AST_EQ: return "==";
-		case AST_ADD: return "+";
-		case AST_SUB: return "-";
-		case AST_MUL: return "*";
-		case AST_DIV: return "/";
-		case AST_MOD: return "%";
-		case AST_NOT: return "not";
-		case AST_DECL: return "decl";
-		case AST_LET: return "let";
-		case AST_AT: return "at";
-		case AST_AS: return "as";
-		case AST_NUM:
-		case AST_ID:
-		case AST_STR:
-		case AST_EMPTY:
-		case AST_NIL:
-		case AST_TRUE:
-		case AST_FALSE:
-		case AST_CHAR:
-		case AST_PATH:
-		case AST_PRIMITIVE_TYPE: assert(false && "unreachable");
+		case NodeType::APP: return "app";
+		case NodeType::BLK: return "block";
+		case NodeType::IF: return "if";
+		case NodeType::WHEN: return "when";
+		case NodeType::FOR: return "for";
+		case NodeType::WHILE: return "while";
+		case NodeType::BREAK: return "break";
+		case NodeType::CONTINUE: return "continue";
+		case NodeType::ASS: return "=";
+		case NodeType::OR: return "or";
+		case NodeType::AND: return "and";
+		case NodeType::GTN: return ">";
+		case NodeType::LTN: return "<";
+		case NodeType::GTE: return ">=";
+		case NodeType::LTE: return "<=";
+		case NodeType::EQ: return "==";
+		case NodeType::ADD: return "+";
+		case NodeType::SUB: return "-";
+		case NodeType::MUL: return "*";
+		case NodeType::DIV: return "/";
+		case NodeType::MOD: return "%";
+		case NodeType::NOT: return "not";
+		case NodeType::DECL: return "decl";
+		case NodeType::LET: return "let";
+		case NodeType::AT: return "at";
+		case NodeType::AS: return "as";
+		case NodeType::NUM:
+		case NodeType::ID:
+		case NodeType::STR:
+		case NodeType::EMPTY:
+		case NodeType::NIL:
+		case NodeType::TRUE:
+		case NodeType::FALSE:
+		case NodeType::CHAR:
+		case NodeType::PATH:
+		case NodeType::PRIMITIVE_TYPE: assert(false && "unreachable");
 	}
 	assert(false && "unreachable");
 }
@@ -57,13 +57,13 @@ static void ast_node_print(
 	AST* ast, STR_POOL pool, NodeIndex node_idx, unsigned int space
 ) {
 	const auto& node = ast->at(node_idx);
-	if (node.type == AST_NUM) {
+	if (node.type == NodeType::NUM) {
 		printf("%d", node.num);
 		return;
-	} else if (node.type == AST_ID) {
+	} else if (node.type == NodeType::ID) {
 		printf("%s", str_pool_find(pool, node.str_id));
 		return;
-	} else if (node.type == AST_STR) {
+	} else if (node.type == NodeType::STR) {
 		printf("\"");
 		for (char* it = (char*)str_pool_find(pool, node.str_id); *it != '\0';
 		     it++) {
@@ -74,19 +74,19 @@ static void ast_node_print(
 		}
 		printf("\"");
 		return;
-	} else if (node.type == AST_NIL) {
+	} else if (node.type == NodeType::NIL) {
 		printf("nil");
 		return;
-	} else if (node.type == AST_TRUE) {
+	} else if (node.type == NodeType::TRUE) {
 		printf("true");
 		return;
-	} else if (node.type == AST_FALSE) {
+	} else if (node.type == NodeType::FALSE) {
 		printf("false");
 		return;
-	} else if (node.type == AST_CHAR) {
+	} else if (node.type == NodeType::CHAR) {
 		printf("'%c'", node.character);
 		return;
-	} else if (node.type == AST_PRIMITIVE_TYPE) {
+	} else if (node.type == NodeType::PRIMITIVE_TYPE) {
 		switch (ast->at(node[0]).num) {
 			case 0: printf("int %d", ast->at(node[1]).num); break;
 			case 1: printf("uint %d", ast->at(node[1]).num); break;
@@ -94,7 +94,7 @@ static void ast_node_print(
 			case 3: printf("nil"); break;
 		}
 		return;
-	} else if (node.type == AST_EMPTY) {
+	} else if (node.type == NodeType::EMPTY) {
 		return;
 	}
 
@@ -150,7 +150,7 @@ NodeIndex new_list_node(AST* ast) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_BLK;
+	node.type = NodeType::BLK;
 	node.branch.children_count = 0;
 	node.branch.children = new NodeIndex[max_list_children_count];
 
@@ -174,7 +174,7 @@ NodeIndex new_number_node(AST* ast, Location loc, Number num) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_NUM;
+	node.type = NodeType::NUM;
 	node.loc = loc;
 	node.num = num;
 
@@ -185,7 +185,7 @@ NodeIndex new_nil_node(AST* ast, Location loc) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_NIL;
+	node.type = NodeType::NIL;
 	node.loc = loc;
 
 	return idx;
@@ -195,7 +195,7 @@ NodeIndex new_true_node(AST* ast, Location loc) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_TRUE;
+	node.type = NodeType::TRUE;
 	node.loc = loc;
 
 	return idx;
@@ -205,7 +205,7 @@ NodeIndex new_false_node(AST* ast, Location loc) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_FALSE;
+	node.type = NodeType::FALSE;
 	node.loc = loc;
 
 	return idx;
@@ -215,7 +215,7 @@ NodeIndex new_char_node(AST* ast, Location loc, char character) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_CHAR;
+	node.type = NodeType::CHAR;
 	node.loc = loc;
 	node.character = character;
 
@@ -226,7 +226,7 @@ NodeIndex new_empty_node(AST* ast) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = AST_EMPTY;
+	node.type = NodeType::EMPTY;
 
 	return idx;
 }
@@ -267,7 +267,7 @@ void node_deinit(AST* ast, NodeIndex node_idx) {
 
 	// if it's a terminal node, we don't free the children and children indexes
 	// buffer
-	if (node.type == AST_ID || node.type == AST_NUM || node.type == AST_STR || node.type == AST_CHAR)
+	if (node.type == NodeType::ID || node.type == NodeType::NUM || node.type == NodeType::STR || node.type == NodeType::CHAR)
 		return;
 
 	for (size_t i = 0; i < node.branch.children_count; i++)
