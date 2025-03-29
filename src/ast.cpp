@@ -87,6 +87,9 @@ static void ast_node_print(
 	} else if (node.type == NodeType::CHAR) {
 		printf("'%c'", node.character);
 		return;
+	} else if (node.type == NodeType::PATH) {
+		ast_node_print(ast, pool, node[0], space);
+		return;
 	} else if (node.type == NodeType::PRIMITIVE_TYPE) {
 		switch (ast->at(node[0]).num) {
 			case 0: printf("int %d", ast->at(node[1]).num); break;
