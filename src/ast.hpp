@@ -69,6 +69,7 @@ typedef struct AST AST;
 
 // AST
 void ast_print(AST* ast, STR_POOL pool);
+void ast_print_detailed(AST* ast, STR_POOL pool);
 void ast_set_root(AST* ast, NodeIndex node_idx);
 
 // nodes
