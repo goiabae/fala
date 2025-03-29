@@ -5,9 +5,6 @@
 #include "file.hpp"
 #include "ring.h"
 
-// necessary for lval of GNU bison rule values
-#define YYSTYPE union TokenValue
-
 union TokenValue {
 	int num;
 	char *str;

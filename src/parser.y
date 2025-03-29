@@ -9,6 +9,9 @@
 
 %define api.location.type {Location}
 
+/* type of symbols ($N and $$) in grammar actions */
+%define api.value.type {union TokenValue}
+
 %lex-param {Lexer* lexer}
 %parse-param {Lexer* lexer}{AST* ast}{STR_POOL pool}
 
@@ -28,14 +31,6 @@
 
 #define NODE(TYPE, ...) new_node(ast, TYPE, {__VA_ARGS__})
 %}
-
-/* type of symbols ($N and $$) in grammar actions */
-%union {
-	int num;
-	char* str;
-	char character;
-	NodeIndex node;
-}
 
 %token YYEOF 0 /* old versions of bison don't predefine this */
 
