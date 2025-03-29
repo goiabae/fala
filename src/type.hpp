@@ -1,6 +1,7 @@
 #ifndef TYPE_HPP
 #define TYPE_HPP
 
+#include <cassert>
 #include <typeinfo>
 #include <vector>
 
@@ -10,6 +11,8 @@ struct Type {
 	virtual bool operator==(Type* other) {
 		return (typeid(*this) == typeid(*other));
 	}
+
+	virtual size_t size_of() = 0;
 
  protected:
 	Type() {}
@@ -29,11 +32,21 @@ struct Integer : Type {
 		   and this->bit_count == ((Integer*)other)->bit_count
 		   and this->sign == ((Integer*)other)->sign;
 	}
+
+	size_t size_of() override { return 1; }
 };
 
-struct Nil : Type {};
-struct Bool : Type {};
-struct Void : Type {};
+struct Nil : Type {
+	size_t size_of() override { return 0; }
+};
+
+struct Bool : Type {
+	size_t size_of() override { return 1; }
+};
+
+struct Void : Type {
+	size_t size_of() override { return 0; }
+};
 
 struct Function : Type {
 	Function(std::vector<Type*> inputs, Type* output)
@@ -53,6 +66,9 @@ struct Function : Type {
 
 		return true;
 	}
+
+	// label to function?
+	size_t size_of() override { return 1; }
 };
 
 struct TypeVariable : Type {
@@ -60,8 +76,11 @@ struct TypeVariable : Type {
 	std::size_t name;
 
 	bool operator==(Type*) override { return true; }
+
+	size_t size_of() override { assert(false); }
 };
 
+// Array of Int 64, really
 struct Array : Type {
 	Array(Type* item_type) : item_type(item_type) {}
 	Type* item_type;
@@ -70,6 +89,9 @@ struct Array : Type {
 		return Type::operator==(other)
 		   and (*this->item_type) == ((Array*)other)->item_type;
 	}
+
+	// pointer to beginning of allocated region
+	size_t size_of() override { return 1; }
 };
 
 #endif
