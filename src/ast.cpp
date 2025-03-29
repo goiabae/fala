@@ -11,7 +11,24 @@
 
 using std::vector;
 
+bool node_has_fixed_repr(enum NodeType type) {
+	switch (type) {
+		case NodeType::NUM:
+		case NodeType::ID:
+		case NodeType::STR:
+		case NodeType::EMPTY:
+		case NodeType::CHAR:
+		case NodeType::PATH:
+		case NodeType::PRIMITIVE_TYPE: return false;
+		default: return true;
+	}
+}
+
+// returns the string for nodes with a fixed representation, independent of the
+// program's values
 const char* node_repr(enum NodeType type) {
+	if (!node_has_fixed_repr(type)) assert(false && "unreachable");
+
 	switch (type) {
 		case NodeType::APP: return "app";
 		case NodeType::BLK: return "block";
@@ -39,18 +56,11 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::LET: return "let";
 		case NodeType::AT: return "at";
 		case NodeType::AS: return "as";
-		case NodeType::NUM:
-		case NodeType::ID:
-		case NodeType::STR:
-		case NodeType::EMPTY:
-		case NodeType::NIL:
-		case NodeType::TRUE:
-		case NodeType::FALSE:
-		case NodeType::CHAR:
-		case NodeType::PATH:
-		case NodeType::PRIMITIVE_TYPE: assert(false && "unreachable");
+		case NodeType::NIL: return "nil";
+		case NodeType::TRUE: return "true";
+		case NodeType::FALSE: return "false";
+		default: assert(false && "unreachable");
 	}
-	assert(false && "unreachable");
 }
 
 static void ast_node_print(
@@ -73,15 +83,6 @@ static void ast_node_print(
 				printf("%c", *it);
 		}
 		printf("\"");
-		return;
-	} else if (node.type == NodeType::NIL) {
-		printf("nil");
-		return;
-	} else if (node.type == NodeType::TRUE) {
-		printf("true");
-		return;
-	} else if (node.type == NodeType::FALSE) {
-		printf("false");
 		return;
 	} else if (node.type == NodeType::CHAR) {
 		printf("'%c'", node.character);
@@ -267,7 +268,8 @@ void node_deinit(AST* ast, NodeIndex node_idx) {
 
 	// if it's a terminal node, we don't free the children and children indexes
 	// buffer
-	if (node.type == NodeType::ID || node.type == NodeType::NUM || node.type == NodeType::STR || node.type == NodeType::CHAR)
+	if (node.type == NodeType::ID || node.type == NodeType::NUM
+	    || node.type == NodeType::STR || node.type == NodeType::CHAR)
 		return;
 
 	for (size_t i = 0; i < node.branch.children_count; i++)
