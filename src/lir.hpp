@@ -68,6 +68,10 @@ struct Label {
 	size_t id;
 };
 
+struct Array {
+	Register start_pointer_reg;
+};
+
 struct Operand {
 	enum class Type {
 		NIL, // no operand
@@ -76,6 +80,7 @@ struct Operand {
 		LAB, // label
 		NUM, // immediate number
 		FUN,
+		ARR, // array
 	};
 
 	Type type;
@@ -85,6 +90,7 @@ struct Operand {
 		Label lab;
 		Number num;
 		Funktion fun;
+		Array arr;
 	};
 
 	Operand() : type {Type::NIL}, num {0} {}
@@ -92,6 +98,7 @@ struct Operand {
 	Operand(Label lab) : type(Type::LAB), lab {lab} {}
 	constexpr Operand(Number num) : type(Type::NUM), num {num} {}
 	Operand(Funktion fun) : type(Type::FUN), fun {fun} {}
+	Operand(Array arr) : type(Type::ARR), arr {arr} {}
 
 	bool is_register() const { return type == Type::REG || type == Type::TMP; }
 

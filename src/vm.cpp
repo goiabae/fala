@@ -22,7 +22,9 @@ void err(const char* msg) {
 #define FETCH(OPND)                                                  \
 	(((OPND).type == Operand::Type::TMP)   ? t_cells[(OPND).reg.index] \
 	 : ((OPND).type == Operand::Type::REG) ? r_cells[(OPND).reg.index] \
-	                                       : (OPND).num)
+	 : ((OPND).type == Operand::Type::ARR)                             \
+	   ? r_cells[(OPND).arr.start_pointer_reg.index]                   \
+	   : (OPND).num)
 
 #define DEREF(OPND) \
 	(((OPND).type == Operand::Type::TMP) ? t_cells : r_cells)[(OPND).reg.index]

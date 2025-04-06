@@ -110,14 +110,14 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 	Chunk chunk {};
 	// if size if constant we subtract the allocation start at compile time
 	if (args[0].type == Operand::Type::NUM) {
-		auto addr = Operand(Register(comp.reg_count++).as_addr()).as_reg();
+		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
 		auto dyn = Operand(comp.dyn_alloc_start -= args[0].num);
 
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");
 		return {chunk, addr};
 
 	} else {
-		auto addr = Operand(Register(comp.reg_count++).as_addr()).as_reg();
+		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
 		auto dyn = Operand(Register(0).as_num()).as_reg();
 
 		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
@@ -487,7 +487,7 @@ Result Compiler::compile_decl(
 		Operand initial = initial_res.opnd;
 
 		// initial is an array
-		if (initial.type == Operand::Type::REG && initial.reg.has_addr())
+		if (initial.type == Operand::Type::ARR)
 			return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
 
 		// anything else
@@ -597,8 +597,7 @@ Result Compiler::compile_at(
 	chunk = chunk + off_res.code;
 	Operand off = to_rvalue(&chunk, off_res.opnd);
 
-	if (!base.is_register()) err("Base must be an lvalue");
-	if (base.type == Operand::Type::TMP) err("Not an array");
+	if (base.type != Operand::Type::ARR) err("Base must be an lvalue");
 
 	Operand tmp = make_temporary();
 	chunk.emit(Opcode::ADD, tmp, base, off)

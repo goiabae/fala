@@ -1,6 +1,6 @@
-#include <cassert>
-
 #include "lir.hpp"
+
+#include <cassert>
 
 namespace lir {
 
@@ -101,6 +101,8 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.lab.id);
 		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.num);
 		case Operand::Type::FUN: assert(false && "unreachable");
+		case Operand::Type::ARR:
+			return fprintf(fd, "%%r%zu", opnd.arr.start_pointer_reg.index);
 	}
 	return 0;
 }
