@@ -97,7 +97,7 @@ exp : do
 nls : %empty | nls NEWLINE ;
 
 /* Expression sequences */
-do : DO nls block END { $$ = $block; }
+do : DO nls block END { $$ = $block; } ;
 
 block : stmts exp opt-seps { $$ = list_append_node(ast, $1, $2); } ;
 
@@ -168,25 +168,25 @@ arg : term ;
 /* Assignment */
 ass : path "=" nls exp { $$ = NODE(NodeType::ASS, $1, $exp); } ;
 
-path : id | id "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); }
+path : id | id "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); } ;
 
 /* Operators. Infix and prefix */
 op : op0;
 
-op0  : op1  | op1[lft] AS type-literal[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); }
-op1  : op2  | op1[lft] OR   nls op2[rgt]  { $$ = NODE(NodeType::OR,  $lft, $rgt); }
-op2  : op3  | op2[lft] AND  nls op3[rgt]  { $$ = NODE(NodeType::AND, $lft, $rgt); }
-op3  : op4  | op3[lft] ">"  nls op4[rgt]  { $$ = NODE(NodeType::GTN, $lft, $rgt); }
-op4  : op5  | op4[lft] "<"  nls op5[rgt]  { $$ = NODE(NodeType::LTN, $lft, $rgt); }
-op5  : op6  | op5[lft] ">=" nls op6[rgt]  { $$ = NODE(NodeType::GTE, $lft, $rgt); }
-op6  : op7  | op6[lft] "<=" nls op7[rgt]  { $$ = NODE(NodeType::LTE, $lft, $rgt); }
-op7  : op9  | op7[lft] "==" nls op9[rgt]  { $$ = NODE(NodeType::EQ,  $lft, $rgt); }
-op9  : op10 | op9[lft] "+" nls op10[rgt] { $$ = NODE(NodeType::ADD, $lft, $rgt); }
-op10 : op11 | op10[lft] "-" nls op11[rgt] { $$ = NODE(NodeType::SUB, $lft, $rgt); }
-op11 : op12 | op11[lft] "*" nls op12[rgt] { $$ = NODE(NodeType::MUL, $lft, $rgt); }
-op12 : op13 | op12[lft] "/" nls op13[rgt] { $$ = NODE(NodeType::DIV, $lft, $rgt); }
-op13 : op14 | op13[lft] "%" nls op14[rgt] { $$ = NODE(NodeType::MOD, $lft, $rgt); }
-op14 : op15 | NOT op15[rgt]      { $$ = NODE(NodeType::NOT, $rgt); }
+op0  : op1  | op1[lft] AS type-literal[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
+op1  : op2  | op1[lft] OR   nls op2[rgt]  { $$ = NODE(NodeType::OR,  $lft, $rgt); } ;
+op2  : op3  | op2[lft] AND  nls op3[rgt]  { $$ = NODE(NodeType::AND, $lft, $rgt); } ;
+op3  : op4  | op3[lft] ">"  nls op4[rgt]  { $$ = NODE(NodeType::GTN, $lft, $rgt); } ;
+op4  : op5  | op4[lft] "<"  nls op5[rgt]  { $$ = NODE(NodeType::LTN, $lft, $rgt); } ;
+op5  : op6  | op5[lft] ">=" nls op6[rgt]  { $$ = NODE(NodeType::GTE, $lft, $rgt); } ;
+op6  : op7  | op6[lft] "<=" nls op7[rgt]  { $$ = NODE(NodeType::LTE, $lft, $rgt); } ;
+op7  : op9  | op7[lft] "==" nls op9[rgt]  { $$ = NODE(NodeType::EQ,  $lft, $rgt); } ;
+op9  : op10 | op9[lft] "+" nls op10[rgt] { $$ = NODE(NodeType::ADD, $lft, $rgt); } ;
+op10 : op11 | op10[lft] "-" nls op11[rgt] { $$ = NODE(NodeType::SUB, $lft, $rgt); } ;
+op11 : op12 | op11[lft] "*" nls op12[rgt] { $$ = NODE(NodeType::MUL, $lft, $rgt); } ;
+op12 : op13 | op12[lft] "/" nls op13[rgt] { $$ = NODE(NodeType::DIV, $lft, $rgt); } ;
+op13 : op14 | op13[lft] "%" nls op14[rgt] { $$ = NODE(NodeType::MOD, $lft, $rgt); } ;
+op14 : op15 | NOT op15[rgt]      { $$ = NODE(NodeType::NOT, $rgt); } ;
 op15 : term ;
 
 /* Terms */
@@ -200,14 +200,14 @@ term : "(" nls exp nls ")" { $$ = $exp; }
      | CHAR        { $$ = new_char_node(ast, @$, $1); }
      ;
 
-id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); }
+id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 
-int : NUMBER { $$ = new_number_node(ast, @$, $1); }
+int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
 
 type-literal : type-primitive ;
 
-type-primitive :
-  INT int    { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 0), $2); }
+type-primitive
+  : INT int  { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 0), $2); }
   | UINT int { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 1), $2); }
   | BOOL     { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 2)); }
   | NIL      { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 3)); }
