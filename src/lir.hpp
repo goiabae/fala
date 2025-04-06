@@ -75,7 +75,6 @@ struct Array {
 struct Operand {
 	enum class Type {
 		NIL, // no operand
-		TMP, // temporary register
 		REG, // variables register
 		LAB, // label
 		NUM, // immediate number
@@ -94,16 +93,11 @@ struct Operand {
 	};
 
 	Operand() : type {Type::NIL}, num {0} {}
-	Operand(Register reg) : type(Type::NIL), reg {reg} {}
+	Operand(Register reg) : type(Type::REG), reg {reg} {}
 	Operand(Label lab) : type(Type::LAB), lab {lab} {}
 	constexpr Operand(Number num) : type(Type::NUM), num {num} {}
 	Operand(Funktion fun) : type(Type::FUN), fun {fun} {}
 	Operand(Array arr) : type(Type::ARR), arr {arr} {}
-
-	bool is_register() const { return type == Type::REG || type == Type::TMP; }
-
-	Operand as_reg() { return (type = Type::REG), *this; }
-	Operand as_temp() { return (type = Type::TMP), *this; }
 
 	void deinit() { return; }
 };

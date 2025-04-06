@@ -56,7 +56,7 @@ Result write_int(Compiler&, vector<Operand> args) {
 	Chunk chunk {};
 
 	auto& op = args[0];
-	assert(!(op.is_register() && op.reg.has_addr()));
+	assert(!(op.type == Operand::Type::REG && op.reg.has_addr()));
 	chunk.emit(Opcode::PRINTV, op);
 	return {chunk, {}};
 }
@@ -70,7 +70,7 @@ Result write_char(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(!(op.is_register() && op.reg.has_addr()));
+	assert(!(op.type == Operand::Type::REG && op.reg.has_addr()));
 	chunk.emit(Opcode::PRINTC, op);
 	return {chunk, {}};
 }
@@ -84,21 +84,21 @@ Result write_str(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(op.is_register() && op.reg.has_addr());
+	assert(op.type == Operand::Type::REG && op.reg.has_addr());
 	chunk.emit(Opcode::PRINTF, op);
 	return {chunk, {}};
 }
 
 Result read_int(Compiler& comp, vector<Operand>) {
 	Chunk chunk {};
-	Operand tmp = comp.make_temporary();
+	Operand tmp = comp.make_register();
 	chunk.emit(Opcode::READV, tmp);
 	return {chunk, tmp};
 }
 
 Result read_char(Compiler& comp, vector<Operand>) {
 	Chunk chunk {};
-	Operand tmp = comp.make_temporary();
+	Operand tmp = comp.make_register();
 	chunk.emit(Opcode::READC, tmp);
 	return {chunk, tmp};
 }
@@ -118,7 +118,7 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 
 	} else {
 		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
-		auto dyn = Operand(Register(0).as_num()).as_reg();
+		auto dyn = Operand(Register(0).as_num());
 
 		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
@@ -163,19 +163,15 @@ Chunk Compiler::compile(AST& ast, const StringPool& pool) {
 	return res;
 }
 
-Operand Compiler::make_temporary() {
-	return Operand(Register(tmp_count++).as_num()).as_temp();
-}
-
 Operand Compiler::make_register() {
-	return Operand(Register(reg_count++).as_num()).as_reg();
+	return Operand(Register(reg_count++).as_num());
 }
 
 Operand Compiler::make_label() { return {lir::Label {label_count++}}; }
 
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
-	if (opnd.is_register() && opnd.reg.has_addr()) {
-		Operand tmp = make_temporary();
+	if (opnd.type == Operand::Type::REG && opnd.reg.has_addr()) {
+		Operand tmp = make_register();
 		chunk->emit(Opcode::LOAD, tmp, Operand(0), opnd)
 			.with_comment("casting to rvalue");
 		return tmp;
@@ -227,7 +223,7 @@ Result Compiler::compile_app(
 		chunk.emit(Opcode::PUSH, args[i - 1]);
 
 	chunk.emit(Opcode::CALL, *func_opnd);
-	Operand res = make_temporary();
+	Operand res = make_register();
 	chunk.emit(Opcode::POP, res);
 
 	return {chunk, res};
@@ -246,7 +242,7 @@ Result Compiler::compile_if(
 
 	Operand l1 = make_label();
 	Operand l2 = make_label();
-	Operand res = make_temporary();
+	Operand res = make_register();
 
 	auto cond_res = compile(ast, cond_idx, pool, handlers, scope_id);
 	chunk = chunk + cond_res.code;
@@ -289,9 +285,9 @@ Result Compiler::compile_for(
 	Operand beg = make_label();
 	Operand inc = make_label();
 	Operand end = make_label();
-	Operand cmp = make_temporary();
+	Operand cmp = make_register();
 
-	Operand result_register = make_temporary();
+	Operand result_register = make_register();
 
 	SignalHandlers new_handlers {
 		{inc.lab, result_register},
@@ -317,7 +313,8 @@ Result Compiler::compile_for(
 	auto var_res = compile(ast, decl_idx, pool, handlers, new_scope_id);
 	chunk = chunk + var_res.code;
 	Operand var = var_res.opnd;
-	if (!var.is_register()) err("Declaration must be of a number lvalue");
+	if (var.type != Operand::Type::REG)
+		err("Declaration must be of a number lvalue");
 
 	auto to_res = compile(ast, to_idx, pool, handlers, new_scope_id);
 	chunk = chunk + to_res.code;
@@ -352,7 +349,7 @@ Result Compiler::compile_when(
 	auto then_idx = node[1];
 
 	Operand l1 = make_label();
-	Operand res = make_temporary();
+	Operand res = make_register();
 
 	auto cond_res = compile(ast, cond_idx, pool, handlers, scope_id);
 	chunk = chunk + cond_res.code;
@@ -381,7 +378,7 @@ Result Compiler::compile_while(
 	Operand beg = make_label();
 	Operand end = make_label();
 
-	Operand result_register = make_temporary();
+	Operand result_register = make_register();
 
 	SignalHandlers new_handlers {
 		{beg.lab, result_register},
@@ -493,7 +490,7 @@ Result Compiler::compile_decl(
 		// anything else
 		initial = to_rvalue(&chunk, initial);
 		Operand* var = env.insert(scope_id, id_node.str_id, make_register());
-		if (initial.is_register()) var->reg.type = initial.reg.type;
+		if (initial.type == Operand::Type::REG) var->reg.type = initial.reg.type;
 		chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
 		return {chunk, *var};
 	}
@@ -511,7 +508,7 @@ Result Compiler::compile_ass(
 	auto cell_res = compile(ast, node[0], pool, handlers, scope_id);
 	chunk = chunk + cell_res.code;
 	Operand cell = cell_res.opnd;
-	if (!cell.is_register())
+	if (cell.type != Operand::Type::REG)
 		err("Left-hand side of assignment must be an lvalue");
 
 	auto exp_res = compile(ast, node[1], pool, handlers, scope_id);
@@ -564,7 +561,7 @@ Result Compiler::compile_str(
 
 	const char* str = pool.find(node.str_id);
 	auto str_len = strlen(str);
-	auto buf = make_temporary();
+	auto buf = make_register();
 	buf.reg = buf.reg.as_addr();
 	dyn_alloc_start -= (Number)str_len + 1;
 
@@ -573,7 +570,7 @@ Result Compiler::compile_str(
 	for (size_t i = 0; i < str_len + 1; i++)
 		chunk.emit(
 			Opcode::MOV,
-			Operand(Register((size_t)dyn_alloc_start + i).as_num()).as_reg(),
+			Operand(Register((size_t)dyn_alloc_start + i).as_num()),
 			Operand((Number)str[i])
 		);
 
@@ -599,11 +596,11 @@ Result Compiler::compile_at(
 
 	if (base.type != Operand::Type::ARR) err("Base must be an lvalue");
 
-	Operand tmp = make_temporary();
+	Operand tmp = make_register();
 	chunk.emit(Opcode::ADD, tmp, base, off)
 		.with_comment("accessing allocated array");
 
-	return {chunk, Operand(tmp.reg.as_addr()).as_temp()};
+	return {chunk, Operand(tmp.reg.as_addr())};
 }
 
 // FIXME: Temporary workaround
@@ -677,7 +674,7 @@ Result Compiler::compile(
 		chunk = chunk + right_res.code;                                      \
 		Operand left = to_rvalue(&chunk, left_res.opnd);                     \
 		Operand right = to_rvalue(&chunk, right_res.opnd);                   \
-		Operand res = make_temporary();                                      \
+		Operand res = make_register();                                       \
                                                                          \
 		chunk.emit(OPCODE, res, left, right);                                \
 		return {chunk, res};                                                 \
@@ -697,7 +694,7 @@ Result Compiler::compile(
 		case NodeType::MOD: BINARY_ARITH(Opcode::MOD);
 		case NodeType::NOT: {
 			Chunk chunk {};
-			Operand res = make_temporary();
+			Operand res = make_register();
 			auto inverse_res = compile(ast, node[0], pool, handlers, scope_id);
 			chunk = chunk + inverse_res.code;
 			Operand inverse = to_rvalue(&chunk, inverse_res.opnd);

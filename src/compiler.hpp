@@ -61,10 +61,8 @@ struct Compiler {
 
 	// these are monotonically increasing as the compiler goes on
 	size_t label_count {0};
-	size_t tmp_count {0};
 	size_t reg_count {0};
 
-	Operand make_temporary();
 	Operand make_register();
 	Operand make_label();
 

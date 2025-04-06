@@ -96,13 +96,12 @@ int print_str(FILE* fd, const char* str) {
 int print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
 		case Operand::Type::NIL: return fprintf(fd, "0");
-		case Operand::Type::TMP: return fprintf(fd, "%%t%zu", opnd.reg.index);
-		case Operand::Type::REG: return fprintf(fd, "%%r%zu", opnd.reg.index);
+		case Operand::Type::REG: return fprintf(fd, "%%%zu", opnd.reg.index);
 		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.lab.id);
 		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.num);
 		case Operand::Type::FUN: assert(false && "unreachable");
 		case Operand::Type::ARR:
-			return fprintf(fd, "%%r%zu", opnd.arr.start_pointer_reg.index);
+			return fprintf(fd, "%%%zu", opnd.arr.start_pointer_reg.index);
 	}
 	return 0;
 }
@@ -152,11 +151,6 @@ int print_operand_indirect(FILE* fd, Operand opnd) {
 			return fprintf(fd, "%zu", opnd.reg.index);
 		else if (opnd.reg.has_addr())
 			return fprintf(fd, "%%r%zu", opnd.reg.index);
-	} else if (opnd.type == Operand::Type::TMP) {
-		if (opnd.reg.has_num())
-			return fprintf(fd, "%zu", opnd.reg.index);
-		else if (opnd.reg.has_addr())
-			return fprintf(fd, "%%t%zu", opnd.reg.index);
 	} else
 		assert(false && "unreachable");
 	return 0;

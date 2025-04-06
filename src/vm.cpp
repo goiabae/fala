@@ -19,21 +19,18 @@ void err(const char* msg) {
 	exit(1);
 }
 
-#define FETCH(OPND)                                                  \
-	(((OPND).type == Operand::Type::TMP)   ? t_cells[(OPND).reg.index] \
-	 : ((OPND).type == Operand::Type::REG) ? r_cells[(OPND).reg.index] \
-	 : ((OPND).type == Operand::Type::ARR)                             \
-	   ? r_cells[(OPND).arr.start_pointer_reg.index]                   \
+#define FETCH(OPND)                                              \
+	(((OPND).type == Operand::Type::REG) ? cells[(OPND).reg.index] \
+	 : ((OPND).type == Operand::Type::ARR)                         \
+	   ? cells[(OPND).arr.start_pointer_reg.index]                 \
 	   : (OPND).num)
 
-#define DEREF(OPND) \
-	(((OPND).type == Operand::Type::TMP) ? t_cells : r_cells)[(OPND).reg.index]
+#define DEREF(OPND) cells[(OPND).reg.index]
 
-#define INDIRECT_LOAD(BASE, OFF) r_cells[(size_t)(FETCH(BASE) + FETCH(OFF))]
+#define INDIRECT_LOAD(BASE, OFF) cells[(size_t)(FETCH(BASE) + FETCH(OFF))]
 
 void run(const lir::Chunk& code) {
-	array<int64_t, 2048> t_cells {};
-	array<int64_t, 2048> r_cells {};
+	array<int64_t, 2048> cells {};
 
 	std::stack<int64_t> stack {};
 
@@ -75,7 +72,7 @@ void run(const lir::Chunk& code) {
 				int num = (int)strtol(read_buffer, &endptr, 10);
 				if (endptr == read_buffer) err("Could not convert input to integer");
 
-				if (!inst.operands[0].is_register())
+				if (inst.operands[0].type != Operand::Type::REG)
 					err("First argument must be a register");
 
 				DEREF(inst.operands[0]) = num;
