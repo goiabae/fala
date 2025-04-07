@@ -88,6 +88,7 @@ T* Env<T>::insert(ScopeID scope_id, StrID str_id) {
 template<typename T>
 T* Env<T>::find(ScopeID scope_id, StrID str_id) {
 	Id cur = find_last_entry(scope_id);
+	if (cur.idx < 0) return nullptr;
 
 	while (name[cur.idx].idx != str_id.idx) {
 		if (cur.idx < 0) return nullptr;
