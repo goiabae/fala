@@ -94,6 +94,8 @@ struct Compiler {
 	DECLARE_NODE_HANDLER(ass);
 	DECLARE_NODE_HANDLER(str);
 	DECLARE_NODE_HANDLER(at);
+
+	#undef DECLARE_NODE_HANDLER
 };
 
 } // namespace compiler
