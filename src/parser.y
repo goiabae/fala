@@ -141,8 +141,8 @@ decls : decl           { $$ = new_list_node(ast); $$ = list_append_node(ast, $$,
       ;
 
 /* Declarations */
-decl : VAR id opt-type "=" nls exp        { $$ = NODE(NodeType::DECL, $2, $3, $exp); }
-     | FUN id params opt-type "=" nls exp { $$ = NODE(NodeType::DECL, $2, $3, $4, $exp); }
+decl : VAR id opt-type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $2, $3, $exp); }
+     | FUN id params opt-type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
      ;
 
 opt-type : %empty { $$ = new_empty_node(ast); }

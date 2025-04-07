@@ -579,99 +579,94 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			return make_array(uint8_typ);
 		}
 			// FIXME: add typing rules
-		case NodeType::DECL: {
-			// "var" id opt-type "=" exp
-			if (node.branch.children_count == 3) {
-				auto id_idx = node[0];
-				auto opt_type_idx = node[1];
-				auto exp_idx = node[2];
+		case NodeType::VAR_DECL: {
+			auto id_idx = node[0];
+			auto opt_type_idx = node[1];
+			auto exp_idx = node[2];
 
-				const auto& id_node = ast.at(id_idx);
-				const auto& opt_type_node = ast.at(opt_type_idx);
+			const auto& id_node = ast.at(id_idx);
+			const auto& opt_type_node = ast.at(opt_type_idx);
 
-				auto exp = typecheck(exp_idx, scope_id);
+			auto exp = typecheck(exp_idx, scope_id);
 
-				if (opt_type_node.type != NodeType::EMPTY) {
-					auto annot = typecheck(opt_type_idx, scope_id);
-					if (!unify(annot, exp))
-						mismatch_error(
-							node.loc,
-							"Expression does not have type described in the annotation",
-							exp,
-							annot
-						);
+			if (opt_type_node.type != NodeType::EMPTY) {
+				auto annot = typecheck(opt_type_idx, scope_id);
+				if (!unify(annot, exp))
+					mismatch_error(
+						node.loc,
+						"Expression does not have type described in the annotation",
+						exp,
+						annot
+					);
+			}
+
+			env.insert(scope_id, id_node.str_id, exp);
+			return exp;
+		}
+			// FIXME: add typing rules
+		case NodeType::FUN_DECL: {
+			auto opt_type_idx = node[2];
+			auto body_idx = node[3];
+
+			const auto& id_node = ast.at(node[0]);
+			const auto& params_node = ast.at(node[1]);
+			const auto& opt_type_node = ast.at(opt_type_idx);
+
+			// Start with parameters and output types and variables (or concrete
+			// type, if provided)
+			//   [t1, ..., tn] -> t
+			auto typ = [&]() {
+				vector<TYPE> inputs {};
+				for (auto param_idx : params_node) inputs.push_back(make_typevar());
+
+				// if no return type is provided, must be infered
+				TYPE output = nullptr;
+				if (opt_type_node.type == NodeType::EMPTY)
+					output = make_typevar();
+				else
+					output = typecheck(opt_type_idx, scope_id);
+
+				return ASSOC_TYPE(node_idx, make_function(inputs, output));
+			}();
+
+			auto var = env.insert(scope_id, id_node.str_id, typ);
+
+			{
+				auto new_scope_id = env.create_child_scope(scope_id);
+
+				vector<TYPE> param_types {};
+
+				for (auto param_idx : params_node) {
+					const auto& param = ast.at(param_idx);
+					auto var = make_typevar();
+					param_types.push_back(var);
+					env.insert(new_scope_id, param.str_id, var);
 				}
 
-				env.insert(scope_id, id_node.str_id, exp);
-				return exp;
-			}
-			// "fun" id params opt-type "=" exp
-			else if (node.branch.children_count == 4) {
-				auto opt_type_idx = node[2];
-				auto body_idx = node[3];
-
-				const auto& id_node = ast.at(node[0]);
-				const auto& params_node = ast.at(node[1]);
-				const auto& opt_type_node = ast.at(opt_type_idx);
-
-				// Start with parameters and output types and variables (or concrete
-				// type, if provided)
-				//   [t1, ..., tn] -> t
-				auto typ = [&]() {
-					vector<TYPE> inputs {};
-					for (auto param_idx : params_node) inputs.push_back(make_typevar());
-
-					// if no return type is provided, must be infered
-					TYPE output = nullptr;
-					if (opt_type_node.type == NodeType::EMPTY)
-						output = make_typevar();
-					else
-						output = typecheck(opt_type_idx, scope_id);
-
-					return ASSOC_TYPE(node_idx, make_function(inputs, output));
+				auto output = [&]() {
+					auto body_type = typecheck(body_idx, new_scope_id);
+					if (opt_type_node.type != NodeType::EMPTY) {
+						auto opt_type = typecheck(opt_type_idx, new_scope_id);
+						if (!unify(body_type, opt_type))
+							mismatch_error(
+								node.loc,
+								"Function annotation output type and infered type don't "
+								"match",
+								body_type,
+								opt_type
+							);
+						return opt_type;
+					}
+					return body_type;
 				}();
 
-				auto var = env.insert(scope_id, id_node.str_id, typ);
-
-				{
-					auto new_scope_id = env.create_child_scope(scope_id);
-
-					vector<TYPE> param_types {};
-
-					for (auto param_idx : params_node) {
-						const auto& param = ast.at(param_idx);
-						auto var = make_typevar();
-						param_types.push_back(var);
-						env.insert(new_scope_id, param.str_id, var);
-					}
-
-					auto output = [&]() {
-						auto body_type = typecheck(body_idx, new_scope_id);
-						if (opt_type_node.type != NodeType::EMPTY) {
-							auto opt_type = typecheck(opt_type_idx, new_scope_id);
-							if (!unify(body_type, opt_type))
-								mismatch_error(
-									node.loc,
-									"Function annotation output type and infered type don't "
-									"match",
-									body_type,
-									opt_type
-								);
-							return opt_type;
-						}
-						return body_type;
-					}();
-
-					typ = make_function(param_types, output);
-				}
-
-				*var = typ;
-
-				auto typ_ = typ;
-				return ASSOC_TYPE(node_idx, typ_);
+				typ = make_function(param_types, output);
 			}
 
-			return ASSOC_TYPE(node_idx, make_nil());
+			*var = typ;
+
+			auto typ_ = typ;
+			return ASSOC_TYPE(node_idx, typ_);
 		}
 			// FIXME: add typing rules
 		case NodeType::NIL:

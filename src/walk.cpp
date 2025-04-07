@@ -183,7 +183,51 @@ Value eval_ass(
 	return *(lvalue.var) = right;
 }
 
-Value eval_decl(
+Value eval_var_decl(
+	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+) {
+	auto id_idx = node[0];
+	const auto& id_node = ast.at(id_idx);
+
+	Value* cell = inter->env.insert(scope_id, id_node.str_id);
+	if (!cell) err2(node.loc, "Could not initialize variable");
+
+	// "fun" id params opt-type "=" body
+	if (node.branch.children_count == 4) {
+		auto body_idx = node[3];
+
+		const auto& params_node = ast.at(node[1]);
+		const auto& opt_type_node = ast.at(node[2]);
+
+		(void)opt_type_node;
+
+		for (size_t i = 0; i < params_node.branch.children_count; i++) {
+			const auto& param = ast.at(params_node[i]);
+			if (param.type != NodeType::ID)
+				err("Function parameter must be a valid identifier");
+			auto value = Value(Function(
+				body_idx, params_node.branch.children, params_node.branch.children_count
+			));
+			return *cell = value;
+		}
+	}
+
+	// "var" id opt-type "=" exp
+	if (node.branch.children_count == 3) {
+		auto opt_type_idx = node[1];
+		auto exp_idx = node[2];
+
+		(void)opt_type_idx;
+
+		Value res(cell);
+		*cell = inter_eval_node(inter, ast, exp_idx, scope_id).to_rvalue();
+		return res;
+	}
+
+	assert(false);
+}
+
+Value eval_fun_decl(
 	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
 ) {
 	auto id_idx = node[0];
@@ -333,7 +377,8 @@ Value inter_eval_node(
 			const char* str = str_pool_find(inter->pool, node.str_id);
 			return Value(strdup(str));
 		}
-		case NodeType::DECL: return eval_decl(inter, ast, node, scope_id);
+		case NodeType::VAR_DECL: return eval_var_decl(inter, ast, node, scope_id);
+		case NodeType::FUN_DECL: return eval_fun_decl(inter, ast, node, scope_id);
 		case NodeType::NIL: return {};
 		case NodeType::TRUE: return Value(true);
 		case NodeType::FALSE: return Value(false);

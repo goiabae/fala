@@ -420,82 +420,82 @@ Result Compiler::compile_app(
 }
 #endif
 
-Result Compiler::compile_decl(
+Result Compiler::compile_var_decl(
 	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers,
 	Env<Operand>::ScopeID scope_id
 ) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	// "fun" id params opt-type "=" body
-	if (node.branch.children_count == 4) {
-		auto id_idx = node[0];
-		auto params_idx = node[1];
-		auto opt_type_idx = node[2];
-		auto body_idx = node[3];
+	auto id_idx = node[0];
+	auto opt_type_idx = node[1];
+	auto exp_idx = node[2];
 
-		const auto& id_node = ast.at(id_idx);
-		const auto& params_node = ast.at(params_idx);
+	(void)opt_type_idx;
 
-		(void)opt_type_idx;
+	const auto& id_node = ast.at(id_idx);
 
-		Operand* opnd = env.insert(scope_id, id_node.str_id, make_register());
+	auto initial_res = compile(ast, exp_idx, pool, handlers, scope_id);
+	chunk = chunk + initial_res.code;
+	Operand initial = initial_res.opnd;
 
-		auto func_name = make_label();
-		*opnd = func_name;
-		auto new_scope_id = env.create_child_scope(scope_id);
+	// initial is an array
+	if (initial.type == Operand::Type::ARR)
+		return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
 
-		Chunk func {};
+	// anything else
+	initial = to_rvalue(&chunk, initial);
+	Operand* var = env.insert(scope_id, id_node.str_id, make_register());
+	if (initial.type == Operand::Type::REG) var->reg.type = initial.reg.type;
+	chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
+	return {chunk, *var};
+}
 
-		func.add_label(func_name);
-		func.emit(Opcode::FUNC);
+Result Compiler::compile_fun_decl(
+	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers,
+	Env<Operand>::ScopeID scope_id
+) {
+	Chunk chunk {};
+	const auto& node = ast.at(node_idx);
 
-		for (size_t i = 0; i < params_node.branch.children_count; i++) {
-			const auto& param_node = ast.at(params_node[i]);
-			auto arg = make_register();
-			func.emit(Opcode::POP, arg);
-			env.insert(new_scope_id, param_node.str_id, arg);
-		}
+	auto id_idx = node[0];
+	auto params_idx = node[1];
+	auto opt_type_idx = node[2];
+	auto body_idx = node[3];
 
-		auto op_res = compile(ast, body_idx, pool, handlers, new_scope_id);
-		func = func + op_res.code;
-		auto op = op_res.opnd;
+	const auto& id_node = ast.at(id_idx);
+	const auto& params_node = ast.at(params_idx);
 
-		func.emit(Opcode::PUSH, op);
-		func.emit(Opcode::RET);
+	(void)opt_type_idx;
 
-		functions.push_back(func);
+	Operand* opnd = env.insert(scope_id, id_node.str_id, make_register());
 
-		return {chunk, func_name};
+	auto func_name = make_label();
+	*opnd = func_name;
+	auto new_scope_id = env.create_child_scope(scope_id);
+
+	Chunk func {};
+
+	func.add_label(func_name);
+	func.emit(Opcode::FUNC);
+
+	for (auto param_idx : params_node) {
+		const auto& param_node = ast.at(param_idx);
+		auto arg = make_register();
+		func.emit(Opcode::POP, arg);
+		env.insert(new_scope_id, param_node.str_id, arg);
 	}
 
-	// "var" id opt-type "=" exp
-	if (node.branch.children_count == 3) {
-		auto id_idx = node[0];
-		auto opt_type_idx = node[1];
-		auto exp_idx = node[2];
+	auto op_res = compile(ast, body_idx, pool, handlers, new_scope_id);
+	func = func + op_res.code;
+	auto op = op_res.opnd;
 
-		(void)opt_type_idx;
+	func.emit(Opcode::PUSH, op);
+	func.emit(Opcode::RET);
 
-		const auto& id_node = ast.at(id_idx);
+	functions.push_back(func);
 
-		auto initial_res = compile(ast, exp_idx, pool, handlers, scope_id);
-		chunk = chunk + initial_res.code;
-		Operand initial = initial_res.opnd;
-
-		// initial is an array
-		if (initial.type == Operand::Type::ARR)
-			return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
-
-		// anything else
-		initial = to_rvalue(&chunk, initial);
-		Operand* var = env.insert(scope_id, id_node.str_id, make_register());
-		if (initial.type == Operand::Type::REG) var->reg.type = initial.reg.type;
-		chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
-		return {chunk, *var};
-	}
-
-	assert(false && "unreachable");
+	return {chunk, func_name};
 }
 
 Result Compiler::compile_ass(
@@ -711,7 +711,8 @@ Result Compiler::compile(
 			return {{}, *opnd};
 		}
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
-		case NodeType::DECL: COMPILE_WITH_HANDLER(compile_decl)
+		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
+		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
 		case NodeType::NIL: return {{}, {}};
 		case NodeType::TRUE: return {{}, {1}};
 		case NodeType::FALSE: return {{}, {0}};

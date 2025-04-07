@@ -40,7 +40,8 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::NOT: return "NodeType::NOT";
 		case NodeType::ID: return "NodeType::ID";
 		case NodeType::STR: return "NodeType::STR";
-		case NodeType::DECL: return "NodeType::DECL";
+		case NodeType::VAR_DECL: return "NodeType::VAR_DECL";
+		case NodeType::FUN_DECL: return "NodeType::FUN_DECL";
 		case NodeType::NIL: return "NodeType::NIL";
 		case NodeType::TRUE: return "NodeType::TRUE";
 		case NodeType::FALSE: return "NodeType::FALSE";
@@ -97,7 +98,8 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::DIV: return "/";
 		case NodeType::MOD: return "%";
 		case NodeType::NOT: return "not";
-		case NodeType::DECL: return "decl";
+		case NodeType::VAR_DECL: return "fun_decl";
+		case NodeType::FUN_DECL: return "var_decl";
 		case NodeType::LET: return "let";
 		case NodeType::AT: return "at";
 		case NodeType::AS: return "as";
