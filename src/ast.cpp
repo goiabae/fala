@@ -47,7 +47,10 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::LET: return "NodeType::LET";
 		case NodeType::CHAR: return "NodeType::CHAR";
 		case NodeType::PATH: return "NodeType::PATH";
-		case NodeType::PRIMITIVE_TYPE: return "NodeType::PRIMITIVE_TYPE";
+		case NodeType::INT_TYPE: return "NodeType::INT_TYPE";
+		case NodeType::UINT_TYPE: return "NodeType::UINT_TYPE";
+		case NodeType::BOOL_TYPE: return "NodeType::BOOL_TYPE";
+		case NodeType::NIL_TYPE: return "NodeType::NIL_TYPE";
 		case NodeType::AS: return "NodeType::AS";
 	}
 }
@@ -60,7 +63,8 @@ bool node_has_fixed_repr(enum NodeType type) {
 		case NodeType::EMPTY:
 		case NodeType::CHAR:
 		case NodeType::PATH:
-		case NodeType::PRIMITIVE_TYPE: return false;
+		case NodeType::INT_TYPE:
+		case NodeType::UINT_TYPE: return false;
 		default: return true;
 	}
 }
@@ -100,6 +104,8 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::NIL: return "nil";
 		case NodeType::TRUE: return "true";
 		case NodeType::FALSE: return "false";
+		case NodeType::BOOL_TYPE: return "Bool";
+		case NodeType::NIL_TYPE: return "Nil";
 		default: assert(false && "unreachable");
 	}
 }
@@ -131,13 +137,10 @@ static void ast_node_print(
 	} else if (node.type == NodeType::PATH) {
 		ast_node_print(ast, pool, node[0], space);
 		return;
-	} else if (node.type == NodeType::PRIMITIVE_TYPE) {
-		switch (ast->at(node[0]).num) {
-			case 0: printf("int %d", ast->at(node[1]).num); break;
-			case 1: printf("uint %d", ast->at(node[1]).num); break;
-			case 2: printf("bool"); break;
-			case 3: printf("nil"); break;
-		}
+	} else if (node.type == NodeType::INT_TYPE) {
+		printf("int %d", ast->at(node[0]).num);
+	} else if (node.type == NodeType::UINT_TYPE) {
+		printf("uint %d", ast->at(node[0]).num);
 		return;
 	} else if (node.type == NodeType::EMPTY) {
 		return;
@@ -231,66 +234,62 @@ static void ast_node_print_detailed(
 		print_spaces(fd, space);
 		fprintf(fd, "}\n");
 		return;
-	} else if (node.type == NodeType::PRIMITIVE_TYPE) {
-		switch (ast->at(node[0]).num) {
-			case 0:
-				print_spaces(fd, space);
-				fprintf(fd, "{\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "index = %d\n", node_idx.index);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "kind = %d\n", ast->at(node[1]).num);
-				print_spaces(fd, space);
-				fprintf(fd, "}\n");
-				break;
-			case 1:
-				print_spaces(fd, space);
-				fprintf(fd, "{\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "index = %d\n", node_idx.index);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "kind = uint %d\n", ast->at(node[1]).num);
-				print_spaces(fd, space);
-				fprintf(fd, "}\n");
-				break;
-			case 2:
-				print_spaces(fd, space);
-				fprintf(fd, "{\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "index = %d\n", node_idx.index);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "kind = bool\n");
-				print_spaces(fd, space);
-				fprintf(fd, "}\n");
-				print_spaces(fd, space);
-				break;
-			case 3:
-				print_spaces(fd, space);
-				fprintf(fd, "{\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
-				print_spaces(fd, space + 2);
-				fprintf(fd, "index = %d\n", node_idx.index);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
-				print_spaces(fd, space + 2);
-				fprintf(fd, "kind = nil\n");
-				print_spaces(fd, space);
-				fprintf(fd, "}\n");
-				break;
-		}
+	} else if (node.type == NodeType::INT_TYPE) {
+		print_spaces(fd, space);
+		fprintf(fd, "{\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "index = %d\n", node_idx.index);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "kind = %d\n", ast->at(node[0]).num);
+		print_spaces(fd, space);
+		fprintf(fd, "}\n");
+		return;
+	} else if (node.type == NodeType::UINT_TYPE) {
+		print_spaces(fd, space);
+		fprintf(fd, "{\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "index = %d\n", node_idx.index);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "kind = uint %d\n", ast->at(node[0]).num);
+		print_spaces(fd, space);
+		fprintf(fd, "}\n");
+		return;
+	} else if (node.type == NodeType::BOOL_TYPE) {
+		print_spaces(fd, space);
+		fprintf(fd, "{\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "index = %d\n", node_idx.index);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "kind = bool\n");
+		print_spaces(fd, space);
+		fprintf(fd, "}\n");
+		print_spaces(fd, space);
+		return;
+	} else if (node.type == NodeType::NIL_TYPE) {
+		print_spaces(fd, space);
+		fprintf(fd, "{\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "type = NodeType::PRIMITIVE_TYPE\n");
+		print_spaces(fd, space + 2);
+		fprintf(fd, "index = %d\n", node_idx.index);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
+		print_spaces(fd, space + 2);
+		fprintf(fd, "kind = nil\n");
+		print_spaces(fd, space);
+		fprintf(fd, "}\n");
 		return;
 	} else if (node.type == NodeType::EMPTY) {
 		print_spaces(fd, space);

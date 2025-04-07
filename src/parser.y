@@ -207,10 +207,10 @@ int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
 type-literal : type-primitive ;
 
 type-primitive
-  : INT int  { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 0), $2); }
-  | UINT int { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 1), $2); }
-  | BOOL     { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 2)); }
-  | NIL      { $$ = NODE(NodeType::PRIMITIVE_TYPE, new_number_node(ast, @$, 3)); }
+  : INT int  { $$ = NODE(NodeType::INT_TYPE, $2); }
+  | UINT int { $$ = NODE(NodeType::UINT_TYPE, $2); }
+  | BOOL     { $$ = NODE(NodeType::BOOL_TYPE); }
+  | NIL      { $$ = NODE(NodeType::NIL_TYPE); }
   ;
 
 %%

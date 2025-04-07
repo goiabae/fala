@@ -719,7 +719,10 @@ Result Compiler::compile(
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: return {{}, {node.character}};
 		case NodeType::PATH: return compile(ast, node[0], pool, handlers, scope_id);
-		case NodeType::PRIMITIVE_TYPE: assert(false && "TODO");
+		case NodeType::INT_TYPE: assert(false && "TODO");
+		case NodeType::UINT_TYPE: assert(false && "TODO");
+		case NodeType::BOOL_TYPE: assert(false && "TODO");
+		case NodeType::NIL_TYPE: assert(false && "TODO");
 		case NodeType::AS: return compile(ast, node[0], pool, handlers, scope_id);
 	}
 	assert(false);

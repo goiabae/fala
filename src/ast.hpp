@@ -46,7 +46,10 @@ enum class NodeType {
 	LET,
 	CHAR,
 	PATH,
-	PRIMITIVE_TYPE,
+	INT_TYPE,
+	UINT_TYPE,
+	BOOL_TYPE,
+	NIL_TYPE,
 	AS,
 };
 

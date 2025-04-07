@@ -720,7 +720,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			break;
 		}
 
-			// FIXME: This is kinda wrong as having a type is not the same as
+			// FIXME: These are kinda wrong as having a type is not the same as
 			// representing or evaluating to a type.
 
 			// | e1 : Int<64>
@@ -739,22 +739,19 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// +------------
 			// | |- nil : Nil
 
-		case NodeType::PRIMITIVE_TYPE: {
-			const auto& constructor_keyword_node = ast.at(node[0]);
-			switch (constructor_keyword_node.num) {
-				case 0: {
-					const auto& type_size_node = ast.at(node[1]);
-					return ASSOC_TYPE(node_idx, make_integer(type_size_node.num, SIGNED));
-				}
-				case 1: {
-					const auto& type_size_node = ast.at(node[1]);
-					return ASSOC_TYPE(
-						node_idx, make_integer(type_size_node.num, UNSIGNED)
-					);
-				}
-				case 2: return ASSOC_TYPE(node_idx, make_bool());
-				case 3: return ASSOC_TYPE(node_idx, make_nil());
-			}
+		case NodeType::INT_TYPE: {
+			const auto& type_size_node = ast.at(node[0]);
+			return ASSOC_TYPE(node_idx, make_integer(type_size_node.num, SIGNED));
+		}
+		case NodeType::UINT_TYPE: {
+			const auto& type_size_node = ast.at(node[0]);
+			return ASSOC_TYPE(node_idx, make_integer(type_size_node.num, UNSIGNED));
+		}
+		case NodeType::BOOL_TYPE: {
+			return ASSOC_TYPE(node_idx, make_bool());
+		}
+		case NodeType::NIL_TYPE: {
+			return ASSOC_TYPE(node_idx, make_nil());
 		}
 	}
 

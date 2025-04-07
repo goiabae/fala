@@ -353,7 +353,10 @@ Value inter_eval_node(
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: return Value(node.character);
 		case NodeType::PATH: return inter_eval_node(inter, ast, node[0], scope_id);
-		case NodeType::PRIMITIVE_TYPE: assert(false && "TODO");
+		case NodeType::INT_TYPE: assert(false && "TODO");
+		case NodeType::UINT_TYPE: assert(false && "TODO");
+		case NodeType::BOOL_TYPE: assert(false && "TODO");
+		case NodeType::NIL_TYPE: assert(false && "TODO");
 		case NodeType::AS: return inter_eval_node(inter, ast, node[0], scope_id);
 	}
 	assert(false);
