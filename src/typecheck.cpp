@@ -368,19 +368,42 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 				node_idx, typecheck(node[node.branch.children_count - 1], scope_id)
 			);
 		}
-			// FIXME: add typing rules
+
+			// | E |- e1 : Bool
+			// | E |- e2 : t
+			// | E |- e3 : t
+			// +----------
+			// | E |- if e1 then e2 else e3 : t
+
 		case NodeType::IF: {
-			const auto t = typecheck(node[1], scope_id);
-			const auto f = typecheck(node[2], scope_id);
-			if (not unify(t, f))
+			auto cond_idx = node[0];
+			auto then_idx = node[1];
+			auto else_idx = node[2];
+
+			auto cond_typ = typecheck(cond_idx, scope_id);
+
+			if (not unify(cond_typ, make_bool())) {
+				mismatch_error(
+					node.loc,
+					"Condition expression of if expression is not of type boolean",
+					cond_typ,
+					make_bool()
+				);
+			}
+
+			auto then_typ = typecheck(then_idx, scope_id);
+			auto else_typ = typecheck(else_idx, scope_id);
+
+			if (not unify(then_typ, else_typ))
 				mismatch_error(
 					node.loc,
 					"If expression has \"then\" and \"else\" branches with different "
 					"types",
-					f,
-					t
+					then_typ,
+					else_typ
 				);
-			return ASSOC_TYPE(node_idx, t);
+
+			return ASSOC_TYPE(node_idx, then_typ);
 		}
 
 			// | e1 : Bool
