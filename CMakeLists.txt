@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.17.0)
 
 project(fala)
 
@@ -50,6 +50,8 @@ if (WITH_READLINE)
 endif()
 
 enable_testing()
+
+list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
 function(test_example example)
 	add_test(
