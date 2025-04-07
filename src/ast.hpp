@@ -103,6 +103,9 @@ struct Node {
 	};
 
 	NodeIndex& operator[](size_t index) const;
+
+	NodeIndex* begin() const { return &branch.children[0]; }
+	NodeIndex* end() const { return &branch.children[branch.children_count]; }
 };
 
 struct AST {
