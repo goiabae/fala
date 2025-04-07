@@ -76,11 +76,11 @@ void Code::load(hir::Register registuhr, hir::Register pointer) {
 
 // Given a pointer <base>, returns a pointer to the <nth> item from base of size
 // <size>
-void Code::item_offset(
+void Code::element_ptr(
 	hir::Register result, hir::Register base, hir::Operand nth, hir::Operand size
 ) {
 	instructions.push_back(
-		Instruction {hir::Opcode::ITEM_OFFSET, {result, base, nth, size}}
+		Instruction {hir::Opcode::ELEMENT_PTR, {result, base, nth, size}}
 	);
 }
 
@@ -230,10 +230,10 @@ void print_instruction(
 			fprintf(fd, "\n");
 			return;
 		}
-		case Opcode::ITEM_OFFSET: {
+		case Opcode::ELEMENT_PTR: {
 			print_operand(fd, inst.operands[0], pool, spaces);
 			fprintf(fd, " = ");
-			fprintf(fd, "item_offset");
+			fprintf(fd, "element_ptr");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
 				print_operand(fd, inst.operands[i], pool, spaces);

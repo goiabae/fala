@@ -117,7 +117,7 @@ enum class Opcode {
 	LESS_EQ,
 	GREATER,
 	GREATER_EQ,
-	ITEM_OFFSET, // returns pointer to the nth item of some size from base
+	ELEMENT_PTR, // returns pointer to the nth item of some size from base
 	CALL,
 	BUILTIN, // move builtin function with name $2 to $1 register
 	RET,
@@ -153,7 +153,7 @@ class Code {
 	void inc(hir::Register);
 	void store(hir::Register, hir::Register);
 	void load(hir::Register, hir::Register);
-	void item_offset(hir::Register, hir::Register, hir::Operand, hir::Operand);
+	void element_ptr(hir::Register, hir::Register, hir::Operand, hir::Operand);
 	void ref_to(hir::Register, hir::Register);
 };
 

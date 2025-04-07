@@ -28,25 +28,36 @@ struct Result {
 
 class Compiler {
  public:
-	hir::Code compile(const AST& ast, const StringPool& pool);
+	Compiler(const AST& ast, const StringPool& pool, Typechecker& checker)
+	: ast(ast), pool(pool), checker(checker) {}
+
+	hir::Code compile();
 
 	Result compile(
-		const AST& ast, NodeIndex node_idx, const StringPool& pool,
-		SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
+		NodeIndex node_idx, SignalHandlers handlers,
+		Env<hir::Operand>::ScopeID scope_id
+	);
+
+	Result compile_lvalue(
+		NodeIndex node_idx, SignalHandlers handlers,
+		Env<hir::Operand>::ScopeID scope_id
+	);
+
+	Result compile_rvalue(
+		NodeIndex node_idx, SignalHandlers handlers,
+		Env<hir::Operand>::ScopeID scope_id
 	);
 
 	Result get_pointer_for(
-		const AST& ast, NodeIndex node_idx, const StringPool& pool,
-		SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
+		NodeIndex node_idx, SignalHandlers handlers,
+		Env<hir::Operand>::ScopeID scope_id
 	);
 
-	Result to_rvalue(Result pointer_result);
+	Result to_rvalue(NodeIndex node_idx, Result pointer_result);
 
 #define DECLARE_NODE_HANDLER(NODE_TYPE) \
 	Result compile_##NODE_TYPE(           \
-		const AST& ast,                     \
 		NodeIndex node_idx,                 \
-		const StringPool& pool,             \
 		SignalHandlers handlers,            \
 		Env<hir::Operand>::ScopeID scope_id \
 	)
@@ -58,9 +69,11 @@ class Compiler {
 
 	hir::Register make_register();
 
-	Env<hir::Operand> env;
-
  private:
+	const AST& ast;
+	const StringPool& pool;
+	Typechecker& checker;
+	Env<hir::Operand> env;
 	size_t register_count;
 	size_t label_count;
 };

@@ -14,24 +14,48 @@ constexpr auto builtins = {
 	"read_int", "read_char", "write_int", "write_char", "write_str", "make_array"
 };
 
-Result Compiler::to_rvalue(Result pointer_result) {
-	hir::Code code = pointer_result.code;
-	hir::Register result_register = make_register();
-	code.load(result_register, pointer_result.result_register);
-	return {code, result_register};
+Result Compiler::compile_rvalue(
+	NodeIndex node_idx, SignalHandlers handlers,
+	Env<hir::Operand>::ScopeID scope_id
+) {
+	return to_rvalue(node_idx, compile(node_idx, handlers, scope_id));
 }
 
-hir::Code Compiler::compile(const AST& ast, const StringPool& pool) {
+Result Compiler::compile_lvalue(
+	NodeIndex node_idx, SignalHandlers handlers,
+	Env<hir::Operand>::ScopeID scope_id
+) {
+	auto node_typ = checker.node_to_type.at(node_idx);
+	if (not checker.is_ref(node_typ)) {
+		assert(false);
+	}
+	auto result = compile(node_idx, handlers, scope_id);
+	return result;
+}
+
+Result Compiler::to_rvalue(NodeIndex node_idx, Result pointer_result) {
+	auto node_typ = checker.node_to_type.at(node_idx);
+	if (checker.is_ref(node_typ)) {
+		hir::Code code = pointer_result.code;
+		hir::Register result_register = make_register();
+		code.load(result_register, pointer_result.result_register);
+		return {code, result_register};
+	} else {
+		return pointer_result;
+	}
+}
+
+hir::Code Compiler::compile() {
 	auto node_idx = ast.root_index;
 	SignalHandlers handlers {};
 	auto scope_id = env.root_scope_id;
-	auto result = compile(ast, node_idx, pool, handlers, scope_id);
+	auto result = compile(node_idx, handlers, scope_id);
 	return result.code;
 }
 
 Result Compiler::compile_app(
-	const AST& ast, NodeIndex node_idx, const StringPool& pool,
-	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
+	NodeIndex node_idx, SignalHandlers handlers,
+	Env<hir::Operand>::ScopeID scope_id
 ) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
@@ -64,7 +88,7 @@ Result Compiler::compile_app(
 	}
 
 	if (!builtin_function_found) {
-		auto func_result = compile(ast, node[0], pool, handlers, scope_id);
+		auto func_result = compile_rvalue(node[0], handlers, scope_id);
 		code = code + func_result.code;
 		function = func_result.result_register;
 	}
@@ -81,7 +105,7 @@ Result Compiler::compile_app(
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
 		const auto& arg_node = ast.at(arg_idx);
-		auto arg_result = compile(ast, arg_idx, pool, handlers, scope_id);
+		auto arg_result = compile_rvalue(arg_idx, handlers, scope_id);
 		code = code + arg_result.code;
 		args.push_back(hir::Operand {arg_result.result_register});
 	}
@@ -92,8 +116,8 @@ Result Compiler::compile_app(
 }
 
 Result Compiler::compile_if(
-	const AST& ast, NodeIndex node_idx, const StringPool& pool,
-	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
+	NodeIndex node_idx, SignalHandlers handlers,
+	Env<hir::Operand>::ScopeID scope_id
 ) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
@@ -104,15 +128,15 @@ Result Compiler::compile_if(
 
 	auto result_register = make_register();
 
-	auto cond_res = compile(ast, cond_idx, pool, handlers, scope_id);
+	auto cond_res = compile(cond_idx, handlers, scope_id);
 	code = code + cond_res.code;
 	auto cond_opnd = cond_res.result_register;
 	assert(not cond_opnd.contains_pointer());
 
-	auto then_res = compile(ast, then_idx, pool, handlers, scope_id);
+	auto then_res = compile(then_idx, handlers, scope_id);
 	then_res.code.copy(result_register, then_res.result_register);
 
-	auto else_res = compile(ast, else_idx, pool, handlers, scope_id);
+	auto else_res = compile(else_idx, handlers, scope_id);
 	else_res.code.copy(result_register, else_res.result_register);
 
 	auto if_true_code = std::make_shared<hir::Code>(then_res.code);
@@ -125,8 +149,8 @@ Result Compiler::compile_if(
 }
 
 Result Compiler::get_pointer_for(
-	const AST& ast, NodeIndex node_idx, const StringPool& pool,
-	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
+	NodeIndex node_idx, SignalHandlers handlers,
+	Env<hir::Operand>::ScopeID scope_id
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
@@ -154,14 +178,13 @@ Result Compiler::get_pointer_for(
 			auto base_idx = node[0];
 			auto off_idx = node[1];
 
-			auto base_result =
-				get_pointer_for(ast, base_idx, pool, handlers, scope_id);
-			auto off_result = compile(ast, off_idx, pool, handlers, scope_id);
+			auto base_result = get_pointer_for(base_idx, handlers, scope_id);
+			auto off_result = compile_rvalue(off_idx, handlers, scope_id);
 
 			auto pointer_result = make_register();
 
 			code = code + base_result.code + off_result.code;
-			code.item_offset(
+			code.element_ptr(
 				pointer_result,
 				base_result.result_register,
 				off_result.result_register,
@@ -198,7 +221,7 @@ Result Compiler::get_pointer_for(
 		case NodeType::LET: assert(false);
 		case NodeType::CHAR: assert(false);
 		case NodeType::PATH: {
-			return get_pointer_for(ast, node[0], pool, handlers, scope_id);
+			return get_pointer_for(node[0], handlers, scope_id);
 		}
 		case NodeType::INT_TYPE: assert(false);
 		case NodeType::UINT_TYPE: assert(false);
@@ -210,14 +233,13 @@ Result Compiler::get_pointer_for(
 }
 
 Result Compiler::compile(
-	const AST& ast, NodeIndex node_idx, const StringPool& pool,
-	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
+	NodeIndex node_idx, SignalHandlers handlers,
+	Env<hir::Operand>::ScopeID scope_id
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::EMPTY: assert(false && "empty node shouldn't be evaluated");
-		case NodeType::APP:
-			return compile_app(ast, node_idx, pool, handlers, scope_id);
+		case NodeType::APP: return compile_app(node_idx, handlers, scope_id);
 		case NodeType::NUM: {
 			hir::Code code {};
 			auto result_register = make_register();
@@ -230,14 +252,13 @@ Result Compiler::compile(
 			auto inner_scope_id = env.create_child_scope(scope_id);
 			hir::Register result_register {};
 			for (auto idx : node) {
-				auto opnd_res = compile(ast, idx, pool, handlers, inner_scope_id);
+				auto opnd_res = compile(idx, handlers, inner_scope_id);
 				code = code + opnd_res.code;
 				result_register = opnd_res.result_register;
 			}
 			return Result {code, result_register};
 		}
-		case NodeType::IF:
-			return compile_if(ast, node_idx, pool, handlers, scope_id);
+		case NodeType::IF: return compile_if(node_idx, handlers, scope_id);
 		case NodeType::WHEN: {
 			hir::Code code {};
 			const auto& node = ast.at(node_idx);
@@ -247,12 +268,12 @@ Result Compiler::compile(
 
 			auto result_register = make_register();
 
-			auto cond_res = compile(ast, cond_idx, pool, handlers, scope_id);
+			auto cond_res = compile(cond_idx, handlers, scope_id);
 			code = code + cond_res.code;
 			auto cond_opnd = cond_res.result_register;
 			assert(not cond_opnd.contains_pointer());
 
-			auto then_res = compile(ast, then_idx, pool, handlers, scope_id);
+			auto then_res = compile(then_idx, handlers, scope_id);
 			then_res.code.copy(result_register, then_res.result_register);
 
 			auto if_true_code = std::make_shared<hir::Code>(then_res.code);
@@ -279,7 +300,7 @@ Result Compiler::compile(
 			hir::Operand step_value {};
 
 			if (step_node.type != NodeType::EMPTY) {
-				auto step_result = compile(ast, step_idx, pool, handlers, scope_id);
+				auto step_result = compile(step_idx, handlers, scope_id);
 				code = code + step_result.code;
 				step_value = step_result.result_register;
 			} else {
@@ -288,15 +309,15 @@ Result Compiler::compile(
 
 			auto inner_scope_id = env.create_child_scope(scope_id);
 
-			auto var_result = compile(ast, decl_idx, pool, handlers, inner_scope_id);
+			auto var_result = compile(decl_idx, handlers, inner_scope_id);
 			code = code + var_result.code;
 			auto var_opnd = var_result.result_register;
 
-			auto to_result = compile(ast, to_idx, pool, handlers, inner_scope_id);
+			auto to_result = compile_rvalue(to_idx, handlers, inner_scope_id);
 			code = code + to_result.code;
 			auto to_opnd = to_result.result_register;
 
-			auto then_result = compile(ast, then_idx, pool, handlers, inner_scope_id);
+			auto then_result = compile_rvalue(then_idx, handlers, inner_scope_id);
 			auto then_opnd = then_result.result_register;
 
 			hir::Code if_break {};
@@ -328,10 +349,10 @@ Result Compiler::compile(
 
 			hir::Operand step_value {};
 
-			auto cond_result = compile(ast, cond_idx, pool, handlers, scope_id);
+			auto cond_result = compile(cond_idx, handlers, scope_id);
 			auto cond_opnd = cond_result.result_register;
 
-			auto then_result = compile(ast, then_idx, pool, handlers, scope_id);
+			auto then_result = compile(then_idx, handlers, scope_id);
 			auto then_opnd = then_result.result_register;
 
 			hir::Code if_break {};
@@ -356,9 +377,11 @@ Result Compiler::compile(
 			auto pointer_idx = node[0];
 			auto value_idx = node[1];
 
-			auto pointer_result =
-				get_pointer_for(ast, pointer_idx, pool, handlers, scope_id);
-			auto value_result = compile(ast, value_idx, pool, handlers, scope_id);
+			auto base_typ = checker.node_to_type.at(pointer_idx);
+			assert(checker.is_ref(base_typ));
+
+			auto pointer_result = get_pointer_for(pointer_idx, handlers, scope_id);
+			auto value_result = compile(value_idx, handlers, scope_id);
 
 			code = code + pointer_result.code + value_result.code;
 
@@ -367,23 +390,23 @@ Result Compiler::compile(
 			return {code, value_result.result_register};
 		}
 
-#define BINARY_ARITH(OPCODE)                                               \
-	{                                                                        \
-		hir::Code code {};                                                     \
-		auto left_idx = node[0];                                               \
-		auto right_idx = node[1];                                              \
-                                                                           \
-		auto left_result = compile(ast, left_idx, pool, handlers, scope_id);   \
-		auto right_result = compile(ast, right_idx, pool, handlers, scope_id); \
-		code = code + left_result.code + right_result.code;                    \
-		auto result_register = make_register();                                \
-		code.instructions.push_back(hir::Instruction {                         \
-			hir::Opcode::OPCODE,                                                 \
-			{result_register,                                                    \
-		   left_result.result_register,                                        \
-		   right_result.result_register}                                       \
-		});                                                                    \
-		return {code, result_register};                                        \
+#define BINARY_ARITH(OPCODE)                                           \
+	{                                                                    \
+		hir::Code code {};                                                 \
+		auto left_idx = node[0];                                           \
+		auto right_idx = node[1];                                          \
+                                                                       \
+		auto left_result = compile_rvalue(left_idx, handlers, scope_id);   \
+		auto right_result = compile_rvalue(right_idx, handlers, scope_id); \
+		code = code + left_result.code + right_result.code;                \
+		auto result_register = make_register();                            \
+		code.instructions.push_back(hir::Instruction {                     \
+			hir::Opcode::OPCODE,                                             \
+			{result_register,                                                \
+		   left_result.result_register,                                    \
+		   right_result.result_register}                                   \
+		});                                                                \
+		return {code, result_register};                                    \
 	}
 
 		case NodeType::OR: BINARY_ARITH(OR);
@@ -392,7 +415,15 @@ Result Compiler::compile(
 		case NodeType::LTN: BINARY_ARITH(LESS);
 		case NodeType::GTE: BINARY_ARITH(GREATER_EQ);
 		case NodeType::LTE: BINARY_ARITH(LESS_EQ);
-		case NodeType::EQ: BINARY_ARITH(EQ);
+		case NodeType::EQ:
+			BINARY_ARITH(EQ);
+
+			// a[b]
+			//
+			// a must be an lvalue
+			// b must be an rvalue
+			// return an lvalue
+
 		case NodeType::AT: {
 			hir::Code code {};
 
@@ -401,19 +432,24 @@ Result Compiler::compile(
 			auto pointer_idx = node[0];
 			auto value_idx = node[1];
 
-			auto pointer_result = compile(ast, pointer_idx, pool, handlers, scope_id);
-			auto value_result = compile(ast, value_idx, pool, handlers, scope_id);
+			auto pointer_typ = checker.node_to_type.at(pointer_idx);
+			assert(checker.is_ref(pointer_typ));
+
+			auto pointer_result = compile(pointer_idx, handlers, scope_id);
+
+			auto value_result =
+				to_rvalue(value_idx, compile(value_idx, handlers, scope_id));
 
 			code = code + pointer_result.code + value_result.code;
 
-			code.item_offset(
+			code.element_ptr(
 				result_register,
 				pointer_result.result_register,
 				value_result.result_register,
 				hir::Integer(1) // FIXME: assuming size of items is 1
 			);
 
-			return to_rvalue({code, result_register});
+			return {code, result_register};
 		}
 
 		case NodeType::ADD: BINARY_ARITH(ADD);
@@ -424,7 +460,7 @@ Result Compiler::compile(
 		case NodeType::NOT: {
 			hir::Code code {};
 			auto result_register = make_register();
-			auto exp_result = compile(ast, node[0], pool, handlers, scope_id);
+			auto exp_result = compile(node[0], handlers, scope_id);
 			code = code + exp_result.code;
 			code.instructions.push_back(hir::Instruction {
 				hir::Opcode::NOT, {result_register, exp_result.result_register}
@@ -442,7 +478,7 @@ Result Compiler::compile(
 			auto variable_register = variable_ptr->registuhr;
 			auto result_ptr = make_register();
 			code.ref_to(result_ptr, variable_register);
-			return Result {code, variable_register};
+			return Result {code, result_ptr};
 		}
 		case NodeType::STR: {
 			hir::Code code {};
@@ -462,7 +498,7 @@ Result Compiler::compile(
 
 			const auto& id_node = ast.at(id_idx);
 
-			auto initial_result = compile(ast, exp_idx, pool, handlers, scope_id);
+			auto initial_result = compile(exp_idx, handlers, scope_id);
 			code = code + initial_result.code;
 
 			auto variable_register = make_register();
@@ -501,7 +537,7 @@ Result Compiler::compile(
 				env.insert(inner_scope_id, param_node.str_id, param_register);
 			}
 
-			auto body_result = compile(ast, body_idx, pool, handlers, inner_scope_id);
+			auto body_result = compile(body_idx, handlers, inner_scope_id);
 
 			body_result.code.instructions.push_back(
 				hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
@@ -545,11 +581,10 @@ Result Compiler::compile(
 
 			auto inner_scope_id = env.create_child_scope(scope_id);
 			for (auto idx : decls_node) {
-				auto initial_result = compile(ast, idx, pool, handlers, inner_scope_id);
+				auto initial_result = compile(idx, handlers, inner_scope_id);
 				code = code + initial_result.code;
 			}
-			auto expression_result =
-				compile(ast, exp_idx, pool, handlers, inner_scope_id);
+			auto expression_result = compile(exp_idx, handlers, inner_scope_id);
 			code = code + expression_result.code;
 			return {code, expression_result.result_register};
 		}
@@ -560,13 +595,13 @@ Result Compiler::compile(
 			code.copy(result_register, literal_character);
 			return Result {code, result_register};
 		}
-		case NodeType::PATH: return compile(ast, node[0], pool, handlers, scope_id);
+		case NodeType::PATH: return compile(node[0], handlers, scope_id);
 		case NodeType::INT_TYPE: assert(false);
 		case NodeType::UINT_TYPE: assert(false);
 		case NodeType::BOOL_TYPE: assert(false);
 		case NodeType::NIL_TYPE: assert(false);
 		case NodeType::AS: {
-			return compile(ast, node[0], pool, handlers, scope_id);
+			return compile(node[0], handlers, scope_id);
 		}
 	}
 	assert(false);

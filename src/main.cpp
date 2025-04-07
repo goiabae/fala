@@ -199,9 +199,10 @@ int compile(Options opts) {
 	checker.typecheck();
 
 #ifdef EXPERIMENTAL_HIR_COMPILER
-	hir_compiler::Compiler hir_comp {};
-	auto code = hir_comp.compile(ast, pool);
+	hir_compiler::Compiler hir_comp {ast, pool, checker};
+	auto code = hir_comp.compile();
 	hir::print_code(stderr, code, pool, 0);
+	auto new_code = hir_compiler::optimize(code);
 #endif
 
 	compiler::Compiler comp {ast, pool};
