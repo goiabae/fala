@@ -52,12 +52,16 @@ struct SignalHandlers {
 };
 
 struct Compiler {
-	Chunk compile(AST& ast, const StringPool& pool);
+	Compiler(const AST& ast, const StringPool& pool) : ast(ast), pool(pool) {}
+
+	Chunk compile();
 
 	Result compile(
-		AST& ast, NodeIndex node_idx, const StringPool& pool,
-		SignalHandlers handlers, Env<Operand>::ScopeID scope_id
+		NodeIndex node_idxz, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
 	);
+
+	const AST& ast;
+	const StringPool& pool;
 
 	// these are monotonically increasing as the compiler goes on
 	size_t label_count {0};
@@ -77,9 +81,7 @@ struct Compiler {
 
 #define DECLARE_NODE_HANDLER(NAME) \
 	Result compile_##NAME(           \
-		AST& ast,                      \
 		NodeIndex node_idx,            \
-		const StringPool& pool,        \
 		SignalHandlers handlers,       \
 		Env<Operand>::ScopeID scope_id \
 	)
@@ -96,7 +98,7 @@ struct Compiler {
 	DECLARE_NODE_HANDLER(str);
 	DECLARE_NODE_HANDLER(at);
 
-	#undef DECLARE_NODE_HANDLER
+#undef DECLARE_NODE_HANDLER
 };
 
 } // namespace compiler

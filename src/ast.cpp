@@ -498,7 +498,12 @@ void node_deinit(AST* ast, NodeIndex node_idx) {
 }
 
 Node& AST::at(NodeIndex node_idx) {
-	assert(node_idx.index >= 0 && node_idx.index < 2048);
+	assert(node_idx.index >= 0 && node_idx.index < (int)nodes.max_size());
+	return nodes[(size_t)node_idx.index];
+}
+
+const Node& AST::at(NodeIndex node_idx) const {
+	assert(node_idx.index >= 0 && node_idx.index < (int)nodes.max_size());
 	return nodes[(size_t)node_idx.index];
 }
 

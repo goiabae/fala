@@ -120,6 +120,7 @@ struct AST {
 	NodeIndex root_index {-1};
 	std::array<Node, 2048> nodes {};
 
+	const Node& at(NodeIndex) const;
 	Node& at(NodeIndex);
 	NodeIndex alloc_node();
 
