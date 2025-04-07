@@ -690,7 +690,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// | |- s : Array<Uint<8>>
 
 		case NodeType::STR: {
-			return make_array(uint8_typ);
+			return ASSOC_TYPE(node_idx, make_array(uint8_typ));
 		}
 
 			// FIXME: add typing rules
