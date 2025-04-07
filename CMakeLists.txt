@@ -38,6 +38,7 @@ add_executable(fala
 	src/compiler.cpp
 	src/lir.cpp
 	src/vm.cpp
+	src/hir_compiler.cpp
 	src/hir.cpp
 	${BISON_PARSER_OUTPUTS})
 

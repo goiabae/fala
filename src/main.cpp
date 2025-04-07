@@ -19,6 +19,12 @@
 #include "typecheck.hpp"
 #include "walk.hpp"
 
+#define EXPERIMENTAL_HIR_COMPILER
+
+#ifdef EXPERIMENTAL_HIR_COMPILER
+#	include "hir_compiler.hpp"
+#endif
+
 typedef int Number;
 typedef char* String;
 
@@ -191,6 +197,12 @@ int compile(Options opts) {
 
 	Typechecker checker {ast, pool};
 	checker.typecheck();
+
+#ifdef EXPERIMENTAL_HIR_COMPILER
+	hir_compiler::Compiler hir_comp {};
+	auto code = hir_comp.compile(ast, pool);
+	hir::print_code(stderr, code, pool, 0);
+#endif
 
 	compiler::Compiler comp {ast, pool};
 	auto chunk = comp.compile();
