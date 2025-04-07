@@ -277,7 +277,6 @@ static void ast_node_print_detailed(
 		fprintf(fd, "kind = bool\n");
 		print_spaces(fd, space);
 		fprintf(fd, "}\n");
-		print_spaces(fd, space);
 		return;
 	} else if (node.type == NodeType::NIL_TYPE) {
 		print_spaces(fd, space);
@@ -317,15 +316,14 @@ static void ast_node_print_detailed(
 	print_spaces(fd, space + 2);
 	fprintf(fd, "loc = %d\n", node.loc.begin.byte_offset);
 	print_spaces(fd, space + 2);
-	fprintf(fd, "children = [\n");
+	fprintf(fd, "children = %zu [\n", node.branch.children_count);
 
-	for (size_t i = 0; i < node.branch.children_count; i++) {
-		// for (size_t j = 0; j < space; j++) printf(" ");
-		ast_node_print_detailed(ast, pool, node[i], space + 2 + 2);
+	for (auto idx : node) {
+		ast_node_print_detailed(ast, pool, idx, space + 2 + 2);
 	}
 
 	print_spaces(fd, space + 2);
-	printf("]\n");
+	fprintf(fd, "]\n");
 	print_spaces(fd, space);
 	fprintf(fd, "}\n");
 }
