@@ -12,34 +12,46 @@
 #include "type.hpp"
 
 struct Typechecker {
-	size_t next_var_id {0};
+	Typechecker(AST& ast, StringPool& pool) : ast(ast), pool(pool) {}
 
-	Typechecker(StringPool& pool) : pool(pool) {}
+	bool typecheck();
+	TYPE typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id);
 
-	~Typechecker() {
-		for (Type* t : ts) delete t;
-	}
+	bool unify(TYPE, TYPE);
+	void print_type(FILE* fd, TYPE);
+	void mismatch_error(Location, const char*, TYPE, TYPE);
 
-	Type* make_var() {
-		auto t = new TypeVariable {next_var_id++};
-		ts.push_back(t);
-		return t;
-	}
+	TYPE make_nil();
+	TYPE make_bool();
+	TYPE make_void();
+	TYPE make_integer(int bit_count, Sign sign);
+	TYPE make_array(TYPE item_type);
+	TYPE make_function(std::vector<TYPE> inputs, TYPE output);
+	TYPE make_typevar();
 
-	Type* add_type(Type* t) {
-		ts.push_back(t);
-		return t;
-	}
+	bool is_nil(TYPE);
+	bool is_bool(TYPE);
+	bool is_void(TYPE);
 
-	std::vector<Type*> ts {};
-	Env<Type*> env {};
+	bool is_integer(TYPE);
+	INTEGER to_integer(TYPE);
+
+	bool is_array(TYPE);
+	ARRAY to_array(TYPE);
+
+	bool is_function(TYPE);
+	FUNCTION to_function(TYPE);
+
+	bool is_typevar(TYPE);
+	TYPE_VARIABLE to_typevar(TYPE);
+
+	AST& ast;
 	StringPool& pool;
-	std::map<NodeIndex, Env<Type*>::ScopeID> node_to_scope_id {};
-	std::map<NodeIndex, Type*> node_to_type {};
+
+	size_t next_var_id {0};
+	Env<TYPE> env {};
+	std::map<NodeIndex, Env<TYPE>::ScopeID> node_to_scope_id {};
+	std::map<NodeIndex, TYPE> node_to_type {};
 };
-
-Typechecker typecheck(AST& ast, StringPool& pool);
-
-void print_type(FILE* fd, Type* t);
 
 #endif

@@ -151,7 +151,8 @@ int interpret(Options opts) {
 			printf("\n");
 		}
 
-		typecheck(ast, pool);
+		Typechecker checker {ast, pool};
+		checker.typecheck();
 
 		if (opts.use_walk_interpreter) {
 			walk::Interpreter inter {&pool};
@@ -188,7 +189,8 @@ int compile(Options opts) {
 		printf("\n");
 	}
 
-	auto checker = typecheck(ast, pool);
+	Typechecker checker {ast, pool};
+	checker.typecheck();
 
 	compiler::Compiler comp;
 	auto chunk = comp.compile(ast, pool);

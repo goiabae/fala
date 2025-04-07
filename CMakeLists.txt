@@ -38,7 +38,6 @@ add_executable(fala
 	src/compiler.cpp
 	src/lir.cpp
 	src/vm.cpp
-	src/type.cpp
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)
