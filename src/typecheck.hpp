@@ -28,6 +28,7 @@ struct Typechecker {
 	TYPE make_array(TYPE item_type);
 	TYPE make_function(std::vector<TYPE> inputs, TYPE output);
 	TYPE make_typevar();
+	TYPE make_ref(TYPE);
 
 	bool is_nil(TYPE);
 	bool is_bool(TYPE);
@@ -44,6 +45,11 @@ struct Typechecker {
 
 	bool is_typevar(TYPE);
 	TYPE_VARIABLE to_typevar(TYPE);
+
+	bool is_ref(TYPE);
+	REF to_ref(TYPE);
+
+	TYPE deref(TYPE);
 
 	AST& ast;
 	StringPool& pool;

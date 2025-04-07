@@ -3,7 +3,6 @@
 
 #include <cassert>
 #include <memory>
-#include <typeinfo>
 #include <vector>
 
 struct Type;
@@ -12,11 +11,6 @@ using TYPE = std::shared_ptr<Type>;
 
 struct Type {
 	virtual ~Type() {}
-
-	virtual bool operator==(Type* other) {
-		return (typeid(*this) == typeid(*other));
-	}
-
 	virtual size_t size_of() = 0;
 
  protected:
@@ -29,12 +23,6 @@ struct Integer : Type {
 	Integer(int bit_count, Sign sign) : bit_count(bit_count), sign(sign) {}
 	int bit_count;
 	Sign sign;
-
-	bool operator==(Type* other) override {
-		return Type::operator==(other)
-		   and this->bit_count == ((Integer*)other)->bit_count
-		   and this->sign == ((Integer*)other)->sign;
-	}
 
 	size_t size_of() override { return 1; }
 };
@@ -68,8 +56,12 @@ using FUNCTION = std::shared_ptr<Function>;
 struct TypeVariable : Type {
 	TypeVariable(std::size_t name) : unbound_name(name) {}
 
-	bool operator==(Type*) override { return true; }
-	size_t size_of() override { assert(false); }
+	size_t size_of() override {
+		if (is_bound)
+			return bound_type->size_of();
+		else
+			assert(false);
+	}
 
 	void bind_to(TYPE t) {
 		bound_type = t;
@@ -93,5 +85,14 @@ struct Array : Type {
 };
 
 using ARRAY = std::shared_ptr<Array>;
+
+struct Ref : Type {
+	Ref(TYPE ref_type) : ref_type(ref_type) {}
+	size_t size_of() override { return ref_type->size_of(); }
+
+	TYPE ref_type;
+};
+
+using REF = std::shared_ptr<Ref>;
 
 #endif

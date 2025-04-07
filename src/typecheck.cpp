@@ -11,8 +11,15 @@
 #include "str_pool.h"
 #include "type.hpp"
 
-// whether PTR points to an instance fo class CLS
-#define IS(PTR, CLS) (dynamic_cast<CLS*>(PTR) != nullptr)
+// Meta-variables:
+
+// E       The environment
+// e       An expression
+// x       A variable or name
+// n       A literal number
+// s       A literal string
+// c       A literal character
+// t       A type
 
 TYPE Typechecker::make_nil() { return std::shared_ptr<Nil>(new Nil()); }
 TYPE Typechecker::make_bool() { return std::shared_ptr<Bool>(new Bool()); }
@@ -32,6 +39,10 @@ TYPE Typechecker::make_function(std::vector<TYPE> inputs, TYPE output) {
 
 TYPE Typechecker::make_typevar() {
 	return std::shared_ptr<TypeVariable>(new TypeVariable {next_var_id++});
+}
+
+TYPE Typechecker::make_ref(TYPE ref_type) {
+	return std::shared_ptr<Ref>(new Ref {ref_type});
 }
 
 bool Typechecker::is_nil(TYPE typ) {
@@ -60,6 +71,10 @@ bool Typechecker::is_typevar(TYPE typ) {
 	return dynamic_pointer_cast<TypeVariable>(typ) != nullptr;
 }
 
+bool Typechecker::is_ref(TYPE typ) {
+	return dynamic_pointer_cast<Ref>(typ) != nullptr;
+}
+
 INTEGER Typechecker::to_integer(TYPE typ) {
 	return dynamic_pointer_cast<Integer>(typ);
 }
@@ -74,6 +89,15 @@ FUNCTION Typechecker::to_function(TYPE typ) {
 
 TYPE_VARIABLE Typechecker::to_typevar(TYPE typ) {
 	return dynamic_pointer_cast<TypeVariable>(typ);
+}
+
+REF Typechecker::to_ref(TYPE typ) { return dynamic_pointer_cast<Ref>(typ); }
+
+TYPE Typechecker::deref(TYPE typ) {
+	if (not is_ref(typ))
+		return typ;
+	else
+		return to_ref(typ)->ref_type;
 }
 
 static void err(Location loc, const char* msg) {
@@ -120,13 +144,13 @@ void Typechecker::print_type(FILE* fd, TYPE t) {
 		fprintf(fd, "Void");
 	} else if (is_function(t)) {
 		auto ft = to_function(t);
-		fprintf(fd, "[");
+		fprintf(fd, "(");
 		for (size_t i = 0; i < ft->inputs.size() - 1; i++) {
 			print_type(fd, ft->inputs[i]);
 			fprintf(fd, ", ");
 		}
 		print_type(fd, ft->inputs[ft->inputs.size() - 1]);
-		fprintf(fd, "]");
+		fprintf(fd, ")");
 		fprintf(fd, " -> ");
 		print_type(fd, ft->output);
 	} else if (is_typevar(t)) {
@@ -142,9 +166,13 @@ void Typechecker::print_type(FILE* fd, TYPE t) {
 		}
 	} else if (is_array(t)) {
 		auto at = to_array(t);
-		fprintf(fd, "[: ");
+		fprintf(fd, "Array<");
 		print_type(fd, at->item_type);
-		fprintf(fd, " ]");
+		fprintf(fd, ">");
+	} else if (is_ref(t)) {
+		auto rt = to_ref(t);
+		fprintf(fd, "&");
+		print_type(fd, rt->ref_type);
 	}
 }
 
@@ -179,6 +207,18 @@ bool Typechecker::typecheck() {
 }
 
 bool Typechecker::unify(TYPE a, TYPE b) {
+	// if a is a ref. unify ref a' and b
+	if (is_ref(a)) {
+		auto ra = to_ref(a);
+		return unify(ra->ref_type, b);
+	}
+
+	// if b is a ref. unify a and ref b'
+	if (is_ref(b)) {
+		auto rb = to_ref(b);
+		return unify(a, rb->ref_type);
+	}
+
 	// a is a bound typevar. unify bound a' and b
 	if (is_typevar(a)) {
 		auto var_a = to_typevar(a);
@@ -279,13 +319,13 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			return ASSOC_TYPE(node_idx, make_void());
 		}
 
-			// | f : (t1 t2 ... tn) -> ot
+			// | f : (t1 t2 ... tn) -> t0
 			// | a1 : t1
 			// | a2 : t2
 			// | ...
 			// | an : tn
 			// +-----------
-			// | |- f a1 a2 ... an : ot
+			// | |- f a1 a2 ... an : t0
 
 		case NodeType::APP: {
 			auto func_idx = node[0];
@@ -311,7 +351,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 				);
 			}
 
-			return ASSOC_TYPE(node_idx, to_function(func_type)->output);
+			return ASSOC_TYPE(node_idx, to_function(deref(func_type))->output);
 		}
 			// |
 			// +------
@@ -365,18 +405,18 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			// Rules for for loop with and without step increment
 
-			// | x : t1
-			// | e1 : t1
-			// | e2 : t2
+			// | E |- x : t1
+			// | E |- e1 : t1
+			// | E |- e2 : t2
 			// +------------
-			// | |- for var x1 to e1 then e2 : t2
+			// | E |- for var x1 to e1 then e2 : t2
 
-			// | x : t1
-			// | e1 : t1
-			// | e2 : t1
-			// | e3 : t3
+			// | E |- x : t1
+			// | E |- e1 : t1
+			// | E |- e2 : t1
+			// | E |- e3 : t3
 			// +------------
-			// | |- for var x1 to e1 step e2 then e3 : t3
+			// | E |- for var x1 to e1 step e2 then e3 : t3
 
 		case NodeType::FOR: {
 			auto decl_idx = node[0];
@@ -460,6 +500,8 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto val = typecheck(node[1], scope_id);
 			if (not unify(path, val))
 				err(node.loc, "Assignment with value of wrong type");
+			if (not is_ref(path))
+				err(node.loc, "Left side of assignment must be a reference");
 			return ASSOC_TYPE(node_idx, val);
 		}
 			// FIXME: add typing rules
@@ -543,41 +585,91 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 				);
 			return ASSOC_TYPE(node_idx, int64_typ);
 		}
-			// FIXME: add typing rules
+
+			// If e1 is an array of t and e2 is an integer, then e1[e2] has type t
+
+			// FIXME: Since there is no way to construct a literal array right now,
+			// the first rule is useless.
+
+			// | E |- e1 : Array<t>
+			// | E |- e2 : Int<64>
+			// +------------
+			// | E |- e1[e2] : t
+
+			// | E |- e1 : Ref<Array<t>>
+			// | E |- e2 : Int<64>
+			// +------------
+			// | E |- e1[e2] : Ref<t>
+
 		case NodeType::AT: {
-			auto int64_typ = make_integer(64, SIGNED);
-			auto index = typecheck(node[1], scope_id);
-			auto inti = int64_typ;
-			if (!unify(index, inti)) {
+			auto arr_idx = node[0];
+			auto off_idx = node[1];
+
+			auto any_arr_typ = make_ref(make_array(make_typevar()));
+			auto arr_typ = typecheck(arr_idx, scope_id);
+
+			if (not unify(any_arr_typ, arr_typ)) {
+				mismatch_error(node.loc, "Not an array", any_arr_typ, arr_typ);
+			}
+
+			if (not is_ref(arr_typ)) {
+				err(node.loc, "Array expression is not a reference");
+			}
+
+			auto off_typ = typecheck(off_idx, scope_id);
+
+			if (not unify(off_typ, int64_typ)) {
 				mismatch_error(
-					node.loc, "Index expression must be of integer type", index, inti
+					node.loc,
+					"Index expression must be of integer type",
+					off_typ,
+					int64_typ
 				);
 			}
 
-			auto arr = typecheck(node[0], scope_id);
-			if (not is_array(arr))
-				err(node.loc, "Cannot index expression which is not of array type");
+			auto actual_arr_typ = to_array(deref(arr_typ));
+			return ASSOC_TYPE(node_idx, make_ref(actual_arr_typ->item_type));
+		}
 
-			return ASSOC_TYPE(node_idx, to_array(arr)->item_type);
-		}
-			// FIXME: add typing rules
+			// | E |- e : Bool
+			// +-------------
+			// | E |- not e : Bool
+
 		case NodeType::NOT: {
-			auto exp = typecheck(node[0], scope_id);
-			auto bull = make_bool();
-			if (!unify(exp, bull)) err(node.loc, "Expression is not of type boolean");
-			return ASSOC_TYPE(node_idx, bull);
+			auto exp_typ = typecheck(node[0], scope_id);
+			auto bool_typ = make_bool();
+
+			if (not unify(exp_typ, bool_typ))
+				mismatch_error(
+					node.loc, "Expression is not of type boolean", exp_typ, bool_typ
+				);
+
+			return ASSOC_TYPE(node_idx, exp_typ);
 		}
-			// FIXME: add typing rules
+
+			// If a variable of name x of type t was previously declared, then x is
+			// a reference to a t
+
+			// | x : t in E
+			// +-------
+			// | E |- x : Ref<t>
+
 		case NodeType::ID: {
-			auto typ = env.find(scope_id, node.str_id);
-			if (typ == nullptr) err(node.loc, "Variable not previously declared");
-			auto typ_ = *typ;
-			return ASSOC_TYPE(node_idx, typ_);
+			auto found_typ = env.find(scope_id, node.str_id);
+			if (found_typ == nullptr)
+				err(node.loc, "Variable not previously declared");
+			auto ref_typ = make_ref(*found_typ);
+			return ASSOC_TYPE(node_idx, ref_typ);
 		}
-			// FIXME: add typing rules
+
+			// |
+			// +------
+			// | |- s : Array<Uint<8>>
+
 		case NodeType::STR: {
 			return make_array(uint8_typ);
 		}
+
 			// FIXME: add typing rules
 		case NodeType::VAR_DECL: {
 			auto id_idx = node[0];
@@ -668,15 +760,27 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto typ_ = typ;
 			return ASSOC_TYPE(node_idx, typ_);
 		}
-			// FIXME: add typing rules
+			// |
+			// +---------
+			// | |- nil : Nil
+
 		case NodeType::NIL:
 			return ASSOC_TYPE(node_idx, make_nil());
-			// FIXME: add typing rules
+
+			// |
+			// +---------
+			// | |- true : Bool
+
 		case NodeType::TRUE:
 			return ASSOC_TYPE(node_idx, make_bool());
-			// FIXME: add typing rules
+
+			// |
+			// +---------
+			// | |- false : Bool
+
 		case NodeType::FALSE:
 			return ASSOC_TYPE(node_idx, make_bool());
+
 			// FIXME: add typing rules
 		case NodeType::LET: {
 			auto decls_idx = node[0];
@@ -691,9 +795,14 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			return ASSOC_TYPE(node_idx, typecheck(exp_idx, new_scope_id));
 		}
-			// FIXME: add typing rules
+
+			// |
+			// +---------
+			// | |- c : Uint<8>
+
 		case NodeType::CHAR:
 			return ASSOC_TYPE(node_idx, uint8_typ);
+
 			// FIXME: add typing rules
 		case NodeType::PATH:
 			return ASSOC_TYPE(node_idx, typecheck(node[0], scope_id));
