@@ -21,7 +21,7 @@ Result Compiler::to_rvalue(Result pointer_result) {
 	return {code, result_register};
 }
 
-hir::Code Compiler::compile(AST& ast, const StringPool& pool) {
+hir::Code Compiler::compile(const AST& ast, const StringPool& pool) {
 	auto node_idx = ast.root_index;
 	SignalHandlers handlers {};
 	auto scope_id = env.root_scope_id;
@@ -30,8 +30,8 @@ hir::Code Compiler::compile(AST& ast, const StringPool& pool) {
 }
 
 Result Compiler::compile_app(
-	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
+	const AST& ast, NodeIndex node_idx, const StringPool& pool,
+	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 ) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
@@ -92,8 +92,8 @@ Result Compiler::compile_app(
 }
 
 Result Compiler::compile_if(
-	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
+	const AST& ast, NodeIndex node_idx, const StringPool& pool,
+	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 ) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
@@ -125,8 +125,8 @@ Result Compiler::compile_if(
 }
 
 Result Compiler::get_pointer_for(
-	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
+	const AST& ast, NodeIndex node_idx, const StringPool& pool,
+	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
@@ -190,7 +190,8 @@ Result Compiler::get_pointer_for(
 			return Result {code, result_ptr};
 		}
 		case NodeType::STR: assert(false);
-		case NodeType::DECL: assert(false);
+		case NodeType::VAR_DECL: assert(false);
+		case NodeType::FUN_DECL: assert(false);
 		case NodeType::NIL: assert(false);
 		case NodeType::TRUE: assert(false);
 		case NodeType::FALSE: assert(false);
@@ -199,15 +200,18 @@ Result Compiler::get_pointer_for(
 		case NodeType::PATH: {
 			return get_pointer_for(ast, node[0], pool, handlers, scope_id);
 		}
-		case NodeType::PRIMITIVE_TYPE: assert(false);
+		case NodeType::INT_TYPE: assert(false);
+		case NodeType::UINT_TYPE: assert(false);
+		case NodeType::BOOL_TYPE: assert(false);
+		case NodeType::NIL_TYPE: assert(false);
 		case NodeType::AS: assert(false);
 	}
 	assert(false);
 }
 
 Result Compiler::compile(
-	AST& ast, NodeIndex node_idx, const StringPool& pool, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
+	const AST& ast, NodeIndex node_idx, const StringPool& pool,
+	SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
@@ -447,73 +451,68 @@ Result Compiler::compile(
 			code.copy(result_register, literal_string);
 			return Result {code, result_register};
 		}
-		case NodeType::DECL: {
+		case NodeType::VAR_DECL: {
 			hir::Code code {};
 
-			// function declaration
-			if (node.branch.children_count == 4) {
-				auto id_idx = node[0];
-				auto params_idx = node[1];
-				auto opt_type_idx = node[2];
-				auto body_idx = node[3];
+			auto id_idx = node[0];
+			auto opt_type_idx = node[1];
+			auto exp_idx = node[2];
 
-				const auto& id_node = ast.at(id_idx);
-				const auto& params_node = ast.at(params_idx);
+			(void)opt_type_idx;
 
-				// FIXME: do something with this
-				(void)opt_type_idx;
+			const auto& id_node = ast.at(id_idx);
 
-				auto variable_register = make_register();
-				env.insert(scope_id, id_node.str_id, variable_register);
+			auto initial_result = compile(ast, exp_idx, pool, handlers, scope_id);
+			code = code + initial_result.code;
 
-				auto inner_scope_id = env.create_child_scope(scope_id);
+			auto variable_register = make_register();
 
-				std::vector<hir::Register> parameter_registers {};
+			env.insert(scope_id, id_node.str_id, variable_register);
 
-				for (auto param_id : params_node) {
-					const auto& param_node = ast.at(param_id);
-					auto param_register = make_register();
-					parameter_registers.push_back(param_register);
-					env.insert(inner_scope_id, param_node.str_id, param_register);
-				}
+			code.copy(variable_register, initial_result.result_register);
 
-				auto body_result =
-					compile(ast, body_idx, pool, handlers, inner_scope_id);
+			return Result {code, variable_register};
+		}
+		case NodeType::FUN_DECL: {
+			hir::Code code {};
 
-				body_result.code.instructions.push_back(
-					hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
-				);
+			auto id_idx = node[0];
+			auto params_idx = node[1];
+			auto opt_type_idx = node[2];
+			auto body_idx = node[3];
 
-				hir::Block block {std::make_shared<hir::Code>(body_result.code)};
-				hir::Function function {parameter_registers, block, false, {0}};
+			const auto& id_node = ast.at(id_idx);
+			const auto& params_node = ast.at(params_idx);
 
-				code.copy(variable_register, function);
+			// FIXME: do something with this
+			(void)opt_type_idx;
 
-				return {code, variable_register};
+			auto variable_register = make_register();
+			env.insert(scope_id, id_node.str_id, variable_register);
+
+			auto inner_scope_id = env.create_child_scope(scope_id);
+
+			std::vector<hir::Register> parameter_registers {};
+
+			for (auto param_id : params_node) {
+				const auto& param_node = ast.at(param_id);
+				auto param_register = make_register();
+				parameter_registers.push_back(param_register);
+				env.insert(inner_scope_id, param_node.str_id, param_register);
 			}
 
-			if (node.branch.children_count == 3) {
-				auto id_idx = node[0];
-				auto opt_type_idx = node[1];
-				auto exp_idx = node[2];
+			auto body_result = compile(ast, body_idx, pool, handlers, inner_scope_id);
 
-				(void)opt_type_idx;
+			body_result.code.instructions.push_back(
+				hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
+			);
 
-				const auto& id_node = ast.at(id_idx);
+			hir::Block block {std::make_shared<hir::Code>(body_result.code)};
+			hir::Function function {parameter_registers, block, false, {0}};
 
-				auto initial_result = compile(ast, exp_idx, pool, handlers, scope_id);
-				code = code + initial_result.code;
+			code.copy(variable_register, function);
 
-				auto variable_register = make_register();
-
-				env.insert(scope_id, id_node.str_id, variable_register);
-
-				code.copy(variable_register, initial_result.result_register);
-
-				return Result {code, variable_register};
-			}
-
-			assert(false);
+			return {code, variable_register};
 		}
 		case NodeType::NIL: {
 			hir::Code code {};
@@ -562,8 +561,13 @@ Result Compiler::compile(
 			return Result {code, result_register};
 		}
 		case NodeType::PATH: return compile(ast, node[0], pool, handlers, scope_id);
-		case NodeType::PRIMITIVE_TYPE: assert(false);
-		case NodeType::AS: assert(false);
+		case NodeType::INT_TYPE: assert(false);
+		case NodeType::UINT_TYPE: assert(false);
+		case NodeType::BOOL_TYPE: assert(false);
+		case NodeType::NIL_TYPE: assert(false);
+		case NodeType::AS: {
+			return compile(ast, node[0], pool, handlers, scope_id);
+		}
 	}
 	assert(false);
 }

@@ -28,15 +28,15 @@ struct Result {
 
 class Compiler {
  public:
-	hir::Code compile(AST& ast, const StringPool& pool);
+	hir::Code compile(const AST& ast, const StringPool& pool);
 
 	Result compile(
-		AST& ast, NodeIndex node_idx, const StringPool& pool,
+		const AST& ast, NodeIndex node_idx, const StringPool& pool,
 		SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 	);
 
 	Result get_pointer_for(
-		AST& ast, NodeIndex node_idx, const StringPool& pool,
+		const AST& ast, NodeIndex node_idx, const StringPool& pool,
 		SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 	);
 
@@ -44,7 +44,7 @@ class Compiler {
 
 #define DECLARE_NODE_HANDLER(NODE_TYPE) \
 	Result compile_##NODE_TYPE(           \
-		AST& ast,                           \
+		const AST& ast,                     \
 		NodeIndex node_idx,                 \
 		const StringPool& pool,             \
 		SignalHandlers handlers,            \
