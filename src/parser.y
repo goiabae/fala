@@ -70,7 +70,7 @@
 %type <node> let decls
 %type <node> decl params opt-type
 %type <node> app func args arg
-%type <node> ass path
+%type <node> ass path at
 %type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id int
@@ -168,7 +168,12 @@ arg : term ;
 /* Assignment */
 ass : path "=" nls exp { $$ = NODE(NodeType::ASS, $1, $exp); } ;
 
-path : id | id "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); } ;
+at: id "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); } ;
+
+path
+  : id { $$ = NODE(NodeType::PATH, $1); }
+  | at { $$ = NODE(NodeType::PATH, $1); }
+  ;
 
 /* Operators. Infix and prefix */
 op : op0;
@@ -191,7 +196,7 @@ op15 : term ;
 
 /* Terms */
 term : "(" nls exp nls ")" { $$ = $exp; }
-     | path      { $$ = NODE(NodeType::PATH, $1); }
+     | path
      | int
      | STRING      { $$ = new_string_node(ast, NodeType::STR, @$, pool, $1); }
      | NIL         { $$ = new_nil_node(ast, @$); }
