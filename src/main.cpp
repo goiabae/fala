@@ -202,7 +202,6 @@ int compile(Options opts) {
 	hir_compiler::Compiler hir_comp {ast, pool, checker};
 	auto code = hir_comp.compile();
 	hir::print_code(stderr, code, pool, 0);
-	auto new_code = hir_compiler::optimize(code);
 #endif
 
 	compiler::Compiler comp {ast, pool};
