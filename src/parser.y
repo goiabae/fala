@@ -68,13 +68,13 @@
 %type <node> loop step
 %type <node> jump
 %type <node> let decls
-%type <node> decl params opt-type
+%type <node> decl params opt_type
 %type <node> app func args arg
 %type <node> ass path at
 %type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id int
-%type <node> type-literal type-primitive
+%type <node> type_literal type_primitive
 
 %%
 
@@ -99,16 +99,16 @@ nls : %empty | nls NEWLINE ;
 /* Expression sequences */
 do : DO nls block END { $$ = $block; } ;
 
-block : stmts exp opt-seps { $$ = list_append_node(ast, $1, $2); } ;
+block : stmts exp opt_seps { $$ = list_append_node(ast, $1, $2); } ;
 
-opt-seps : %empty | stmt-seps ;
+opt_seps : %empty | stmt_seps ;
 
 stmts : %empty { $$ = new_list_node(ast); }
-      | stmts exp stmt-seps { $$ = list_append_node(ast, $$, $2); }
-      | stmts decl stmt-seps { $$ = list_append_node(ast, $$, $2); }
+      | stmts exp stmt_seps { $$ = list_append_node(ast, $$, $2); }
+      | stmts decl stmt_seps { $$ = list_append_node(ast, $$, $2); }
       ;
 
-stmt-seps : stmt-sep | stmt-seps stmt-sep ;
+stmt_seps : stmt_sep | stmt_seps stmt_sep ;
 
 stmt-sep : "\n" | ";" ;
 
@@ -141,12 +141,12 @@ decls : decl           { $$ = new_list_node(ast); $$ = list_append_node(ast, $$,
       ;
 
 /* Declarations */
-decl : VAR id opt-type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $2, $3, $exp); }
-     | FUN id params opt-type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
+decl : VAR id opt_type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $2, $3, $exp); }
+     | FUN id params opt_type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
      ;
 
-opt-type : %empty { $$ = new_empty_node(ast); }
-         | ":" type-literal { $$ = $2; }
+opt_type : %empty { $$ = new_empty_node(ast); }
+         | ":" type_literal { $$ = $2; }
          ;
 
 params : %empty    { $$ = new_list_node(ast); }
@@ -178,7 +178,7 @@ path
 /* Operators. Infix and prefix */
 op : op0;
 
-op0  : op1  | op1[lft] AS type-literal[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
+op0  : op1  | op1[lft] AS type_literal[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
 op1  : op2  | op1[lft] OR   nls op2[rgt]  { $$ = NODE(NodeType::OR,  $lft, $rgt); } ;
 op2  : op3  | op2[lft] AND  nls op3[rgt]  { $$ = NODE(NodeType::AND, $lft, $rgt); } ;
 op3  : op4  | op3[lft] ">"  nls op4[rgt]  { $$ = NODE(NodeType::GTN, $lft, $rgt); } ;
@@ -209,9 +209,9 @@ id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 
 int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
 
-type-literal : type-primitive ;
+type_literal : type_primitive ;
 
-type-primitive
+type_primitive
   : INT int  { $$ = NODE(NodeType::INT_TYPE, $2); }
   | UINT int { $$ = NODE(NodeType::UINT_TYPE, $2); }
   | BOOL     { $$ = NODE(NodeType::BOOL_TYPE); }
