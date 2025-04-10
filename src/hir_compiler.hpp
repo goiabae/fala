@@ -38,22 +38,12 @@ class Compiler {
 		Env<hir::Operand>::ScopeID scope_id
 	);
 
-	Result compile_lvalue(
-		NodeIndex node_idx, SignalHandlers handlers,
-		Env<hir::Operand>::ScopeID scope_id
-	);
+	bool is_simple_path(NodeIndex node_idx);
 
-	Result compile_rvalue(
-		NodeIndex node_idx, SignalHandlers handlers,
-		Env<hir::Operand>::ScopeID scope_id
+	hir::Code find_aggregate_indexes(
+		NodeIndex node_idx, hir::Register&, std::vector<hir::Operand>&,
+		SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
 	);
-
-	Result get_pointer_for(
-		NodeIndex node_idx, SignalHandlers handlers,
-		Env<hir::Operand>::ScopeID scope_id
-	);
-
-	Result to_rvalue(NodeIndex node_idx, Result pointer_result);
 
 #define DECLARE_NODE_HANDLER(NODE_TYPE) \
 	Result compile_##NODE_TYPE(           \

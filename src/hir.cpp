@@ -60,34 +60,31 @@ void Code::equals(hir::Register result, hir::Operand a, hir::Operand b) {
 	instructions.push_back(Instruction {hir::Opcode::EQ, {result, a, b}});
 }
 
+// pseudo-instruction
 void Code::inc(hir::Register registuhr) {
 	instructions.push_back(
 		Instruction {hir::Opcode::ADD, {registuhr, registuhr, hir::Integer(1)}}
 	);
 }
 
-void Code::store(hir::Register pointer, hir::Register value) {
-	instructions.push_back(Instruction {hir::Opcode::STORE, {pointer, value}});
-}
-
-void Code::load(hir::Register registuhr, hir::Register pointer) {
-	instructions.push_back(Instruction {hir::Opcode::LOAD, {registuhr, pointer}});
-}
-
-// Given a pointer <base>, returns a pointer to the <nth> item from base of size
-// <size>
-void Code::element_ptr(
-	hir::Register result, hir::Register base, hir::Operand nth, hir::Operand size
+void Code::set_element(
+	hir::Register aggregate, std::vector<hir::Operand> indexes, hir::Operand value
 ) {
-	instructions.push_back(
-		Instruction {hir::Opcode::ELEMENT_PTR, {result, base, nth, size}}
-	);
+	std::vector<hir::Operand> operands;
+	operands.push_back(aggregate);
+	for (const auto& x : indexes) operands.push_back(x);
+	operands.push_back(value);
+	instructions.push_back(Instruction {hir::Opcode::SET_ELEMENT, operands});
 }
-
-void Code::ref_to(hir::Register pointer_result, hir::Register registuhr) {
-	instructions.push_back(
-		Instruction {hir::Opcode::REFTO, {pointer_result, registuhr}}
-	);
+void Code::get_element(
+	hir::Register result, hir::Register aggregate,
+	std::vector<hir::Operand> indexes
+) {
+	std::vector<hir::Operand> operands;
+	operands.push_back(result);
+	operands.push_back(aggregate);
+	for (const auto& x : indexes) operands.push_back(x);
+	instructions.push_back(Instruction {hir::Opcode::GET_ELEMENT, operands});
 }
 
 bool Register::contains_value() { return m_contains_value; }
@@ -230,11 +227,20 @@ void print_instruction(
 			fprintf(fd, "\n");
 			return;
 		}
-		case Opcode::ELEMENT_PTR: {
+		case Opcode::GET_ELEMENT: {
 			print_operand(fd, inst.operands[0], pool, spaces);
 			fprintf(fd, " = ");
-			fprintf(fd, "element_ptr");
+			fprintf(fd, "get_element");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
+				fprintf(fd, " ");
+				print_operand(fd, inst.operands[i], pool, spaces);
+			}
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::SET_ELEMENT: {
+			fprintf(fd, "set_element");
+			for (size_t i = 0; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
 				print_operand(fd, inst.operands[i], pool, spaces);
 			}
@@ -264,38 +270,6 @@ void print_instruction(
 		}
 		case Opcode::RET: {
 			fprintf(fd, "ret");
-			for (size_t i = 0; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::REFTO: {
-			print_operand(fd, inst.operands[0], pool, spaces);
-			fprintf(fd, " = ");
-			fprintf(fd, "refto");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::ALLOC: assert(false);
-		case Opcode::LOAD: {
-			print_operand(fd, inst.operands[0], pool, spaces);
-			fprintf(fd, " = ");
-			fprintf(fd, "load");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::STORE: {
-			fprintf(fd, "store");
 			for (size_t i = 0; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
 				print_operand(fd, inst.operands[i], pool, spaces);
@@ -336,6 +310,10 @@ void print_instruction(
 			fprintf(fd, "continue\n");
 			return;
 		}
+		case Opcode::REFTO: assert(false);
+		case Opcode::GET_ELEMENT_PTR: assert(false);
+		case Opcode::LOAD: assert(false);
+		case Opcode::STORE: assert(false);
 	}
 }
 

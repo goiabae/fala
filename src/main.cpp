@@ -19,8 +19,6 @@
 #include "typecheck.hpp"
 #include "walk.hpp"
 
-#define EXPERIMENTAL_HIR_COMPILER
-
 #ifdef EXPERIMENTAL_HIR_COMPILER
 #	include "hir_compiler.hpp"
 #endif
@@ -199,6 +197,7 @@ int compile(Options opts) {
 	checker.typecheck();
 
 #ifdef EXPERIMENTAL_HIR_COMPILER
+	ast_print_detailed(&ast, &pool);
 	hir_compiler::Compiler hir_comp {ast, pool, checker};
 	auto code = hir_comp.compile();
 	hir::print_code(stderr, code, pool, 0);

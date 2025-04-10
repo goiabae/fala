@@ -100,9 +100,16 @@ class Operand {
 };
 
 enum class Opcode {
+	// Copy the value of a register into another one or create a reference to the
+	// value in a register.
+	COPY,
+	REFTO,
+
+	// I/O
 	PRINT,
 	READ,
-	COPY,
+
+	// Unary and binary operators
 	ADD,
 	SUB,
 	MUL,
@@ -117,19 +124,36 @@ enum class Opcode {
 	LESS_EQ,
 	GREATER,
 	GREATER_EQ,
-	ELEMENT_PTR, // returns pointer to the nth item of some size from base
-	CALL,
-	BUILTIN, // move builtin function with name $2 to $1 register
-	RET,
-	REFTO,
-	ALLOC,
-	LOAD,
-	STORE,
+
+	// Escape hatch into the compiler
+	BUILTIN,
+
+	// Control flow
 	LOOP,
 	IF_TRUE,
 	IF_FALSE,
 	BREAK,
 	CONTINUE,
+	CALL,
+	RET,
+
+	// Receives a register containing an aggregate value and a sequence of indexes
+	// (registers or numeric literals). Sets or gets the element of the aggregate
+	// at the position indicated by the indexes.
+	SET_ELEMENT,
+	GET_ELEMENT,
+
+	// Given a reference to an aggregate and a sequence of indexes, returns a
+	// reference to the element at the position indicated by the indexes
+	GET_ELEMENT_PTR,
+
+	// Given a reference, copy the value contained in the register pointed to by
+	// the refence into another register
+	LOAD,
+
+	// Given a reference and a value, store the value into the register pointed to
+	// by the reference
+	STORE,
 };
 
 class Instruction {
@@ -151,10 +175,8 @@ class Code {
 	void brake();
 	void equals(hir::Register, hir::Operand, hir::Operand);
 	void inc(hir::Register);
-	void store(hir::Register, hir::Register);
-	void load(hir::Register, hir::Register);
-	void element_ptr(hir::Register, hir::Register, hir::Operand, hir::Operand);
-	void ref_to(hir::Register, hir::Register);
+	void set_element(hir::Register, std::vector<hir::Operand>, hir::Operand);
+	void get_element(hir::Register, hir::Register, std::vector<hir::Operand>);
 };
 
 Code operator+(Code pre, Code post);

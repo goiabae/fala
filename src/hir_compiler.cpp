@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <memory>
 
 #include "hir.hpp"
@@ -13,37 +14,6 @@ namespace hir_compiler {
 constexpr auto builtins = {
 	"read_int", "read_char", "write_int", "write_char", "write_str", "make_array"
 };
-
-Result Compiler::compile_rvalue(
-	NodeIndex node_idx, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
-) {
-	return to_rvalue(node_idx, compile(node_idx, handlers, scope_id));
-}
-
-Result Compiler::compile_lvalue(
-	NodeIndex node_idx, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
-) {
-	auto node_typ = checker.node_to_type.at(node_idx);
-	if (not checker.is_ref(node_typ)) {
-		assert(false);
-	}
-	auto result = compile(node_idx, handlers, scope_id);
-	return result;
-}
-
-Result Compiler::to_rvalue(NodeIndex node_idx, Result pointer_result) {
-	auto node_typ = checker.node_to_type.at(node_idx);
-	if (checker.is_ref(node_typ)) {
-		hir::Code code = pointer_result.code;
-		hir::Register result_register = make_register();
-		code.load(result_register, pointer_result.result_register);
-		return {code, result_register};
-	} else {
-		return pointer_result;
-	}
-}
 
 hir::Code Compiler::compile() {
 	auto node_idx = ast.root_index;
@@ -88,7 +58,7 @@ Result Compiler::compile_app(
 	}
 
 	if (!builtin_function_found) {
-		auto func_result = compile_rvalue(node[0], handlers, scope_id);
+		auto func_result = compile(node[0], handlers, scope_id);
 		code = code + func_result.code;
 		function = func_result.result_register;
 	}
@@ -105,7 +75,7 @@ Result Compiler::compile_app(
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
 		const auto& arg_node = ast.at(arg_idx);
-		auto arg_result = compile_rvalue(arg_idx, handlers, scope_id);
+		auto arg_result = compile(arg_idx, handlers, scope_id);
 		code = code + arg_result.code;
 		args.push_back(hir::Operand {arg_result.result_register});
 	}
@@ -148,88 +118,42 @@ Result Compiler::compile_if(
 	return Result {code, result_register};
 }
 
-Result Compiler::get_pointer_for(
-	NodeIndex node_idx, SignalHandlers handlers,
+bool Compiler::is_simple_path(NodeIndex node_idx) {
+	return ast.at(node_idx).type == NodeType::ID;
+}
+
+hir::Code Compiler::find_aggregate_indexes(
+	NodeIndex node_idx, hir::Register& aggregate,
+	std::vector<hir::Operand>& indexes, SignalHandlers handlers,
 	Env<hir::Operand>::ScopeID scope_id
 ) {
 	const auto& node = ast.at(node_idx);
-	switch (node.type) {
-		case NodeType::EMPTY: assert(false);
-		case NodeType::APP: assert(false);
-		case NodeType::NUM: assert(false);
-		case NodeType::BLK: assert(false);
-		case NodeType::IF: assert(false);
-		case NodeType::WHEN: assert(false);
-		case NodeType::FOR: assert(false);
-		case NodeType::WHILE: assert(false);
-		case NodeType::BREAK: assert(false);
-		case NodeType::CONTINUE: assert(false);
-		case NodeType::ASS: assert(false);
-		case NodeType::OR: assert(false);
-		case NodeType::AND: assert(false);
-		case NodeType::GTN: assert(false);
-		case NodeType::LTN: assert(false);
-		case NodeType::GTE: assert(false);
-		case NodeType::LTE: assert(false);
-		case NodeType::EQ: assert(false);
-		case NodeType::AT: {
-			hir::Code code {};
-
-			auto base_idx = node[0];
-			auto off_idx = node[1];
-
-			auto base_result = get_pointer_for(base_idx, handlers, scope_id);
-			auto off_result = compile_rvalue(off_idx, handlers, scope_id);
-
-			auto pointer_result = make_register();
-
-			code = code + base_result.code + off_result.code;
-			code.element_ptr(
-				pointer_result,
-				base_result.result_register,
-				off_result.result_register,
-				hir::Integer(1)
-			);
-
-			return {code, pointer_result};
+	if (node.type == NodeType::AT) {
+		hir::Code code {};
+		auto base_idx = node[0];
+		auto index_idx = node[1];
+		auto base_code =
+			find_aggregate_indexes(base_idx, aggregate, indexes, handlers, scope_id);
+		auto index_result = compile(index_idx, handlers, scope_id);
+		indexes.push_back(index_result.result_register);
+		code = code + base_code + index_result.code;
+		return code;
+	} else if (node.type == NodeType::ID) {
+		auto maybe_var = env.find(scope_id, node.str_id);
+		if (maybe_var == nullptr
+		    || maybe_var->kind != hir::Operand::Kind::REGISTER) {
+			assert(false);
 		}
-		case NodeType::ADD: assert(false);
-		case NodeType::SUB: assert(false);
-		case NodeType::MUL: assert(false);
-		case NodeType::DIV: assert(false);
-		case NodeType::MOD: assert(false);
-		case NodeType::NOT: assert(false);
-		case NodeType::ID: {
-			hir::Code code {};
-			auto variable_ptr = env.find(scope_id, node.str_id);
-			if (variable_ptr == nullptr) {
-				err("Variable not previously declared");
-				assert(false);
-			}
-			auto variable_register = *variable_ptr;
-			assert(variable_register.kind == hir::Operand::Kind::REGISTER);
-			auto result_ptr = make_register();
-			code.ref_to(result_ptr, variable_register.registuhr);
-			return Result {code, result_ptr};
-		}
-		case NodeType::STR: assert(false);
-		case NodeType::VAR_DECL: assert(false);
-		case NodeType::FUN_DECL: assert(false);
-		case NodeType::NIL: assert(false);
-		case NodeType::TRUE: assert(false);
-		case NodeType::FALSE: assert(false);
-		case NodeType::LET: assert(false);
-		case NodeType::CHAR: assert(false);
-		case NodeType::PATH: {
-			return get_pointer_for(node[0], handlers, scope_id);
-		}
-		case NodeType::INT_TYPE: assert(false);
-		case NodeType::UINT_TYPE: assert(false);
-		case NodeType::BOOL_TYPE: assert(false);
-		case NodeType::NIL_TYPE: assert(false);
-		case NodeType::AS: assert(false);
+		aggregate = maybe_var->registuhr;
+		return {};
+	} else if (node.type == NodeType::PATH) {
+		return find_aggregate_indexes(
+			ast.at(node_idx)[0], aggregate, indexes, handlers, scope_id
+		);
+	} else {
+		fprintf(stderr, "NODEID: %d\n", node_idx.index);
+		assert(false);
 	}
-	assert(false);
 }
 
 Result Compiler::compile(
@@ -291,8 +215,6 @@ Result Compiler::compile(
 
 			const auto& step_node = ast.at(step_idx);
 
-			auto result_register = make_register();
-
 			SignalHandlers new_handlers {
 				{}, {}, {}, true, true, handlers.has_return_handler
 			};
@@ -313,11 +235,11 @@ Result Compiler::compile(
 			code = code + var_result.code;
 			auto var_opnd = var_result.result_register;
 
-			auto to_result = compile_rvalue(to_idx, handlers, inner_scope_id);
+			auto to_result = compile(to_idx, handlers, inner_scope_id);
 			code = code + to_result.code;
 			auto to_opnd = to_result.result_register;
 
-			auto then_result = compile_rvalue(then_idx, handlers, inner_scope_id);
+			auto then_result = compile(then_idx, handlers, inner_scope_id);
 			auto then_opnd = then_result.result_register;
 
 			hir::Code if_break {};
@@ -340,8 +262,6 @@ Result Compiler::compile(
 			hir::Code code {};
 			auto cond_idx = node[0];
 			auto then_idx = node[1];
-
-			auto result_register = make_register();
 
 			SignalHandlers new_handlers {
 				{}, {}, {}, true, true, handlers.has_return_handler
@@ -374,39 +294,49 @@ Result Compiler::compile(
 		case NodeType::ASS: {
 			hir::Code code {};
 
-			auto pointer_idx = node[0];
+			auto place_idx = node[0];
 			auto value_idx = node[1];
 
-			auto base_typ = checker.node_to_type.at(pointer_idx);
+			auto base_typ = checker.node_to_type.at(place_idx);
 			assert(checker.is_ref(base_typ));
 
-			auto pointer_result = get_pointer_for(pointer_idx, handlers, scope_id);
 			auto value_result = compile(value_idx, handlers, scope_id);
+			code = code + value_result.code;
 
-			code = code + pointer_result.code + value_result.code;
-
-			code.store(pointer_result.result_register, value_result.result_register);
+			if (is_simple_path(ast.at(place_idx)[0])) {
+				auto place_result = compile(place_idx, handlers, scope_id);
+				code = code + place_result.code;
+				code.copy(place_result.result_register, value_result.result_register);
+			} else {
+				hir::Register aggregate;
+				std::vector<hir::Operand> indexes;
+				auto indexes_code = find_aggregate_indexes(
+					place_idx, aggregate, indexes, handlers, scope_id
+				);
+				code = code + indexes_code;
+				code.set_element(aggregate, indexes, value_result.result_register);
+			}
 
 			return {code, value_result.result_register};
 		}
 
-#define BINARY_ARITH(OPCODE)                                           \
-	{                                                                    \
-		hir::Code code {};                                                 \
-		auto left_idx = node[0];                                           \
-		auto right_idx = node[1];                                          \
-                                                                       \
-		auto left_result = compile_rvalue(left_idx, handlers, scope_id);   \
-		auto right_result = compile_rvalue(right_idx, handlers, scope_id); \
-		code = code + left_result.code + right_result.code;                \
-		auto result_register = make_register();                            \
-		code.instructions.push_back(hir::Instruction {                     \
-			hir::Opcode::OPCODE,                                             \
-			{result_register,                                                \
-		   left_result.result_register,                                    \
-		   right_result.result_register}                                   \
-		});                                                                \
-		return {code, result_register};                                    \
+#define BINARY_ARITH(OPCODE)                                    \
+	{                                                             \
+		hir::Code code {};                                          \
+		auto left_idx = node[0];                                    \
+		auto right_idx = node[1];                                   \
+                                                                \
+		auto left_result = compile(left_idx, handlers, scope_id);   \
+		auto right_result = compile(right_idx, handlers, scope_id); \
+		code = code + left_result.code + right_result.code;         \
+		auto result_register = make_register();                     \
+		code.instructions.push_back(hir::Instruction {              \
+			hir::Opcode::OPCODE,                                      \
+			{result_register,                                         \
+		   left_result.result_register,                             \
+		   right_result.result_register}                            \
+		});                                                         \
+		return {code, result_register};                             \
 	}
 
 		case NodeType::OR: BINARY_ARITH(OR);
@@ -424,34 +354,7 @@ Result Compiler::compile(
 			// b must be an rvalue
 			// return an lvalue
 
-		case NodeType::AT: {
-			hir::Code code {};
-
-			auto result_register = make_register();
-
-			auto pointer_idx = node[0];
-			auto value_idx = node[1];
-
-			auto pointer_typ = checker.node_to_type.at(pointer_idx);
-			assert(checker.is_ref(pointer_typ));
-
-			auto pointer_result = compile(pointer_idx, handlers, scope_id);
-
-			auto value_result =
-				to_rvalue(value_idx, compile(value_idx, handlers, scope_id));
-
-			code = code + pointer_result.code + value_result.code;
-
-			code.element_ptr(
-				result_register,
-				pointer_result.result_register,
-				value_result.result_register,
-				hir::Integer(1) // FIXME: assuming size of items is 1
-			);
-
-			return {code, result_register};
-		}
-
+		case NodeType::AT: assert(false);
 		case NodeType::ADD: BINARY_ARITH(ADD);
 		case NodeType::SUB: BINARY_ARITH(SUB);
 		case NodeType::MUL: BINARY_ARITH(MUL);
@@ -476,9 +379,7 @@ Result Compiler::compile(
 			}
 			assert(variable_ptr->kind == hir::Operand::Kind::REGISTER);
 			auto variable_register = variable_ptr->registuhr;
-			auto result_ptr = make_register();
-			code.ref_to(result_ptr, variable_register);
-			return Result {code, result_ptr};
+			return Result {code, variable_register};
 		}
 		case NodeType::STR: {
 			hir::Code code {};
@@ -595,7 +496,24 @@ Result Compiler::compile(
 			code.copy(result_register, literal_character);
 			return Result {code, result_register};
 		}
-		case NodeType::PATH: return compile(node[0], handlers, scope_id);
+		case NodeType::PATH: {
+			auto place_idx = node[0];
+
+			if (is_simple_path(place_idx)) {
+				return compile(place_idx, handlers, scope_id);
+			} else {
+				hir::Code code {};
+				hir::Register aggregate;
+				std::vector<hir::Operand> indexes;
+				auto result_register = make_register();
+				auto indexes_code = find_aggregate_indexes(
+					place_idx, aggregate, indexes, handlers, scope_id
+				);
+				code = code + indexes_code;
+				code.get_element(result_register, aggregate, indexes);
+				return {code, result_register};
+			}
+		}
 		case NodeType::INT_TYPE: assert(false);
 		case NodeType::UINT_TYPE: assert(false);
 		case NodeType::BOOL_TYPE: assert(false);
@@ -610,5 +528,4 @@ Result Compiler::compile(
 hir::Register Compiler::make_register() {
 	return hir::Register {register_count++, true};
 }
-
 } // namespace hir_compiler
