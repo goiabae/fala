@@ -110,7 +110,7 @@ stmts : %empty { $$ = new_list_node(ast); }
 
 stmt_seps : stmt_sep | stmt_seps stmt_sep ;
 
-stmt-sep : "\n" | ";" ;
+stmt_sep : NEWLINE | ";" ;
 
 /* Conditionals */
 cond : IF exp nls THEN nls exp[then] nls ELSE nls exp[else] { $$ = NODE(NodeType::IF, $2, $then, $else); }
