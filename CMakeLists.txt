@@ -16,6 +16,7 @@ else()
 endif()
 
 option(WITH_READLINE "Enable readline line editting" OFF)
+option(HIR_COMPILER "Enable experimental hir compiler" OFF)
 
 if(WITH_READLINE)
 	add_compile_options(-D FALA_WITH_READLINE)
@@ -38,8 +39,6 @@ add_executable(fala
 	src/compiler.cpp
 	src/lir.cpp
 	src/vm.cpp
-	src/hir_compiler.cpp
-	src/hir.cpp
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)
@@ -49,6 +48,11 @@ target_include_directories(fala PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 if (WITH_READLINE)
 	target_link_libraries(fala readline history)
+endif()
+
+if(HIR_COMPILER)
+	target_compile_options(fala PRIVATE -D EXPERIMENTAL_HIR_COMPILER)
+	set_property(TARGET fala APPEND PROPERTY SOURCES src/hir_compiler.cpp src/hir.cpp)
 endif()
 
 enable_testing()
