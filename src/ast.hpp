@@ -8,6 +8,8 @@
 
 #include "str_pool.h"
 
+#define INVALID_NODE_INDEX -1
+
 typedef int Number;
 typedef char* String;
 
@@ -99,6 +101,7 @@ typedef struct BranchNode {
 struct Node {
 	NodeType type;
 	Location loc;
+	NodeIndex parent_idx;
 	union {
 		Number num;
 		StrID str_id;

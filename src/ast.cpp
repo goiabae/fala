@@ -348,6 +348,10 @@ NodeIndex new_node(AST* ast, NodeType type, vector<NodeIndex> children) {
 	node.branch.children_count = len;
 	node.branch.children = NULL;
 
+	for (auto child_idx : children) {
+		ast->at(child_idx).parent_idx = idx;
+	}
+
 	{
 		const auto& first = ast->at(children[0]);
 		const auto& last = ast->at(children[len - 1]);
@@ -505,7 +509,12 @@ const Node& AST::at(NodeIndex node_idx) const {
 	return nodes[(size_t)node_idx.index];
 }
 
-NodeIndex AST::alloc_node() { return {next_free_index.index++}; }
+NodeIndex AST::alloc_node() {
+	auto idx = next_free_index.index++;
+	auto& node = nodes[(size_t)idx];
+	node.parent_idx = NodeIndex {INVALID_NODE_INDEX};
+	return {idx};
+}
 
 NodeIndex& Node::operator[](size_t index) const {
 	return branch.children[index];
