@@ -168,7 +168,7 @@ class Code {
 
 	void copy(hir::Register, hir::Operand);
 	void call(hir::Register, hir::Register, std::vector<hir::Operand>);
-	void builtin(hir::Register, hir::Operand);
+	void builtin(hir::Register, hir::String);
 	void if_false(hir::Register, hir::Block);
 	void if_true(hir::Register, hir::Block);
 	void loop(hir::Block);

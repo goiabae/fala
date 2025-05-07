@@ -31,7 +31,7 @@ void Code::copy(hir::Register destination, hir::Operand source) {
 	);
 }
 
-void Code::builtin(hir::Register result, hir::Operand function_name) {
+void Code::builtin(hir::Register result, hir::String function_name) {
 	// name may be a literal string or a register containing a string
 	instructions.push_back(
 		Instruction {hir::Opcode::BUILTIN, {result, function_name}}

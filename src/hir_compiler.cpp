@@ -48,9 +48,7 @@ Result Compiler::compile_app(
 	for (const auto& builtin : builtins) {
 		if (strcmp(func_name, builtin) == 0) {
 			auto func_register = make_register();
-			code.builtin(
-				func_register, hir::Operand {hir::String {func_node.str_id}}
-			);
+			code.builtin(func_register, hir::String {func_node.str_id});
 			function = func_register;
 			builtin_function_found = true;
 			break;
