@@ -95,4 +95,21 @@ struct Ref : Type {
 
 using REF = std::shared_ptr<Ref>;
 
+// Type of all types
+struct Toat : Type {
+	size_t size_of() override { assert(false); }
+};
+
+using TOAT = std::shared_ptr<Toat>;
+
+struct General : Type {
+	General(std::vector<TYPE> vars, TYPE body) : vars(vars), body(body) {}
+	std::vector<TYPE> vars;
+	TYPE body;
+
+	size_t size_of() override { assert(false); }
+};
+
+using GENERAL = std::shared_ptr<General>;
+
 #endif

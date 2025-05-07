@@ -24,6 +24,7 @@
 TYPE Typechecker::make_nil() { return std::shared_ptr<Nil>(new Nil()); }
 TYPE Typechecker::make_bool() { return std::shared_ptr<Bool>(new Bool()); }
 TYPE Typechecker::make_void() { return std::shared_ptr<Void>(new Void()); }
+TYPE Typechecker::make_toat() { return std::shared_ptr<Toat>(new Toat()); }
 
 TYPE Typechecker::make_integer(int bit_count, Sign sign) {
 	return std::shared_ptr<Integer>(new Integer(bit_count, sign));
@@ -45,6 +46,10 @@ TYPE Typechecker::make_ref(TYPE ref_type) {
 	return std::shared_ptr<Ref>(new Ref {ref_type});
 }
 
+TYPE Typechecker::make_general(std::vector<TYPE> var, TYPE body) {
+	return std::shared_ptr<General>(new General {var, body});
+}
+
 bool Typechecker::is_nil(TYPE typ) {
 	return dynamic_pointer_cast<Nil>(typ) != nullptr;
 }
@@ -53,6 +58,10 @@ bool Typechecker::is_bool(TYPE typ) {
 }
 bool Typechecker::is_void(TYPE typ) {
 	return dynamic_pointer_cast<Void>(typ) != nullptr;
+}
+
+bool Typechecker::is_toat(TYPE typ) {
+	return dynamic_pointer_cast<Toat>(typ) != nullptr;
 }
 
 bool Typechecker::is_integer(TYPE typ) {
@@ -75,6 +84,10 @@ bool Typechecker::is_ref(TYPE typ) {
 	return dynamic_pointer_cast<Ref>(typ) != nullptr;
 }
 
+bool Typechecker::is_general(TYPE typ) {
+	return dynamic_pointer_cast<General>(typ) != nullptr;
+}
+
 INTEGER Typechecker::to_integer(TYPE typ) {
 	return dynamic_pointer_cast<Integer>(typ);
 }
@@ -93,6 +106,10 @@ TYPE_VARIABLE Typechecker::to_typevar(TYPE typ) {
 
 REF Typechecker::to_ref(TYPE typ) { return dynamic_pointer_cast<Ref>(typ); }
 
+GENERAL Typechecker::to_general(TYPE typ) {
+	return dynamic_pointer_cast<General>(typ);
+}
+
 TYPE Typechecker::deref(TYPE typ) {
 	if (not is_ref(typ))
 		return typ;
@@ -110,6 +127,78 @@ static void err(Location loc, const char* msg) {
 		msg
 	);
 	exit(1);
+}
+
+TYPE Typechecker::substitute(TYPE gen, std::vector<TYPE> args) {
+	auto general = to_general(gen);
+	std::vector<TYPE_VARIABLE> vars;
+	for (auto t : args) vars.push_back(to_typevar(t));
+	auto body = general->body;
+	return substitute_aux(body, vars, args);
+}
+
+TYPE Typechecker::substitute_aux(
+	TYPE body, std::vector<TYPE_VARIABLE> vars, std::vector<TYPE> args
+) {
+	if (is_nil(body)) {
+		return body;
+	} else if (is_bool(body)) {
+		return body;
+	} else if (is_void(body)) {
+		return body;
+	} else if (is_toat(body)) {
+		return body;
+	} else if (is_integer(body)) {
+		// Should be handled separately as an intrinsic type
+		assert(false);
+	} else if (is_array(body)) {
+		auto arr_typ = to_array(body);
+		return make_array(substitute_aux(arr_typ->item_type, vars, args));
+	} else if (is_function(body)) {
+		auto func_typ = to_function(body);
+		std::vector<TYPE> inputs;
+		for (auto typ : func_typ->inputs)
+			inputs.push_back(substitute_aux(typ, vars, args));
+		return make_function(inputs, substitute_aux(func_typ->output, vars, args));
+	} else if (is_typevar(body)) {
+		auto var = to_typevar(body);
+		if (var->is_bound) {
+			auto typ = substitute_aux(var->bound_type, vars, args);
+			return typ;
+		}
+
+		for (size_t i = 0; i < vars.size(); i++) {
+			if (var->unbound_name == vars[i]->unbound_name) return args[i];
+		}
+
+		return var;
+	} else if (is_ref(body)) {
+		auto ref_typ = to_ref(body);
+		return make_ref(substitute_aux(ref_typ->ref_type, vars, args));
+	} else if (is_general(body)) {
+		auto gen = to_general(body);
+		std::vector<TYPE_VARIABLE> not_overriden;
+		std::vector<TYPE> new_args;
+		for (size_t i = 0; i < vars.size(); i++) {
+			bool overriden = false;
+			for (size_t j = 0; j < gen->vars.size(); j++) {
+				auto var = to_typevar(gen->vars[j]);
+				if (not var->is_bound and vars[i]->unbound_name == var->unbound_name) {
+					overriden = true;
+					break;
+				}
+			}
+			if (not overriden) {
+				not_overriden.push_back(vars[i]);
+				new_args.push_back(args[i]);
+			}
+		}
+		return make_general(
+			gen->vars, substitute_aux(gen->body, not_overriden, new_args)
+		);
+	} else {
+		assert(false);
+	}
 }
 
 void Typechecker::mismatch_error(
@@ -705,7 +794,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto exp = typecheck(exp_idx, scope_id);
 
 			if (opt_type_node.type != NodeType::EMPTY) {
-				auto annot = typecheck(opt_type_idx, scope_id);
+				auto annot = eval(opt_type_idx, scope_id);
 				if (!unify(annot, exp))
 					mismatch_error(
 						node.loc,
@@ -739,7 +828,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 				if (opt_type_node.type == NodeType::EMPTY)
 					output = make_typevar();
 				else
-					output = typecheck(opt_type_idx, scope_id);
+					output = eval(opt_type_idx, scope_id);
 
 				return ASSOC_TYPE(node_idx, make_function(inputs, output));
 			}();
@@ -761,7 +850,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 				auto output = [&]() {
 					auto body_type = typecheck(body_idx, new_scope_id);
 					if (opt_type_node.type != NodeType::EMPTY) {
-						auto opt_type = typecheck(opt_type_idx, new_scope_id);
+						auto opt_type = eval(opt_type_idx, new_scope_id);
 						if (!unify(body_type, opt_type))
 							mismatch_error(
 								node.loc,
@@ -832,7 +921,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// FIXME: add typing rules
 		case NodeType::AS: {
 			auto exp = typecheck(node[0], scope_id);
-			auto typ_ = typecheck(node[1], scope_id);
+			auto typ_ = eval(node[1], scope_id);
 
 			if (is_integer(exp) and is_integer(typ_)) {
 				return ASSOC_TYPE(node_idx, typ_);
@@ -847,40 +936,66 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			break;
 		}
 
-			// FIXME: These are kinda wrong as having a type is not the same as
-			// representing or evaluating to a type.
-
-			// | e1 : Int<64>
-			// +------------
-			// | |- int e1 : Int<e1>
-
-			// | e1 : Int<64>
-			// +------------
-			// | |- uint e1 : Uint<e1>
-
-			// |
-			// +------------
-			// | |- bool : Bool
-
-			// |
-			// +------------
-			// | |- nil : Nil
-
-		case NodeType::INT_TYPE: {
-			const auto& type_size_node = ast.at(node[0]);
-			return ASSOC_TYPE(node_idx, make_integer(type_size_node.num, SIGNED));
-		}
-		case NodeType::UINT_TYPE: {
-			const auto& type_size_node = ast.at(node[0]);
-			return ASSOC_TYPE(node_idx, make_integer(type_size_node.num, UNSIGNED));
-		}
-		case NodeType::BOOL_TYPE: {
-			return ASSOC_TYPE(node_idx, make_bool());
-		}
-		case NodeType::NIL_TYPE: {
-			return ASSOC_TYPE(node_idx, make_nil());
-		}
+		case NodeType::INSTANCE: assert(false);
 	}
 
 	assert(false && "unreachable");
+}
+
+TYPE Typechecker::eval(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
+	const auto& node = ast.at(node_idx);
+	node_to_type[node_idx] = make_toat();
+	switch (node.type) {
+		case NodeType::ID: {
+			if (node.str_id.idx == pool.intern(strdup("Bool")).idx) {
+				return make_bool();
+			}
+			if (node.str_id.idx == pool.intern(strdup("Nil")).idx) {
+				return make_nil();
+			}
+			assert(false);
+		}
+
+			// | x : type
+			// | x = forall (x1, x2, ..., x2). t
+			// | e1 : type
+			// | e2 : type
+			// | ...
+			// | en : type
+			// +-------------------------
+			// | x<e1, e2, ..., en> = t
+
+		case NodeType::INSTANCE: {
+			assert(node.size() == 2);
+			auto name_idx = node[0];
+			auto args_idx = node[1];
+
+			auto name_node = ast.at(name_idx);
+			auto args_node = ast.at(args_idx);
+
+			if (name_node.str_id.idx == pool.intern(strdup("Array")).idx) {
+				auto elt_typ = eval(args_node[0], scope_id);
+				return make_array(elt_typ);
+			}
+
+			if (name_node.str_id.idx == pool.intern(strdup("Int")).idx) {
+				auto bit_count = ast.at(args_node[0]).num;
+				return make_integer(bit_count, Sign::SIGNED);
+			}
+
+			if (name_node.str_id.idx == pool.intern(strdup("Uint")).idx) {
+				auto bit_count = ast.at(args_node[0]).num;
+				return make_integer(bit_count, Sign::UNSIGNED);
+			}
+
+			auto general_typ = typecheck(name_idx, scope_id);
+			std::vector<TYPE> arguments;
+			for (auto idx : ast.at(args_idx)) {
+				arguments.push_back(eval(idx, scope_id));
+			}
+
+			return substitute(general_typ, arguments);
+		}
+		default: assert(false);
+	}
 }

@@ -74,7 +74,7 @@
 %type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id int
-%type <node> type_literal type_primitive
+%type <node> type_expression type_argument_list type_argument
 
 %%
 
@@ -146,7 +146,7 @@ decl : VAR id opt_type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $2, $3
      ;
 
 opt_type : %empty { $$ = new_empty_node(ast); }
-         | ":" type_literal { $$ = $2; }
+         | ":" type_expression { $$ = $2; }
          ;
 
 params : %empty    { $$ = new_list_node(ast); }
@@ -178,7 +178,7 @@ path
 /* Operators. Infix and prefix */
 op : op0;
 
-op0  : op1  | op1[lft] AS type_literal[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
+op0  : op1  | op1[lft] AS type_expression[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
 op1  : op2  | op1[lft] OR   nls op2[rgt]  { $$ = NODE(NodeType::OR,  $lft, $rgt); } ;
 op2  : op3  | op2[lft] AND  nls op3[rgt]  { $$ = NODE(NodeType::AND, $lft, $rgt); } ;
 op3  : op4  | op3[lft] ">"  nls op4[rgt]  { $$ = NODE(NodeType::GTN, $lft, $rgt); } ;
@@ -209,13 +209,24 @@ id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 
 int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
 
-type_literal : type_primitive ;
+type_expression
+  : id "<" type_argument_list ">"
+  { $$ = NODE(NodeType::INSTANCE, $1, $3); }
+  | id
+  ;
 
-type_primitive
-  : INT int  { $$ = NODE(NodeType::INT_TYPE, $2); }
-  | UINT int { $$ = NODE(NodeType::UINT_TYPE, $2); }
-  | BOOL     { $$ = NODE(NodeType::BOOL_TYPE); }
-  | NIL      { $$ = NODE(NodeType::NIL_TYPE); }
+type_argument_list
+  : type_argument {
+    $$ = new_list_node(ast);
+    $$ = list_append_node(ast, $$, $1);
+  }
+  | type_argument_list[prefix] "," type_argument[postfix]
+  { $$ = list_append_node(ast, $prefix, $postfix); }
+  ;
+
+type_argument
+  : type_expression
+  | int
   ;
 
 %%

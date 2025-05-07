@@ -512,10 +512,8 @@ Result Compiler::compile(
 				return {code, result_register};
 			}
 		}
-		case NodeType::INT_TYPE: assert(false);
-		case NodeType::UINT_TYPE: assert(false);
-		case NodeType::BOOL_TYPE: assert(false);
-		case NodeType::NIL_TYPE: assert(false);
+		case NodeType::INSTANCE:
+			assert(false && "used only in typechecking. should not be evaluated");
 		case NodeType::AS: {
 			return compile(node[0], handlers, scope_id);
 		}

@@ -49,11 +49,8 @@ enum class NodeType {
 	LET,
 	CHAR,
 	PATH,
-	INT_TYPE,
-	UINT_TYPE,
-	BOOL_TYPE,
-	NIL_TYPE,
 	AS,
+	INSTANCE,
 };
 
 struct Position {

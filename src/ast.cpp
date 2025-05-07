@@ -48,10 +48,7 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::LET: return "NodeType::LET";
 		case NodeType::CHAR: return "NodeType::CHAR";
 		case NodeType::PATH: return "NodeType::PATH";
-		case NodeType::INT_TYPE: return "NodeType::INT_TYPE";
-		case NodeType::UINT_TYPE: return "NodeType::UINT_TYPE";
-		case NodeType::BOOL_TYPE: return "NodeType::BOOL_TYPE";
-		case NodeType::NIL_TYPE: return "NodeType::NIL_TYPE";
+		case NodeType::INSTANCE: return "NodeType::INSTANCE";
 		case NodeType::AS: return "NodeType::AS";
 	}
 }
@@ -64,8 +61,7 @@ bool node_has_fixed_repr(enum NodeType type) {
 		case NodeType::EMPTY:
 		case NodeType::CHAR:
 		case NodeType::PATH:
-		case NodeType::INT_TYPE:
-		case NodeType::UINT_TYPE: return false;
+		case NodeType::INSTANCE: return false;
 		default: return true;
 	}
 }
@@ -106,8 +102,6 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::NIL: return "nil";
 		case NodeType::TRUE: return "true";
 		case NodeType::FALSE: return "false";
-		case NodeType::BOOL_TYPE: return "Bool";
-		case NodeType::NIL_TYPE: return "Nil";
 		default: assert(false && "unreachable");
 	}
 }
@@ -139,11 +133,16 @@ static void ast_node_print(
 	} else if (node.type == NodeType::PATH) {
 		ast_node_print(ast, pool, node[0], space);
 		return;
-	} else if (node.type == NodeType::INT_TYPE) {
-		printf("int %d", ast->at(node[0]).num);
-	} else if (node.type == NodeType::UINT_TYPE) {
-		printf("uint %d", ast->at(node[0]).num);
-		return;
+	} else if (node.type == NodeType::INSTANCE) {
+		ast_node_print(ast, pool, node[0], space);
+		printf("<");
+		auto arguments_idx = node[1];
+		const auto& arguments_node = ast->at(arguments_idx);
+		for (auto arg_idx : arguments_node) {
+			ast_node_print(ast, pool, arg_idx, space);
+			printf(", ");
+		}
+		printf(">");
 	} else if (node.type == NodeType::EMPTY) {
 		return;
 	}
@@ -202,18 +201,6 @@ static void ast_node_print_detailed(
 	} else if (node.type == NodeType::CHAR) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "char = '%c'\n", node.character);
-	} else if (node.type == NodeType::INT_TYPE) {
-		print_spaces(fd, space + 2);
-		fprintf(fd, "kind = %d\n", ast->at(node[0]).num);
-	} else if (node.type == NodeType::UINT_TYPE) {
-		print_spaces(fd, space + 2);
-		fprintf(fd, "kind = uint %d\n", ast->at(node[0]).num);
-	} else if (node.type == NodeType::BOOL_TYPE) {
-		print_spaces(fd, space + 2);
-		fprintf(fd, "kind = bool\n");
-	} else if (node.type == NodeType::NIL_TYPE) {
-		print_spaces(fd, space + 2);
-		fprintf(fd, "kind = nil\n");
 	} else if (node.type == NodeType::EMPTY) {
 	} else {
 		print_spaces(fd, space + 2);
