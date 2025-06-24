@@ -4,11 +4,15 @@
 ;; Keywords: languages
 
 ;; Package-Version: 0.0.1
-;; Package-Requires: ((subr-x) (font-lock) (regexp-opt) (derived))
 
 ;;; Commentary:
 
 ;;; Code:
+
+(require 'subr-x)
+(require 'font-lock)
+(require 'regexp-opt)
+(require 'derived)
 
 (defconst fala-syntax-table
   (let ((table (make-syntax-table)))
