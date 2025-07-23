@@ -415,3 +415,8 @@ void ast_set_root(AST* ast, NodeIndex node_idx) { ast->root_index = node_idx; }
 AST::~AST() { node_deinit(this, root_index); }
 
 bool operator<(NodeIndex a, NodeIndex b) { return a.index < b.index; }
+
+size_t Node::size() const {
+	// FIXME: assert this is not a terminal node
+	return branch.children_count;
+}
