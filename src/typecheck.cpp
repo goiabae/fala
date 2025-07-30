@@ -117,17 +117,34 @@ TYPE Typechecker::deref(TYPE typ) {
 		return to_ref(typ)->ref_type;
 }
 
-static void err(Location loc, const char* msg) {
-	fprintf(
-		stderr,
-		"TYPECHECK ERROR at line %d, from %d to %d: %s\n",
-		loc.begin.line + 1,
-		loc.begin.column + 1,
-		loc.end.column + 1,
-		msg
-	);
-	exit(1);
-}
+#define ANSI_STYLE_BOLD "\x1b[1m"
+#define ANSI_COLOR_RED "\x1b[31m"
+#define ANSI_COLOR_GREEN "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_BLUE "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN "\x1b[36m"
+#define ANSI_COLOR_RESET "\x1b[0m"
+
+#define err_(LOC, MSG, ...)                                           \
+	fprintf(                                                            \
+		stderr,                                                           \
+		ANSI_STYLE_BOLD "<FIXME>.fala:%d:%d: " ANSI_COLOR_RED             \
+										"TYPECHECK ERROR" ANSI_COLOR_RESET ": " MSG "\n", \
+		(LOC).begin.line + 1,                                             \
+		(LOC).begin.column + 1,                                           \
+		__VA_ARGS__                                                       \
+	) && (exit(1), 1)
+
+#define err(LOC, MSG)                                            \
+	fprintf(                                                       \
+		stderr,                                                      \
+		ANSI_STYLE_BOLD "<FIXME>.fala:%d:%d: " ANSI_COLOR_RED        \
+										"TYPECHECK ERROR" ANSI_COLOR_RESET ": %s\n", \
+		(LOC).begin.line + 1,                                        \
+		(LOC).begin.column + 1,                                      \
+		MSG                                                          \
+	) && (exit(1), 1)
 
 TYPE Typechecker::substitute(TYPE gen, std::vector<TYPE> args) {
 	auto general = to_general(gen);
@@ -206,16 +223,18 @@ void Typechecker::mismatch_error(
 ) {
 	fprintf(
 		stderr,
-		"TYPE ERROR(%d, %d-%d): %s. Expected type ",
+		ANSI_STYLE_BOLD "<FIXME.fala>:%d:%d: " ANSI_COLOR_RED
+										"TYPECHECK ERROR:" ANSI_COLOR_RESET " %s\n",
 		loc.begin.line + 1,
 		loc.begin.column + 1,
-		loc.end.column + 1,
 		msg
 	);
+	fprintf(stderr, "\tExpected: ");
 	print_type(stderr, expected);
-	fprintf(stderr, " but got ");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "\t     Got: ");
 	print_type(stderr, got);
-	fprintf(stderr, " instead.\n");
+	fprintf(stderr, "\n");
 }
 
 void Typechecker::print_type(FILE* fd, TYPE t) {
@@ -246,12 +265,12 @@ void Typechecker::print_type(FILE* fd, TYPE t) {
 		auto vt = to_typevar(t);
 		if (vt->is_bound) {
 			fprintf(fd, "(");
-			fprintf(fd, "t%zu", vt->unbound_name);
+			fprintf(fd, "'t%zu", vt->unbound_name);
 			fprintf(fd, " := ");
 			print_type(fd, vt->bound_type);
 			fprintf(fd, ")");
 		} else {
-			fprintf(fd, "t%zu", vt->unbound_name);
+			fprintf(fd, "'t%zu", vt->unbound_name);
 		}
 	} else if (is_array(t)) {
 		auto at = to_array(t);
@@ -623,7 +642,8 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			if (not unify(left, right))
 				mismatch_error(
 					node.loc,
-					"Equality comparison of values of different types is always false",
+					"Equality comparison of values of different types is always "
+					"false",
 					left,
 					right
 				);
@@ -700,8 +720,8 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			// If e1 is an array of t and e2 is an integer, then e1[e2] has type t
 
-			// FIXME: Since there is no way to construct a literal array right now,
-			// the first rule is useless.
+			// FIXME: Since there is no way to construct a literal array right
+			// now, the first rule is useless.
 
 			// | E |- e1 : Array<t>
 			// | E |- e2 : Int<64>
@@ -759,8 +779,8 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			return ASSOC_TYPE(node_idx, exp_typ);
 		}
 
-			// If a variable of name x of type t was previously declared, then x is
-			// a reference to a t
+			// If a variable of name x of type t was previously declared, then x
+			// is a reference to a t
 
 			// | x : t in E
 			// +-------
@@ -769,7 +789,11 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 		case NodeType::ID: {
 			auto found_typ = env.find(scope_id, node.str_id);
 			if (found_typ == nullptr)
-				err(node.loc, "Variable not previously declared");
+				err_(
+					node.loc,
+					"Variable \"%s\" not previously declared",
+					pool.find(node.str_id)
+				);
 			auto ref_typ = make_ref(*found_typ);
 			return ASSOC_TYPE(node_idx, ref_typ);
 		}
