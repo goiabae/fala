@@ -158,6 +158,8 @@ void Lexer::ensure() {
 		if (buf[i] == '\n') {
 			lines.push_back(current_line);
 			current_line = "";
+		} else if (buf[i] == '\t') {
+			current_line += "  ";
 		} else {
 			current_line += buf[i];
 		}
@@ -178,6 +180,8 @@ char Lexer::advance() {
 	if (c == '\n') {
 		loc->end.line++;
 		loc->end.column = 0;
+	} else if (c == '\t') {
+		loc->end.column += 2;
 	} else {
 		loc->end.column++;
 	}
