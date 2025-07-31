@@ -48,10 +48,7 @@ constexpr auto builtins = {
 
 Result write_int(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
-		err(
-			"write_int accepts only a single pointer to character or integer as an "
-			"argument"
-		);
+		err("write_int accepts only a single integer as argument");
 
 	Chunk chunk {};
 
@@ -63,10 +60,7 @@ Result write_int(Compiler&, vector<Operand> args) {
 
 Result write_char(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
-		err(
-			"write_int accepts only a single pointer to character or integer as an "
-			"argument"
-		);
+		err("write_int accepts only a single character as argument");
 
 	Chunk chunk {};
 	auto& op = args[0];
@@ -77,10 +71,7 @@ Result write_char(Compiler&, vector<Operand> args) {
 
 Result write_str(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
-		err(
-			"write_str accepts only a single pointer to character or integer as an "
-			"argument"
-		);
+		err("write_str accepts only a single pointer to character as argument");
 
 	Chunk chunk {};
 	auto& op = args[0];
