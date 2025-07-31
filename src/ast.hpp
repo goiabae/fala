@@ -6,6 +6,7 @@
 #include <array>
 #include <vector>
 
+#include "file.hpp"
 #include "str_pool.h"
 
 #define INVALID_NODE_INDEX -1
@@ -120,6 +121,8 @@ struct AST {
 	// after parsing, this should be a proper index
 	NodeIndex root_index {-1};
 	std::array<Node, 2048> nodes {};
+	std::string file_name {};
+	std::vector<std::string> lines {};
 
 	const Node& at(NodeIndex) const;
 	Node& at(NodeIndex);

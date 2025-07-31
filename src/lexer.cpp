@@ -153,6 +153,16 @@ void Lexer::ensure() {
 	              : fread(buf, sizeof(char), ring.cap, file->get_descriptor());
 
 	if (read > 0) ring_write_many(&ring, buf, read);
+
+	for (size_t i = 0; i < read; i++) {
+		if (buf[i] == '\n') {
+			lines.push_back(current_line);
+			current_line = "";
+		} else {
+			current_line += buf[i];
+		}
+	}
+
 	delete[] buf;
 }
 

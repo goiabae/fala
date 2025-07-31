@@ -28,6 +28,12 @@ struct Lexer {
 	char peek();
 	char advance();
 	bool match(char c);
+
+	std::vector<std::string> get_lines() { return lines; }
+
+ private:
+	std::string current_line {};
+	std::vector<std::string> lines {};
 };
 
 int lexer_lex(union TokenValue *lval, Location *location, Lexer *scanner);

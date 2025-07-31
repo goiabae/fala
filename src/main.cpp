@@ -41,8 +41,10 @@ struct Options {
 static AST parse(File& file, StringPool& pool) {
 	Lexer lexer(file);
 	AST ast {};
+	ast.file_name = lexer.file->get_name();
 	yy::parser parser {&lexer, &ast, &pool};
 	if (parser.parse()) exit(1); // FIXME propagate error up
+	ast.lines = lexer.get_lines();
 	return ast;
 }
 

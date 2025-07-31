@@ -3,12 +3,15 @@
 
 #include <stdio.h>
 
+#include <string>
+
 struct File;
 
 #ifdef __cplusplus
 struct File {
-	File(const char* path, const char* mode) : m_fd {fopen(path, mode)} {}
-	File(FILE* fd) : m_fd {fd}, m_owned {false} {}
+	File(const char* path, const char* mode)
+	: m_fd {fopen(path, mode)}, name {path} {}
+	File(FILE* fd) : m_fd {fd}, m_owned {false}, name {"<unnamed>.fala"} {}
 	~File() {
 		if (m_owned && m_fd != nullptr) fclose(m_fd);
 	}
@@ -27,9 +30,12 @@ struct File {
 	FILE* get_descriptor() { return m_fd; }
 	bool at_eof() { return feof(m_fd); }
 
+	std::string get_name() { return name; }
+
  private:
 	FILE* m_fd;
 	bool m_owned {true};
+	std::string name {};
 };
 #endif
 
