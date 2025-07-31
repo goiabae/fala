@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ast.hpp"
+#include "logger.hpp"
 #include "str_pool.h"
 #include "type.hpp"
 
@@ -125,26 +126,6 @@ TYPE Typechecker::deref(TYPE typ) {
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_CYAN "\x1b[36m"
 #define ANSI_COLOR_RESET "\x1b[0m"
-
-#define err_(LOC, MSG, ...)                                           \
-	fprintf(                                                            \
-		stderr,                                                           \
-		ANSI_STYLE_BOLD "<FIXME>.fala:%d:%d: " ANSI_COLOR_RED             \
-										"TYPECHECK ERROR" ANSI_COLOR_RESET ": " MSG "\n", \
-		(LOC).begin.line + 1,                                             \
-		(LOC).begin.column + 1,                                           \
-		__VA_ARGS__                                                       \
-	) && (exit(1), 1)
-
-#define err(LOC, MSG)                                            \
-	fprintf(                                                       \
-		stderr,                                                      \
-		ANSI_STYLE_BOLD "<FIXME>.fala:%d:%d: " ANSI_COLOR_RED        \
-										"TYPECHECK ERROR" ANSI_COLOR_RESET ": %s\n", \
-		(LOC).begin.line + 1,                                        \
-		(LOC).begin.column + 1,                                      \
-		MSG                                                          \
-	) && (exit(1), 1)
 
 TYPE Typechecker::substitute(TYPE gen, std::vector<TYPE> args) {
 	auto general = to_general(gen);
@@ -525,7 +506,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			auto cond_typ = typecheck(cond_idx, scope_id);
 			if (not unify(cond_typ, make_bool()))
-				err(
+				logger.err(
 					node.loc,
 					"Condition expression of when expression is not of type boolean"
 				);
@@ -630,9 +611,9 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto path = typecheck(node[0], scope_id);
 			auto val = typecheck(node[1], scope_id);
 			if (not unify(path, val))
-				err(node.loc, "Assignment with value of wrong type");
+				logger.err(node.loc, "Assignment with value of wrong type");
 			if (not is_ref(path))
-				err(node.loc, "Left side of assignment must be a reference");
+				logger.err(node.loc, "Left side of assignment must be a reference");
 			return ASSOC_TYPE(node_idx, val);
 		}
 			// FIXME: add typing rules
@@ -694,7 +675,9 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			const auto left = typecheck(node[0], scope_id);
 			const auto right = typecheck(node[1], scope_id);
 			if (!(unify(left, int64_typ) && unify(right, int64_typ)))
-				err(node.loc, "Comparison operator arguments must be of numeric type");
+				logger.err(
+					node.loc, "Comparison operator arguments must be of numeric type"
+				);
 			return ASSOC_TYPE(node_idx, make_bool());
 		}
 			// FIXME: add typing rules
@@ -709,9 +692,9 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			const auto& left_node = ast.at(node[0]);
 			const auto& right_node = ast.at(node[1]);
 			if (!unify(left, num))
-				err(left_node.loc, "Left-hand side of operator is not numeric");
+				logger.err(left_node.loc, "Left-hand side of operator is not numeric");
 			if (!unify(right, num))
-				err(
+				logger.err(
 					right_node.loc,
 					"Arithmetic operator arguments must be of numeric type"
 				);
@@ -745,7 +728,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			}
 
 			if (not is_ref(arr_typ)) {
-				err(node.loc, "Array expression is not a reference");
+				logger.err(node.loc, "Array expression is not a reference");
 			}
 
 			auto off_typ = typecheck(off_idx, scope_id);
@@ -789,7 +772,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 		case NodeType::ID: {
 			auto found_typ = env.find(scope_id, node.str_id);
 			if (found_typ == nullptr)
-				err_(
+				logger.err(
 					node.loc,
 					"Variable \"%s\" not previously declared",
 					pool.find(node.str_id)

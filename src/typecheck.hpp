@@ -8,11 +8,13 @@
 
 #include "ast.hpp"
 #include "env.hpp"
+#include "logger.hpp"
 #include "str_pool.h"
 #include "type.hpp"
 
 struct Typechecker {
-	Typechecker(AST& ast, StringPool& pool) : ast(ast), pool(pool) {}
+	Typechecker(AST& ast, StringPool& pool)
+	: ast(ast), pool(pool), logger("TYPECHECKER", ast.file_name, ast.lines) {}
 
 	bool typecheck();
 	TYPE typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id);
@@ -68,6 +70,7 @@ struct Typechecker {
 	Env<TYPE> env {};
 	std::map<NodeIndex, Env<TYPE>::ScopeID> node_to_scope_id {};
 	std::map<NodeIndex, TYPE> node_to_type {};
+	Logger logger;
 };
 
 #endif
