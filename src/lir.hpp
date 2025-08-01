@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "ast.hpp"
@@ -58,7 +59,7 @@ struct Register {
 	bool has_addr() const { return type == VAL_ADDR; }
 };
 
-struct Funktion {
+struct Function {
 	size_t argc;
 	Node* args;
 	Node root;
@@ -68,6 +69,7 @@ struct Label {
 	size_t id;
 };
 
+// simple wrapper around Register
 struct Array {
 	Register start_pointer_reg;
 };
@@ -83,21 +85,24 @@ struct Operand {
 	};
 
 	Type type;
+	std::variant<Register, Label, Number, Function, Array> data;
 
-	union {
-		Register reg;
-		Label lab;
-		Number num;
-		Funktion fun;
-		Array arr;
-	};
+	Operand() : type {Type::NIL}, data {Number {0}} {}
+	Operand(Register reg) : type(Type::REG), data {reg} {}
+	Operand(Label lab) : type(Type::LAB), data {lab} {}
+	constexpr Operand(Number num) : type(Type::NUM), data {num} {}
+	Operand(Function fun) : type(Type::FUN), data {fun} {}
+	Operand(Array arr) : type(Type::ARR), data {arr} {}
 
-	Operand() : type {Type::NIL}, num {0} {}
-	Operand(Register reg) : type(Type::REG), reg {reg} {}
-	Operand(Label lab) : type(Type::LAB), lab {lab} {}
-	constexpr Operand(Number num) : type(Type::NUM), num {num} {}
-	Operand(Funktion fun) : type(Type::FUN), fun {fun} {}
-	Operand(Array arr) : type(Type::ARR), arr {arr} {}
+	Label& as_label() { return std::get<Label>(data); }
+	Register& as_register() { return std::get<Register>(data); }
+	Number& as_number() { return std::get<Number>(data); }
+	Array& as_array() { return std::get<Array>(data); }
+
+	const Label& as_label() const { return std::get<Label>(data); }
+	const Register& as_register() const { return std::get<Register>(data); }
+	const Number& as_number() const { return std::get<Number>(data); }
+	const Array& as_array() const { return std::get<Array>(data); }
 
 	void deinit() { return; }
 };
@@ -126,6 +131,8 @@ void print_chunk(FILE*, const Chunk&);
 int print_inst(FILE*, const Instruction& inst);
 
 Chunk operator+(Chunk x, Chunk y);
+
+const char* operand_type_repr(Operand::Type type);
 
 } // namespace lir
 

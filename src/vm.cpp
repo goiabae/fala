@@ -1,6 +1,7 @@
 #include "vm.hpp"
 
 #include <array>
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <stack>
@@ -19,15 +20,7 @@ void err(const char* msg) {
 	exit(1);
 }
 
-#define FETCH(OPND)                                              \
-	(((OPND).type == Operand::Type::REG) ? cells[(OPND).reg.index] \
-	 : ((OPND).type == Operand::Type::ARR)                         \
-	   ? cells[(OPND).arr.start_pointer_reg.index]                 \
-	   : (OPND).num)
-
-#define DEREF(OPND) cells[(OPND).reg.index]
-
-#define INDIRECT_LOAD(BASE, OFF) cells[(size_t)(FETCH(BASE) + FETCH(OFF))]
+#define INDIRECT_LOAD(BASE, OFF) cells[(size_t)(fetch(BASE) + fetch(OFF))]
 
 void run(const lir::Chunk& code) {
 	array<int64_t, 2048> cells {};
@@ -38,6 +31,32 @@ void run(const lir::Chunk& code) {
 	char read_buffer[read_buffer_cap] {0};
 
 	size_t return_address = 0;
+
+	auto deref = [&](Operand opnd) -> int64_t& {
+		if (opnd.type == Operand::Type::REG) {
+			return cells[opnd.as_register().index];
+		} else if (opnd.type == Operand::Type::ARR) {
+			return cells[opnd.as_array().start_pointer_reg.index];
+		} else {
+			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
+			exit(1);
+		}
+	};
+
+	auto fetch = [&](Operand opnd) -> int64_t {
+		if (opnd.type == Operand::Type::REG) {
+			return cells[opnd.as_register().index];
+		} else if (opnd.type == Operand::Type::ARR) {
+			return cells[opnd.as_array().start_pointer_reg.index];
+		} else if (opnd.type == Operand::Type::NUM) {
+			return opnd.as_number();
+		} else if (opnd.type == Operand::Type::NIL) {
+			return 0;
+		} else {
+			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
+			exit(1);
+		}
+	};
 
 	size_t pc = 0;
 	while (pc < code.m_vec.size()) {
@@ -55,11 +74,11 @@ void run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::PRINTV: {
-				printf("%ld", FETCH(inst.operands[0]));
+				printf("%ld", fetch(inst.operands[0]));
 				break;
 			}
 			case Opcode::PRINTC: {
-				printf("%c", (char)FETCH(inst.operands[0]));
+				printf("%c", (char)fetch(inst.operands[0]));
 				break;
 			}
 			case Opcode::READV: {
@@ -75,22 +94,23 @@ void run(const lir::Chunk& code) {
 				if (inst.operands[0].type != Operand::Type::REG)
 					err("First argument must be a register");
 
-				DEREF(inst.operands[0]) = num;
+				deref(inst.operands[0]) = num;
 				break;
 			}
 			case Opcode::READC: {
 				char c = (char)fgetc(stdin);
-				DEREF(inst.operands[0]) = (c == EOF) ? -1 : c;
+				deref(inst.operands[0]) = (c == EOF) ? -1 : c;
 				break;
 			}
 			case Opcode::MOV: {
 				const auto& dest = inst.operands[0];
 				const auto& src = inst.operands[1];
-				DEREF(dest) = FETCH(src);
+				auto& cell = deref(dest);
+				cell = fetch(src);
 				break;
 			}
 #define BIN_ARITH_OP(OP) \
-	DEREF(inst.operands[0]) = FETCH(inst.operands[1]) OP FETCH(inst.operands[2]);
+	deref(inst.operands[0]) = fetch(inst.operands[1]) OP fetch(inst.operands[2]);
 			case Opcode::ADD: BIN_ARITH_OP(+); break;
 			case Opcode::SUB: BIN_ARITH_OP(-); break;
 			case Opcode::MUL: BIN_ARITH_OP(*); break;
@@ -105,39 +125,39 @@ void run(const lir::Chunk& code) {
 			case Opcode::GREATER: BIN_ARITH_OP(>); break;
 			case Opcode::GREATER_EQ: BIN_ARITH_OP(>=); break;
 			case Opcode::NOT:
-				DEREF(inst.operands[0]) = !FETCH(inst.operands[1]);
+				deref(inst.operands[0]) = !fetch(inst.operands[1]);
 				break;
 			case Opcode::LOAD:
-				DEREF(inst.operands[0]) =
+				deref(inst.operands[0]) =
 					INDIRECT_LOAD(inst.operands[2], inst.operands[1]);
 				break;
 			case Opcode::STORE:
 				INDIRECT_LOAD(inst.operands[2], inst.operands[1]) =
-					FETCH(inst.operands[0]);
+					fetch(inst.operands[0]);
 				break;
 			case Opcode::JMP:
-				pc = code.label_indexes.at(inst.operands[0].lab.id);
+				pc = code.label_indexes.at(inst.operands[0].as_label().id);
 				goto dont_inc;
 			case Opcode::JMP_FALSE:
-				if (!FETCH(inst.operands[0]))
-					pc = code.label_indexes.at(inst.operands[1].lab.id);
+				if (!fetch(inst.operands[0]))
+					pc = code.label_indexes.at(inst.operands[1].as_label().id);
 				else
 					pc++;
 				goto dont_inc;
 			case Opcode::JMP_TRUE:
-				if (FETCH(inst.operands[0]))
-					pc = code.label_indexes.at(inst.operands[1].lab.id);
+				if (fetch(inst.operands[0]))
+					pc = code.label_indexes.at(inst.operands[1].as_label().id);
 				else
 					pc++;
 				goto dont_inc;
-			case Opcode::PUSH: stack.push(FETCH(inst.operands[0])); break;
+			case Opcode::PUSH: stack.push(fetch(inst.operands[0])); break;
 			case Opcode::POP:
-				DEREF(inst.operands[0]) = stack.top();
+				deref(inst.operands[0]) = stack.top();
 				stack.pop();
 				break;
 			case Opcode::CALL:
 				stack.push((int64_t)pc);
-				pc = code.label_indexes.at(inst.operands[0].lab.id) - 1;
+				pc = code.label_indexes.at(inst.operands[0].as_label().id) - 1;
 				break;
 			case Opcode::RET: pc = return_address; break;
 			case Opcode::FUNC: return_address = (size_t)stack.top(); stack.pop();

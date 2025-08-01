@@ -15,7 +15,7 @@ Chunk& Chunk::with_comment(std::string comment) {
 }
 
 void Chunk::add_label(Operand label) {
-	label_indexes[label.lab.id] = m_vec.size();
+	label_indexes[label.as_label().id] = m_vec.size();
 }
 
 size_t opcode_opnd_count(Opcode op) {
@@ -96,12 +96,13 @@ int print_str(FILE* fd, const char* str) {
 int print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
 		case Operand::Type::NIL: return fprintf(fd, "0");
-		case Operand::Type::REG: return fprintf(fd, "%%%zu", opnd.reg.index);
-		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.lab.id);
-		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.num);
+		case Operand::Type::REG:
+			return fprintf(fd, "%%%zu", opnd.as_register().index);
+		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.as_label().id);
+		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.as_number());
 		case Operand::Type::FUN: assert(false && "unreachable");
 		case Operand::Type::ARR:
-			return fprintf(fd, "%%%zu", opnd.arr.start_pointer_reg.index);
+			return fprintf(fd, "%%%zu", opnd.as_array().start_pointer_reg.index);
 	}
 	return 0;
 }
@@ -145,12 +146,12 @@ const char* opcode_repr(Opcode op) {
 
 int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::NUM) {
-		return fprintf(fd, "%d", opnd.num);
+		return fprintf(fd, "%d", opnd.as_number());
 	} else if (opnd.type == Operand::Type::REG) {
-		if (opnd.reg.has_num())
-			return fprintf(fd, "%zu", opnd.reg.index);
-		else if (opnd.reg.has_addr())
-			return fprintf(fd, "%%r%zu", opnd.reg.index);
+		if (opnd.as_register().has_num())
+			return fprintf(fd, "%zu", opnd.as_register().index);
+		else if (opnd.as_register().has_addr())
+			return fprintf(fd, "%%r%zu", opnd.as_register().index);
 	} else
 		assert(false && "unreachable");
 	return 0;
@@ -201,6 +202,17 @@ Chunk operator+(Chunk x, Chunk y) {
 		res.label_indexes[p.first] = p.second + x.m_vec.size();
 
 	return res;
+}
+
+const char* operand_type_repr(Operand::Type type) {
+	switch (type) {
+		case Operand::Type::NIL: return "Operand::Type::NIL";
+		case Operand::Type::REG: return "Operand::Type::REG";
+		case Operand::Type::LAB: return "Operand::Type::LAB";
+		case Operand::Type::NUM: return "Operand::Type::NUM";
+		case Operand::Type::FUN: return "Operand::Type::FUN";
+		case Operand::Type::ARR: return "Operand::Type::ARR";
+	}
 }
 
 } // namespace lir

@@ -53,7 +53,7 @@ Result write_int(Compiler&, vector<Operand> args) {
 	Chunk chunk {};
 
 	auto& op = args[0];
-	assert(!(op.type == Operand::Type::REG && op.reg.has_addr()));
+	assert(!(op.type == Operand::Type::REG && op.as_register().has_addr()));
 	chunk.emit(Opcode::PRINTV, op);
 	return {chunk, {}};
 }
@@ -64,7 +64,7 @@ Result write_char(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(!(op.type == Operand::Type::REG && op.reg.has_addr()));
+	assert(!(op.type == Operand::Type::REG && op.as_register().has_addr()));
 	chunk.emit(Opcode::PRINTC, op);
 	return {chunk, {}};
 }
@@ -75,7 +75,7 @@ Result write_str(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(op.type == Operand::Type::REG && op.reg.has_addr());
+	assert(op.type == Operand::Type::REG && op.as_register().has_addr());
 	chunk.emit(Opcode::PRINTF, op);
 	return {chunk, {}};
 }
@@ -102,7 +102,7 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 	// if size if constant we subtract the allocation start at compile time
 	if (args[0].type == Operand::Type::NUM) {
 		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
-		auto dyn = Operand(comp.dyn_alloc_start -= args[0].num);
+		auto dyn = Operand(comp.dyn_alloc_start -= args[0].as_number());
 
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");
 		return {chunk, addr};
@@ -161,7 +161,7 @@ Operand Compiler::make_register() {
 Operand Compiler::make_label() { return {lir::Label {label_count++}}; }
 
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
-	if (opnd.type == Operand::Type::REG && opnd.reg.has_addr()) {
+	if (opnd.type == Operand::Type::REG && opnd.as_register().has_addr()) {
 		Operand tmp = make_register();
 		chunk->emit(Opcode::LOAD, tmp, Operand(0), opnd)
 			.with_comment("casting to rvalue");
@@ -278,8 +278,8 @@ Result Compiler::compile_for(
 	Operand result_register = make_register();
 
 	SignalHandlers new_handlers {
-		{inc.lab, result_register},
-		{end.lab, result_register},
+		{inc.as_label(), result_register},
+		{end.as_label(), result_register},
 		handlers.return_handler,
 		true,
 		true,
@@ -367,8 +367,8 @@ Result Compiler::compile_while(
 	Operand result_register = make_register();
 
 	SignalHandlers new_handlers {
-		{beg.lab, result_register},
-		{end.lab, result_register},
+		{beg.as_label(), result_register},
+		{end.as_label(), result_register},
 		handlers.return_handler,
 		true,
 		true,
@@ -431,7 +431,8 @@ Result Compiler::compile_var_decl(
 	// anything else
 	initial = to_rvalue(&chunk, initial);
 	Operand* var = env.insert(scope_id, id_node.str_id, make_register());
-	if (initial.type == Operand::Type::REG) var->reg.type = initial.reg.type;
+	if (initial.type == Operand::Type::REG)
+		var->as_register().type = initial.as_register().type;
 	chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
 	return {chunk, *var};
 }
@@ -498,7 +499,7 @@ Result Compiler::compile_ass(
 	chunk = chunk + exp_res.code;
 	Operand exp = to_rvalue(&chunk, exp_res.opnd);
 
-	if (cell.reg.has_addr())
+	if (cell.as_register().has_addr())
 		chunk.emit(Opcode::STORE, exp, Operand(0), cell)
 			.with_comment("assigning to array variable");
 	else // contains number
@@ -543,7 +544,7 @@ Result Compiler::compile_str(
 	const char* str = pool.find(node.str_id);
 	auto str_len = strlen(str);
 	auto buf = make_register();
-	buf.reg = buf.reg.as_addr();
+	buf.as_register() = buf.as_register().as_addr();
 	dyn_alloc_start -= (Number)str_len + 1;
 
 	chunk.emit(Opcode::MOV, buf, Operand(dyn_alloc_start));
@@ -580,7 +581,7 @@ Result Compiler::compile_at(
 	chunk.emit(Opcode::ADD, tmp, base, off)
 		.with_comment("accessing allocated array");
 
-	return {chunk, Operand(tmp.reg.as_addr())};
+	return {chunk, Operand(tmp.as_register().as_addr())};
 }
 
 // FIXME: Temporary workaround
