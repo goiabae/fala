@@ -157,7 +157,7 @@ int interpret(Options opts) {
 			printf("\n");
 		}
 
-		Typechecker checker {ast, pool, fd};
+		Typechecker checker {ast, pool};
 		checker.typecheck();
 
 		if (opts.use_walk_interpreter) {
