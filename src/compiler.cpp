@@ -395,17 +395,6 @@ Result Compiler::compile_while(
 	return {chunk, result_register};
 }
 
-#if 0
-Result Compiler::compile_app(
-	NodeIndex node_idx, const StringPool& pool
-) {
-	Chunk chunk {};
-	const auto& node = ast.at(node_idx);
-
-	return {chunk, exp};
-}
-#endif
-
 Result Compiler::compile_var_decl(
 	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
 ) {
