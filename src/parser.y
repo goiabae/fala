@@ -13,7 +13,7 @@
 %define api.value.type {union TokenValue}
 
 %lex-param {Lexer* lexer}
-%parse-param {Lexer* lexer}{AST* ast}{STR_POOL pool}
+%parse-param {Lexer* lexer}{AST* ast}{StringPool& pool}
 
 /* necessary for node functions */
 %code requires {

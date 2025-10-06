@@ -72,15 +72,15 @@ typedef struct NodeIndex {
 typedef struct AST AST;
 
 // AST
-void ast_print(AST* ast, STR_POOL pool);
-void ast_print_detailed(AST* ast, STR_POOL pool);
+void ast_print(AST* ast, const StringPool& pool);
+void ast_print_detailed(AST* ast, const StringPool& pool);
 void ast_set_root(AST* ast, NodeIndex node_idx);
 
 // nodes
 NodeIndex new_node(AST* ast, NodeType type, std::vector<NodeIndex> children);
 NodeIndex new_list_node(AST* ast);
 NodeIndex new_string_node(
-	AST* ast, NodeType type, Location loc, STR_POOL pool, String str
+	AST* ast, NodeType type, Location loc, StringPool& pool, String str
 );
 NodeIndex new_number_node(AST* ast, Location loc, Number num);
 NodeIndex new_nil_node(AST* ast, Location loc);

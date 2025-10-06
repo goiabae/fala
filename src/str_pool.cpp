@@ -29,13 +29,3 @@ const char* StringPool::find(StrID id) const {
 	assert(id.idx < m_cap);
 	return m_arr[id.idx];
 }
-
-extern "C" StrID str_pool_intern(STR_POOL pool, char* str) {
-	assert(pool != nullptr);
-	return pool->intern(str);
-}
-
-extern "C" const char* str_pool_find(STR_POOL pool, StrID id) {
-	assert(pool != nullptr);
-	return pool->find(id);
-}

@@ -374,7 +374,7 @@ Value inter_eval_node(
 			return res;
 		}
 		case NodeType::STR: {
-			const char* str = str_pool_find(inter->pool, node.str_id);
+			const char* str = inter->pool.find(node.str_id);
 			return Value(strdup(str));
 		}
 		case NodeType::VAR_DECL: return eval_var_decl(inter, ast, node, scope_id);
@@ -484,11 +484,10 @@ static Value builtin_exit(size_t argc, Value* args) {
 }
 
 // if COUNT is 0 the function takes a variable amount of arguments
-#define PUSH_BUILTIN(STR, FUNC, COUNT)               \
-	*env.insert(scope_id, pool->intern(strdup(STR))) = \
-		Value(Function(FUNC, COUNT))
+#define PUSH_BUILTIN(STR, FUNC, COUNT) \
+	*env.insert(scope_id, pool.intern(strdup(STR))) = Value(Function(FUNC, COUNT))
 
-Interpreter::Interpreter(STR_POOL _pool)
+Interpreter::Interpreter(StringPool& _pool)
 : pool(_pool), in_loop(false), should_break(false), should_continue(false) {
 	// arbitrary choice
 	auto scope_id = env.root_scope_id;

@@ -107,19 +107,18 @@ const char* node_repr(enum NodeType type) {
 }
 
 static void ast_node_print(
-	AST* ast, STR_POOL pool, NodeIndex node_idx, unsigned int space
+	AST* ast, const StringPool& pool, NodeIndex node_idx, unsigned int space
 ) {
 	const auto& node = ast->at(node_idx);
 	if (node.type == NodeType::NUM) {
 		printf("%d", node.num);
 		return;
 	} else if (node.type == NodeType::ID) {
-		printf("%s", str_pool_find(pool, node.str_id));
+		printf("%s", pool.find(node.str_id));
 		return;
 	} else if (node.type == NodeType::STR) {
 		printf("\"");
-		for (char* it = (char*)str_pool_find(pool, node.str_id); *it != '\0';
-		     it++) {
+		for (char* it = (char*)pool.find(node.str_id); *it != '\0'; it++) {
 			if (*it == '\n')
 				printf("\\n");
 			else
@@ -167,7 +166,7 @@ static void print_spaces(FILE* fd, unsigned int count) {
 }
 
 static void ast_node_print_detailed(
-	AST* ast, STR_POOL pool, NodeIndex node_idx, unsigned int space
+	AST* ast, const StringPool& pool, NodeIndex node_idx, unsigned int space
 ) {
 	const auto fd = stderr;
 	const auto& node = ast->at(node_idx);
@@ -186,12 +185,11 @@ static void ast_node_print_detailed(
 		fprintf(fd, "num = %d\n", node.num);
 	} else if (node.type == NodeType::ID) {
 		print_spaces(fd, space + 2);
-		fprintf(fd, "id = %s\n", str_pool_find(pool, node.str_id));
+		fprintf(fd, "id = %s\n", pool.find(node.str_id));
 	} else if (node.type == NodeType::STR) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "str = \"");
-		for (char* it = (char*)str_pool_find(pool, node.str_id); *it != '\0';
-		     it++) {
+		for (char* it = (char*)pool.find(node.str_id); *it != '\0'; it++) {
 			if (*it == '\n')
 				fprintf(fd, "\\n");
 			else
@@ -218,11 +216,11 @@ static void ast_node_print_detailed(
 	fprintf(fd, "}\n");
 }
 
-void ast_print(AST* ast, STR_POOL pool) {
+void ast_print(AST* ast, const StringPool& pool) {
 	ast_node_print(ast, pool, ast->root_index, 0);
 }
 
-void ast_print_detailed(AST* ast, STR_POOL pool) {
+void ast_print_detailed(AST* ast, const StringPool& pool) {
 	ast_node_print_detailed(ast, pool, ast->root_index, 0);
 }
 
@@ -271,13 +269,13 @@ NodeIndex new_list_node(AST* ast) {
 }
 
 NodeIndex new_string_node(
-	AST* ast, NodeType type, Location loc, STR_POOL pool, String str
+	AST* ast, NodeType type, Location loc, StringPool& pool, String str
 ) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
 	node.loc = loc;
-	node.str_id = str_pool_intern(pool, str);
+	node.str_id = pool.intern(str);
 	node.type = type;
 
 	return idx;

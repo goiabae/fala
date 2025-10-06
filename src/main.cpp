@@ -42,7 +42,7 @@ static AST parse(File& file, StringPool& pool) {
 	Lexer lexer(file);
 	AST ast {};
 	ast.file_name = lexer.file->get_name();
-	yy::parser parser {&lexer, &ast, &pool};
+	yy::parser parser {&lexer, &ast, pool};
 	if (parser.parse()) exit(1); // FIXME propagate error up
 	ast.lines = lexer.get_lines();
 	return ast;
@@ -153,15 +153,15 @@ int interpret(Options opts) {
 		AST ast = parse(fd, pool);
 
 		if (opts.verbose) {
-			ast_print(&ast, &pool);
+			ast_print(&ast, pool);
 			printf("\n");
 		}
 
-		Typechecker checker {ast, pool};
+		Typechecker checker {ast, pool, fd};
 		checker.typecheck();
 
 		if (opts.use_walk_interpreter) {
-			walk::Interpreter inter {&pool};
+			walk::Interpreter inter {pool};
 			auto val = inter.eval(ast);
 			if (opts.from_stdin) {
 				print_value(val);
@@ -191,7 +191,7 @@ int compile(Options opts) {
 	AST ast = parse(input, pool);
 
 	if (opts.verbose) {
-		ast_print(&ast, &pool);
+		ast_print(&ast, pool);
 		printf("\n");
 	}
 

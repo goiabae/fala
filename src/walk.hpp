@@ -71,9 +71,9 @@ struct Value {
 };
 
 struct Interpreter {
-	Interpreter(STR_POOL _pool);
+	Interpreter(StringPool& _pool);
 
-	STR_POOL pool;
+	StringPool& pool;
 	Env<Value> env;
 
 	bool in_loop;
