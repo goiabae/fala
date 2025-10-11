@@ -545,8 +545,9 @@ Result Compiler::compile_str(
 			Operand((Number)str[i])
 		);
 
+	chunk.result_opnd = buf;
+
 	return {chunk, buf};
-	// return Operand(pool.find(node.str_id));
 }
 
 Result Compiler::compile_at(
@@ -582,7 +583,12 @@ Result Compiler::compile(
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
-		case NodeType::NUM: return {{}, Operand(node.num)};
+		case NodeType::NUM: {
+			Chunk chunk {};
+			auto opnd = Operand(node.num);
+			chunk.result_opnd = opnd;
+			return {chunk, opnd};
+		}
 		case NodeType::BLK: {
 			Chunk chunk {};
 			auto new_scope_id = env.create_child_scope(scope_id);
@@ -645,6 +651,7 @@ Result Compiler::compile(
 		Operand res = make_register();                            \
                                                               \
 		chunk.emit(OPCODE, res, left, right);                     \
+		chunk.result_opnd = res;                                  \
 		return {chunk, res};                                      \
 	}
 
@@ -686,7 +693,12 @@ Result Compiler::compile(
 		case NodeType::FALSE: return {{}, {0}};
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
 		case NodeType::EMPTY: assert(false && "unreachable");
-		case NodeType::CHAR: return {{}, {node.character}};
+		case NodeType::CHAR: {
+			Chunk chunk {};
+			auto opnd = Operand {node.character};
+			chunk.result_opnd = opnd;
+			return {chunk, opnd};
+		}
 		case NodeType::PATH: return compile(node[0], handlers, scope_id);
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");

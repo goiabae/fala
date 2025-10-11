@@ -201,6 +201,8 @@ Chunk operator+(Chunk x, Chunk y) {
 	for (auto p : y.label_indexes)
 		res.label_indexes[p.first] = p.second + x.m_vec.size();
 
+	res.result_opnd = y.result_opnd;
+
 	return res;
 }
 

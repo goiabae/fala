@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -122,6 +123,8 @@ struct Chunk {
 
 	std::vector<Instruction> m_vec;
 	std::map<size_t, size_t> label_indexes;
+
+	std::optional<Operand> result_opnd;
 };
 
 // return amount of operands of each opcode
