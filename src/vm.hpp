@@ -7,7 +7,7 @@
 
 namespace vm {
 
-void run(const lir::Chunk&);
+void run(const lir::Chunk&, bool should_print_result);
 
 }
 

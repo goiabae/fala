@@ -4,7 +4,9 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <stack>
+#include <stdexcept>
 
 #include "lir.hpp"
 
@@ -22,7 +24,7 @@ void err(const char* msg) {
 
 #define INDIRECT_LOAD(BASE, OFF) cells[(size_t)(fetch(BASE) + fetch(OFF))]
 
-void run(const lir::Chunk& code) {
+void run(const lir::Chunk& code, bool should_print_result) {
 	array<int64_t, 2048> cells {};
 
 	std::stack<int64_t> stack {};
@@ -165,6 +167,23 @@ void run(const lir::Chunk& code) {
 		pc++;
 	dont_inc:
 		(void)0;
+	}
+
+	if (should_print_result and code.result_opnd.has_value()) {
+		if (auto result = code.result_opnd.value(); code.result_opnd.has_value()) {
+			if (result.type == Operand::Type::NUM) {
+				std::cout << "==> " << fetch(result) << '\n';
+			} else if (auto reg = result.as_register();
+			           result.type == Operand::Type::REG) {
+				if (reg.has_num()) {
+					std::cout << "==> " << fetch(result) << '\n';
+				} else if (reg.has_addr()) {
+					std::cout << "==> 0d" << cells[reg.index] << '\n';
+				}
+			} else {
+				std::cout << "VM ERROR: Couldn't print value" << '\n';
+			}
+		}
 	}
 }
 
