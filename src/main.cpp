@@ -64,6 +64,7 @@ int interpret(Options opts) {
 
 	while (!fd.at_eof()) {
 		AST ast = parse(fd, pool);
+		if (ast.is_empty()) break;
 
 		if (opts.verbose) {
 			ast_print(&ast, pool);
@@ -102,6 +103,7 @@ int compile(Options opts) {
 
 	StringPool pool;
 	AST ast = parse(input, pool);
+	if (ast.is_empty()) return 1;
 
 	if (opts.verbose) {
 		ast_print(&ast, pool);

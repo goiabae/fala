@@ -127,6 +127,7 @@ struct AST {
 	const Node& at(NodeIndex) const;
 	Node& at(NodeIndex);
 	NodeIndex alloc_node();
+	bool is_empty();
 
  private:
 	NodeIndex next_free_index {0};

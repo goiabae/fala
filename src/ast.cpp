@@ -11,6 +11,8 @@
 
 using std::vector;
 
+bool AST::is_empty() { return root_index.index == -1; }
+
 const char* node_type_repr(enum NodeType type) {
 	switch (type) {
 		case NodeType::EMPTY: return "NodeType::EMPTY";
@@ -410,7 +412,9 @@ NodeIndex& Node::operator[](size_t index) const {
 
 void ast_set_root(AST* ast, NodeIndex node_idx) { ast->root_index = node_idx; }
 
-AST::~AST() { node_deinit(this, root_index); }
+AST::~AST() {
+	if (not is_empty()) node_deinit(this, root_index);
+}
 
 bool operator<(NodeIndex a, NodeIndex b) { return a.index < b.index; }
 
