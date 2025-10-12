@@ -43,7 +43,12 @@ interpret() {
 	else
 		touch $tmp/$test.in
 	fi
-	timeout 10s $inter $file < $tmp/$test.in > $tmp/$test.actual
+	test "INTERPRETED ${test}"
+	timeout 10s $inter -i $file < $tmp/$test.in > $tmp/$test.actual
+	compare $test
+	test "INTERPRETED(walk) ${test}"
+	timeout 10s $inter -i -w $file < $tmp/$test.in > $tmp/$test.actual
+	compare $test
 }
 
 compare() {
@@ -63,9 +68,7 @@ compare() {
 if [ $# -gt 0 ]; then
 	f="$1"
 
-	test "INTERPRETED ${f}"
-	interpret $f "$FALA -i" ./examples/$f.fala
-	compare $f
+	interpret $f "$FALA" ./examples/$f.fala
 
 	test "COMPILED ${f}"
 	$FALA -c -o $tmp/$f.rap ./examples/$f.fala
