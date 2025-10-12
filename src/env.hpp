@@ -2,6 +2,7 @@
 #define FALA_ENV_HPP
 
 #include <cassert>
+#include <iostream>
 #include <map>
 #include <vector>
 
@@ -31,7 +32,7 @@ struct Env {
 
 	ScopeID create_child_scope(ScopeID parent_id) {
 		ScopeID child_id {scope_count++};
-		parent_scope[child_id] = parent_id;
+		parent_scope_vec.push_back(parent_id);
 		return child_id;
 	}
 
@@ -45,21 +46,22 @@ struct Env {
 	vector<StrID> name;
 
 	std::map<NodeIndex, ScopeID> node_to_scope; // This shouldn't be here
-	std::map<ScopeID, ScopeID> parent_scope;
 	std::map<ScopeID, Id> scope_last_entry;
+	std::vector<ScopeID> parent_scope_vec;
 
 	// lastly added index so far
 	Id last_entry_;
 	int scope_count = 1; // initial root scope counts
 
 	Id find_last_entry(ScopeID scope_id) {
-		auto has_parent = parent_scope.contains(scope_id);
+		auto has_parent =
+			scope_id.idx > 0 and parent_scope_vec.size() >= scope_id.idx;
 		auto scope_not_empty = scope_last_entry.contains(scope_id);
 
 		if (scope_not_empty) {
 			return scope_last_entry[scope_id];
 		} else if (has_parent) {
-			auto parent_id = parent_scope[scope_id];
+			auto parent_id = parent_scope_vec[scope_id.idx - 1];
 			return find_last_entry(parent_id);
 		} else {
 			return {-1};
