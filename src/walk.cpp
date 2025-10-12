@@ -6,13 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <iostream>
+#include <memory>
+#include <variant>
+
 #include "ast.hpp"
 #include "str_pool.h"
 
 namespace walk {
 
-Value inter_eval_node(
-	Interpreter* inter, AST& ast, NodeIndex node_idx, Env<Value>::ScopeID scope_id
+ValueCell inter_eval_node(
+	Interpreter* inter, AST& ast, NodeIndex node_idx,
+	Env<ValueCell>::ScopeID scope_id
 );
 
 static void err(const char* msg) {
@@ -32,13 +37,14 @@ static void err2(Location loc, const char* msg) {
 	exit(1);
 }
 
-Value Interpreter::eval(AST& ast) {
+ValueCell Interpreter::eval(AST& ast) {
 	return inter_eval_node(this, ast, ast.root_index, env.root_scope_id);
 }
 
 // term term+
-Value eval_app(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_app(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
 	auto func_idx = node[0];
 	auto args_idx = node[1];
@@ -49,44 +55,50 @@ Value eval_app(
 	if (func_node.type != NodeType::ID)
 		err("Unnamed functions are not implemented");
 
-	Value* func_ptr = inter->env.find(scope_id, func_node.str_id);
-	if (!func_ptr) err("Function with name <name> not found");
+	ValueCell* maybe_func_ptr = inter->env.find(scope_id, func_node.str_id);
+	if (!maybe_func_ptr) {
+		auto msg = "Function with name "
+		         + std::string(inter->pool.find(func_node.str_id)) + " not found";
+		err(msg.c_str());
+	}
 
-	Function func = func_ptr->func;
-	if (func.param_count != args_node.branch.children_count
-	    && func.param_count != 0)
-		err("Wrong number of arguments");
+	ValueCell func_ptr = *maybe_func_ptr;
 
-	size_t argc = args_node.branch.children_count;
-	Value* args = new Value[argc];
-	for (size_t i = 0; i < argc; i++)
-		args[i] = inter_eval_node(inter, ast, args_node[i], scope_id)
-		            .to_rvalue(); // call-by-value
+	std::vector<ValueCell> args {};
+	for (auto arg_idx : args_node) {
+		auto arg = inter_eval_node(inter, ast, arg_idx, scope_id);
+		assert(arg != nullptr);
+		args.push_back(arg);
+	}
 
-	if (func.is_builtin) {
-		Value val = func.builtin(argc, args);
-		delete[] args;
+	if (std::holds_alternative<BuiltinFunction>(*func_ptr)) {
+		auto builtin = std::get<BuiltinFunction>(*func_ptr);
+		if (builtin.param_count != args.size()) err("Wrong number of arguments");
+		auto val = builtin.builtin(args);
 		return val;
+	} else if (std::holds_alternative<CustomFunction>(*func_ptr)) {
+		auto custom = std::get<CustomFunction>(*func_ptr);
+		auto new_scope = inter->env.create_child_scope(scope_id);
+
+		for (size_t i = 0; i < args.size(); i++) {
+			const auto& param_node = ast.at(custom.param_idxs[i]);
+			assert(param_node.type == NodeType::ID);
+			auto cell = inter->env.insert(new_scope, param_node.str_id, args[i]);
+			assert(cell != nullptr);
+		}
+
+		auto val = inter_eval_node(inter, ast, custom.body_idx, new_scope);
+		return val;
+	} else {
+		assert(false);
 	}
-
-	auto new_scope = inter->env.create_child_scope(scope_id);
-
-	// set all parameters to the corresponding arguments
-	for (size_t i = 0; i < argc; i++) {
-		const auto& param = ast.at(func.custom.params[i]);
-		*inter->env.insert(new_scope, param.str_id) = args[i];
-	}
-
-	Value val = inter_eval_node(inter, ast, func.custom.root, new_scope);
-
-	delete[] args;
-	return val;
 }
 
-Value eval_block(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_block(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
-	Value res;
+	ValueCell res {nullptr};
 	auto scope = inter->env.create_child_scope(scope_id);
 	for (size_t i = 0; i < node.branch.children_count; i++)
 		res = inter_eval_node(inter, ast, node[i], scope);
@@ -94,26 +106,31 @@ Value eval_block(
 }
 
 // if exp then exp else exp
-Value eval_if(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_if(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
-	Value cond = inter_eval_node(inter, ast, node[0], scope_id);
-	return (cond) ? inter_eval_node(inter, ast, node[1], scope_id)
-	              : inter_eval_node(inter, ast, node[2], scope_id);
+	ValueCell cond = inter_eval_node(inter, ast, node[0], scope_id);
+	auto boolean = std::get<bool>(*cond);
+	return (boolean) ? inter_eval_node(inter, ast, node[1], scope_id)
+	                 : inter_eval_node(inter, ast, node[2], scope_id);
 }
 
 // when exp then exp
-Value eval_when(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_when(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
-	Value cond = inter_eval_node(inter, ast, node[0], scope_id);
-	if (cond) inter_eval_node(inter, ast, node[1], scope_id);
+	ValueCell cond = inter_eval_node(inter, ast, node[0], scope_id);
+	auto boolean = std::get<bool>(*cond);
+	if (boolean) inter_eval_node(inter, ast, node[1], scope_id);
 	return {};
 }
 
 // "for" decl "from" exp "to" exp ("step" exp)? "then" exp
-Value eval_for(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_for(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
 	auto decl_idx = node[0];
 	auto to_idx = node[1];
@@ -124,42 +141,47 @@ Value eval_for(
 
 	bool with_step = step_node.type != NodeType::EMPTY;
 
-	Value decl = inter_eval_node(inter, ast, decl_idx, scope_id);
-	Value to = inter_eval_node(inter, ast, to_idx, scope_id).to_rvalue();
-	Value inc =
-		((with_step) ? inter_eval_node(inter, ast, step_idx, scope_id) : Value(1))
-			.to_rvalue();
+	auto new_scope_id = inter->env.create_child_scope(scope_id);
 
-	if (to.type != Value::Type::NUM) err("Type of `to' value is not number");
-	if (inc.type != Value::Type::NUM) err("Type of `inc' value is not number");
+	auto decl = inter_eval_node(inter, ast, decl_idx, new_scope_id);
+	auto to = inter_eval_node(inter, ast, to_idx, new_scope_id);
+	auto inc = with_step ? inter_eval_node(inter, ast, step_idx, new_scope_id)
+	                     : std::make_shared<Value>(Value {1});
 
-	auto scope = inter->env.create_child_scope(scope_id);
+	if (not std::holds_alternative<int>(*to))
+		err("Type of `to' value is not number");
 
-	Value* var = decl.var;
+	if (not std::holds_alternative<int>(*inc))
+		err("Type of `inc' value is not number");
+
+	auto inner_scope_id = inter->env.create_child_scope(new_scope_id);
 
 	inter->in_loop = true;
-	Value res;
-	for (Number i = var->num; i != to.num; i += inc.num) {
-		*var = Value(i);
-		res = inter_eval_node(inter, ast, then_idx, scope);
+	for (int i = std::get<int>(*decl); i != std::get<int>(*to);
+	     i += std::get<int>(*inc)) {
+		*decl = Value {i};
+		inter_eval_node(inter, ast, then_idx, inner_scope_id);
 		if (inter->should_break) break;
 		if (inter->should_continue) continue;
 	}
 	inter->in_loop = false;
 
-	return res;
+	return std::make_shared<Value>(Nil {});
 }
 
 // "while" exp "then" exp
-Value eval_while(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_while(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
 	auto cond_idx = node[0];
 	auto then_idx = node[1];
 
 	inter->in_loop = true;
-	Value res;
-	while (inter_eval_node(inter, ast, cond_idx, scope_id)) {
+	ValueCell res {};
+	ValueCell cond {};
+	while ((cond = inter_eval_node(inter, ast, cond_idx, scope_id))
+	       and std::get<bool>(*cond)) {
 		res = inter_eval_node(inter, ast, then_idx, scope_id);
 		if (inter->should_break) break;
 		if (inter->should_continue) continue;
@@ -170,113 +192,75 @@ Value eval_while(
 }
 
 // id ([idx])? = exp
-Value eval_ass(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_ass(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
 	auto path_idx = node[0];
 	auto exp_idx = node[1];
 
-	Value lvalue = inter_eval_node(inter, ast, path_idx, scope_id);
-	if (lvalue.type != Value::Type::VAR) err("Can only assign to variable");
+	auto lvalue = inter_eval_node(inter, ast, path_idx, scope_id);
+	auto right = inter_eval_node(inter, ast, exp_idx, scope_id);
 
-	Value right = inter_eval_node(inter, ast, exp_idx, scope_id).to_rvalue();
-	return *(lvalue.var) = right;
+	*lvalue = *right;
+	return right;
 }
 
-Value eval_var_decl(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_var_decl(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
+	assert(node.branch.children_count == 3);
+
 	auto id_idx = node[0];
+	[[maybe_unused]] auto opt_type_idx = node[1];
+	auto exp_idx = node[2];
+
 	const auto& id_node = ast.at(id_idx);
 
-	Value* cell = inter->env.insert(scope_id, id_node.str_id);
+	auto value = inter_eval_node(inter, ast, exp_idx, scope_id);
+	auto cell = inter->env.insert(scope_id, id_node.str_id, value);
 	if (!cell) err2(node.loc, "Could not initialize variable");
-
-	// "fun" id params opt-type "=" body
-	if (node.branch.children_count == 4) {
-		auto body_idx = node[3];
-
-		const auto& params_node = ast.at(node[1]);
-		const auto& opt_type_node = ast.at(node[2]);
-
-		(void)opt_type_node;
-
-		for (size_t i = 0; i < params_node.branch.children_count; i++) {
-			const auto& param = ast.at(params_node[i]);
-			if (param.type != NodeType::ID)
-				err("Function parameter must be a valid identifier");
-			auto value = Value(Function(
-				body_idx, params_node.branch.children, params_node.branch.children_count
-			));
-			return *cell = value;
-		}
-	}
-
-	// "var" id opt-type "=" exp
-	if (node.branch.children_count == 3) {
-		auto opt_type_idx = node[1];
-		auto exp_idx = node[2];
-
-		(void)opt_type_idx;
-
-		Value res(cell);
-		*cell = inter_eval_node(inter, ast, exp_idx, scope_id).to_rvalue();
-		return res;
-	}
-
-	assert(false);
+	return value;
 }
 
-Value eval_fun_decl(
-	Interpreter* inter, AST& ast, const Node& node, Env<Value>::ScopeID scope_id
+ValueCell eval_fun_decl(
+	Interpreter* inter, AST& ast, const Node& node,
+	Env<ValueCell>::ScopeID scope_id
 ) {
-	auto id_idx = node[0];
-	const auto& id_node = ast.at(id_idx);
+	assert(node.branch.children_count == 4);
 
-	Value* cell = inter->env.insert(scope_id, id_node.str_id);
+	auto id_idx = node[0];
+	auto params_idx = node[1];
+	auto opt_type_idx = node[2];
+	auto body_idx = node[3];
+
+	const auto& id_node = ast.at(id_idx);
+	const auto& params_node = ast.at(params_idx);
+
+	auto cell = inter->env.insert(scope_id, id_node.str_id);
 	if (!cell) err2(node.loc, "Could not initialize variable");
 
-	// "fun" id params opt-type "=" body
-	if (node.branch.children_count == 4) {
-		auto body_idx = node[3];
-
-		const auto& params_node = ast.at(node[1]);
-		const auto& opt_type_node = ast.at(node[2]);
-
-		(void)opt_type_node;
-
-		for (size_t i = 0; i < params_node.branch.children_count; i++) {
-			const auto& param = ast.at(params_node[i]);
-			if (param.type != NodeType::ID)
-				err("Function parameter must be a valid identifier");
-			auto value = Value(Function(
-				body_idx, params_node.branch.children, params_node.branch.children_count
-			));
-			return *cell = value;
-		}
+	std::vector<NodeIndex> param_idxs {};
+	for (auto param_idx : params_node) {
+		const auto& param_node = ast.at(param_idx);
+		if (param_node.type != NodeType::ID)
+			err("Function parameter must be a valid identifier");
+		param_idxs.push_back(param_idx);
 	}
 
-	// "var" id opt-type "=" exp
-	if (node.branch.children_count == 3) {
-		auto opt_type_idx = node[1];
-		auto exp_idx = node[2];
-
-		(void)opt_type_idx;
-
-		Value res(cell);
-		*cell = inter_eval_node(inter, ast, exp_idx, scope_id).to_rvalue();
-		return res;
-	}
-
-	assert(false);
+	auto value = std::make_shared<Value>(CustomFunction {param_idxs, body_idx});
+	*cell = value;
+	return *cell;
 }
 
-Value inter_eval_node(
-	Interpreter* inter, AST& ast, NodeIndex node_idx, Env<Value>::ScopeID scope_id
+ValueCell inter_eval_node(
+	Interpreter* inter, AST& ast, NodeIndex node_idx,
+	Env<ValueCell>::ScopeID scope_id
 ) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case NodeType::NUM: return Value(node.num);
+		case NodeType::NUM: return std::make_shared<Value>(Value(node.num));
 		case NodeType::APP: return eval_app(inter, ast, node, scope_id);
 		case NodeType::BLK: return eval_block(inter, ast, node, scope_id);
 		case NodeType::IF: return eval_if(inter, ast, node, scope_id);
@@ -295,28 +279,35 @@ Value inter_eval_node(
 		}
 		case NodeType::ASS: return eval_ass(inter, ast, node, scope_id);
 		case NodeType::OR: {
-			Value left = inter_eval_node(inter, ast, node[0], scope_id);
-			if (left) return Value(true);
+			auto left = inter_eval_node(inter, ast, node[0], scope_id);
+			if (std::get<bool>(*left)) return left;
 
-			Value right = inter_eval_node(inter, ast, node[1], scope_id);
-			return (right) ? Value(true) : Value();
+			auto right = inter_eval_node(inter, ast, node[1], scope_id);
+			return right;
 		}
 		case NodeType::AND: {
-			Value left = inter_eval_node(inter, ast, node[0], scope_id);
-			if (!left) return Value();
+			auto left = inter_eval_node(inter, ast, node[0], scope_id);
+			if (not std::get<bool>(*left)) return left;
 
-			Value right = inter_eval_node(inter, ast, node[1], scope_id);
-			return (right) ? Value(true) : Value();
+			auto right = inter_eval_node(inter, ast, node[1], scope_id);
+			return right;
 		}
-#define ARITH_OP(OP)                                                          \
-	{                                                                           \
-		Value left = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();  \
-		Value right = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue(); \
-		if (left.type != Value::Type::NUM)                                        \
-			err("Left-hand side of arithmentic operator is not a number");          \
-		if (right.type != Value::Type::NUM)                                       \
-			err("Right-hand side of arithmentic operator is not a number");         \
-		return Value(left.num OP right.num);                                      \
+#define ARITH_OP(OP)                                                   \
+	{                                                                    \
+		auto left = inter_eval_node(inter, ast, node[0], scope_id);        \
+		auto right = inter_eval_node(inter, ast, node[1], scope_id);       \
+		if (left == nullptr) {                                             \
+			err("Left side was null while performing operation " #OP "\n");  \
+		}                                                                  \
+		if (right == nullptr) {                                            \
+			err("Right side was null while performing operation " #OP "\n"); \
+		}                                                                  \
+		if (not std::holds_alternative<int>(*left))                        \
+			err("Left-hand side of arithmentic operator is not a number");   \
+		if (not std::holds_alternative<int>(*right))                       \
+			err("Right-hand side of arithmentic operator is not a number");  \
+		return std::make_shared<Value>(Value(std::get<int>(*left)          \
+		                                       OP std::get<int>(*right))); \
 	}
 		case NodeType::ADD: ARITH_OP(+);
 		case NodeType::SUB: ARITH_OP(-);
@@ -326,13 +317,16 @@ Value inter_eval_node(
 #undef ARITH_OP
 #define CMP_OP(OP)                                                             \
 	{                                                                            \
-		Value left = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();   \
-		Value right = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue();  \
-		if (left.type != Value::Type::NUM || right.type != Value::Type::NUM) {     \
+		auto left = inter_eval_node(inter, ast, node[0], scope_id);                \
+		auto right = inter_eval_node(inter, ast, node[1], scope_id);               \
+		if (not std::holds_alternative<int>(*left)                                 \
+		    || not std::holds_alternative<int>(*right)) {                          \
 			err2(node.loc, "Arithmetic comparison is allowed only between numbers"); \
 		}                                                                          \
                                                                                \
-		return (left.num OP right.num) ? Value(true) : Value();                    \
+		return (std::get<int>(*left) OP std::get<int>(*right))                     \
+		       ? std::make_shared<Value>(true)                                     \
+		       : std::make_shared<Value>(false);                                   \
 	}
 		case NodeType::GTN: CMP_OP(>);
 		case NodeType::LTN: CMP_OP(<);
@@ -340,48 +334,64 @@ Value inter_eval_node(
 		case NodeType::LTE: CMP_OP(<=);
 #undef CMP_OP
 		case NodeType::EQ: { // exp == exp
-			Value left = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();
-			Value right = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue();
+			auto left = inter_eval_node(inter, ast, node[0], scope_id);
+			auto right = inter_eval_node(inter, ast, node[1], scope_id);
 
-			if (left.type == Value::Type::NIL && right.type == Value::Type::NIL)
-				return Value(true);
+			if (std::holds_alternative<Nil>(*left)
+			    and std::holds_alternative<Nil>(*right))
+				return std::make_shared<Value>(true);
 
-			if (left.type == Value::Type::TRUE && right.type == Value::Type::TRUE)
-				return Value(true);
+			if (std::holds_alternative<bool>(*left)
+			    and std::holds_alternative<bool>(*right))
+				return std::make_shared<Value>(
+					std::get<bool>(*left) == std::get<bool>(*right)
+				);
 
-			if (left.type == Value::Type::NUM && right.type == Value::Type::NUM)
-				return (left.num == right.num) ? Value(true) : Value();
+			if (std::holds_alternative<int>(*left)
+			    and std::holds_alternative<int>(*right))
+				return std::make_shared<Value>(
+					std::get<int>(*left) == std::get<int>(*right)
+				);
 
+			err("Can't compare values");
 			return {};
 		}
 		case NodeType::NOT: { // not exp
-			Value val = inter_eval_node(inter, ast, node[0], scope_id);
-			return (val) ? Value() : Value(true);
+			auto val = inter_eval_node(inter, ast, node[0], scope_id);
+			return std::make_shared<Value>(not std::get<bool>(*val));
 		}
 		case NodeType::AT: {
-			Value base = inter_eval_node(inter, ast, node[0], scope_id).to_rvalue();
-			if (base.type != Value::Type::ARR) err("Can only index arrays");
-			Value off = inter_eval_node(inter, ast, node[1], scope_id).to_rvalue();
-			if (off.type != Value::Type::NUM) err("Index must be a number");
-			Value res(&base.arr.data[off.num]);
-			return res;
+			auto base = inter_eval_node(inter, ast, node[0], scope_id);
+			if (not std::holds_alternative<Array>(*base))
+				err("Can only index arrays");
+
+			auto off = inter_eval_node(inter, ast, node[1], scope_id);
+			if (not std::holds_alternative<int>(*off)) err("Index must be a number");
+
+			assert((size_t)std::get<int>(*off) < std::get<Array>(*base).size);
+
+			return std::get<Array>(*base).items[(size_t)std::get<int>(*off)];
 		}
 		case NodeType::ID: {
-			Value* addr = inter->env.find(scope_id, node.str_id);
-			if (!addr) err2(node.loc, "Variable not previously declared.");
-
-			Value res(addr);
-			return res;
+			auto var = inter->env.find(scope_id, node.str_id);
+			if (!var) err2(node.loc, "Variable not previously declared.");
+			if ((*var) == nullptr) {
+				std::cerr << "\"" << std::string(inter->pool.find(node.str_id)) << "\""
+									<< '\n';
+				err2(node.loc, "Value cell was null");
+			}
+			return *var;
 		}
 		case NodeType::STR: {
 			const char* str = inter->pool.find(node.str_id);
-			return Value(strdup(str));
+			if (str == nullptr) err("Unknown string");
+			return std::make_shared<Value>(std::string(str));
 		}
 		case NodeType::VAR_DECL: return eval_var_decl(inter, ast, node, scope_id);
 		case NodeType::FUN_DECL: return eval_fun_decl(inter, ast, node, scope_id);
-		case NodeType::NIL: return {};
-		case NodeType::TRUE: return Value(true);
-		case NodeType::FALSE: return Value(false);
+		case NodeType::NIL: return std::make_shared<Value>(Nil {});
+		case NodeType::TRUE: return std::make_shared<Value>(true);
+		case NodeType::FALSE: return std::make_shared<Value>(false);
 		case NodeType::LET: {
 			auto decls_idx = node[0];
 			auto exp_idx = node[1];
@@ -392,11 +402,11 @@ Value inter_eval_node(
 			for (size_t i = 0; i < decls.branch.children_count; i++)
 				inter_eval_node(inter, ast, decls[i], new_scope);
 
-			Value res = inter_eval_node(inter, ast, exp_idx, new_scope);
+			auto res = inter_eval_node(inter, ast, exp_idx, new_scope);
 			return res;
 		}
 		case NodeType::EMPTY: assert(false && "unreachable");
-		case NodeType::CHAR: return Value(node.character);
+		case NodeType::CHAR: return std::make_shared<Value>((int)node.character);
 		case NodeType::PATH: return inter_eval_node(inter, ast, node[0], scope_id);
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");
@@ -405,44 +415,29 @@ Value inter_eval_node(
 	assert(false);
 }
 
-void print_value(Value val) {
-	switch (val.type) {
-		case Value::Type::NUM: printf("%d", val.num); break;
-		case Value::Type::STR: printf("%s", val.str); break;
-		case Value::Type::TRUE: printf("1"); break;
-		case Value::Type::NIL: printf("0"); break;
-		case Value::Type::FUN: err("Can't print function"); break;
-		case Value::Type::ARR: err("Can't print array"); break;
-		case Value::Type::VAR: print_value(*(val.var)); break;
+void print_value(ValueCell val) {
+	if (std::holds_alternative<int>(*val)) {
+		printf("%d", std::get<int>(*val));
+	} else if (std::holds_alternative<std::string>(*val)) {
+		printf("%s", std::get<std::string>(*val).c_str());
+	} else if (std::holds_alternative<bool>(*val)) {
+		if (std::get<bool>(*val))
+			printf("1");
+		else
+			printf("0");
+	} else {
+		err("Can't print value");
 	}
 }
 
-std::ostream& operator<<(std::ostream& st, Value& val) {
-	switch (val.type) {
-		case Value::Type::NUM: return st << val.num;
-		case Value::Type::STR: return st << val.str;
-		case Value::Type::TRUE: return st << 1;
-		case Value::Type::NIL: return st << 0;
-		case Value::Type::ARR: assert(false);
-		case Value::Type::FUN: assert(false);
-		case Value::Type::VAR: return st << *(val.var);
-	}
-	assert(false);
-}
+std::ostream& operator<<(std::ostream& st, ValueCell& val) { print_value(val); }
 
-void Value::deinit() {
-	if (type == Value::Type::STR)
-		free(str);
-	else if (type == Value::Type::ARR)
-		free(arr.data);
-}
-
-static Value builtin_read(size_t _1, Value* _2) {
-	(void)_1, (void)_2;
+ValueCell builtin_read(std::vector<ValueCell>) {
 	char* buf = (char*)malloc(sizeof(char) * 100);
 	if (!buf) err("Could not allocate input buffer for `read' built-in");
 	if (fgets(buf, 100, stdin) == NULL) {
 		free(buf);
+		assert(false);
 		return {};
 	}
 	const size_t len = strlen(buf);
@@ -452,48 +447,50 @@ static Value builtin_read(size_t _1, Value* _2) {
 	Number num = 0;
 	if (sscanf(buf, "%d", &num) != 0) {
 		free(buf);
-		return Value(num);
+		return std::make_shared<Value>(num);
 	}
 
 	// otherwise return as string
-	return Value(buf);
+	return std::make_shared<Value>(std::string(buf));
 }
 
-static Value builtin_write(size_t len, Value* args) {
-	for (size_t i = 0; i < len; i++) print_value(args[i]);
-	return {};
+ValueCell builtin_write(std::vector<ValueCell> args) {
+	for (size_t i = 0; i < args.size(); i++) print_value(args[i]);
+	return std::make_shared<Value>(Nil {});
 }
 
-static Value builtin_array(size_t argc, Value* args) {
-	if (argc != 1) err("Expected a single numeric argument");
-	Number arr_len = args[0].num;
+ValueCell builtin_array(std::vector<ValueCell> args) {
+	if (args.size() != 1) err("Expected a single numeric argument");
+	Number arr_len = std::get<int>(*args[0]);
 	if (arr_len < 0) err("Array length must be positive");
-	Value val;
-	val.type = Value::Type::ARR;
-	val.arr.data = (Value*)malloc(sizeof(Value) * (size_t)arr_len);
-	if (!val.arr.data) err("Dynamic memory allocation error");
-	val.arr.len = (size_t)arr_len;
+	ValueCell val = std::make_shared<Value>(Array {});
+	std::get<Array>(*val).items.reserve((size_t)arr_len);
+	for (auto i = 0ul; i < (size_t)arr_len; i++) {
+		std::get<Array>(*val).items[i] = std::make_shared<Value>((int)0);
+	}
+	std::get<Array>(*val).size = (size_t)arr_len;
 	return val;
 }
 
-static Value builtin_exit(size_t argc, Value* args) {
-	if (argc != 1) err("exit takes exit code as a argument");
-	Number exit_code = args[0].num;
+ValueCell builtin_exit(std::vector<ValueCell> args) {
+	if (args.size() != 1) err("exit takes exit code as a argument");
+	Number exit_code = std::get<int>(*args[0]);
 	exit(exit_code);
 	return {};
 }
 
-// if COUNT is 0 the function takes a variable amount of arguments
-#define PUSH_BUILTIN(STR, FUNC, COUNT) \
-	*env.insert(scope_id, pool.intern(strdup(STR))) = Value(Function(FUNC, COUNT))
+#define PUSH_BUILTIN(STR, FUNC, COUNT)              \
+	*env.insert(scope_id, pool.intern(strdup(STR))) = \
+		std::make_shared<Value>(BuiltinFunction(COUNT, FUNC))
 
 Interpreter::Interpreter(StringPool& _pool)
 : pool(_pool), in_loop(false), should_break(false), should_continue(false) {
 	// arbitrary choice
 	auto scope_id = env.root_scope_id;
-	PUSH_BUILTIN("read", builtin_read, 1);
-	PUSH_BUILTIN("write", builtin_write, 0);
-	PUSH_BUILTIN("array", builtin_array, 1);
+	PUSH_BUILTIN("read_int", builtin_read, 1);
+	PUSH_BUILTIN("write_int", builtin_write, 1);
+	PUSH_BUILTIN("write_str", builtin_write, 1);
+	PUSH_BUILTIN("make_array", builtin_array, 1);
 	PUSH_BUILTIN("exit", builtin_exit, 1);
 }
 
