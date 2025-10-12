@@ -191,6 +191,26 @@ ValueCell eval_while(
 	return res;
 }
 
+ValueCell copy_value(ValueCell value) {
+	if (std::holds_alternative<int>(*value)) {
+		return std::make_shared<Value>(std::get<int>(*value));
+	} else if (std::holds_alternative<Array>(*value)) {
+		auto result = std::make_shared<Value>(Array {});
+		auto size = std::get<Array>(*value).size;
+		std::get<Array>(*result).size = size;
+		std::get<Array>(*result).items.reserve(size);
+		const auto& items = std::get<Array>(*value).items;
+		for (auto i = 0ul; i < size; i++) {
+			std::get<Array>(*result).items[i] = copy_value(items[i]);
+		}
+		return result;
+	} else if (std::holds_alternative<bool>(*value)) {
+		return std::make_shared<Value>(std::get<bool>(*value));
+	} else {
+		assert(false && "not implemented yet");
+	}
+}
+
 // id ([idx])? = exp
 ValueCell eval_ass(
 	Interpreter* inter, AST& ast, const Node& node,
@@ -199,11 +219,13 @@ ValueCell eval_ass(
 	auto path_idx = node[0];
 	auto exp_idx = node[1];
 
-	auto lvalue = inter_eval_node(inter, ast, path_idx, scope_id);
 	auto right = inter_eval_node(inter, ast, exp_idx, scope_id);
+	auto lvalue = inter_eval_node(inter, ast, path_idx, scope_id);
 
-	*lvalue = *right;
-	return right;
+	auto copied_right = copy_value(right);
+
+	*lvalue = *copied_right;
+	return copied_right;
 }
 
 ValueCell eval_var_decl(
@@ -219,9 +241,10 @@ ValueCell eval_var_decl(
 	const auto& id_node = ast.at(id_idx);
 
 	auto value = inter_eval_node(inter, ast, exp_idx, scope_id);
-	auto cell = inter->env.insert(scope_id, id_node.str_id, value);
+	auto copied_value = copy_value(value);
+	auto cell = inter->env.insert(scope_id, id_node.str_id, copied_value);
 	if (!cell) err2(node.loc, "Could not initialize variable");
-	return value;
+	return copied_value;
 }
 
 ValueCell eval_fun_decl(
