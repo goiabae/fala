@@ -75,8 +75,8 @@ int interpret(Options opts) {
 		checker.typecheck();
 
 		if (opts.use_walk_interpreter) {
-			walk::Interpreter inter {pool};
-			auto val = inter.eval(ast);
+			walk::Interpreter inter {pool, ast};
+			auto val = inter.eval();
 			if (opts.from_stdin) {
 				print_value(val);
 				printf("\n");
