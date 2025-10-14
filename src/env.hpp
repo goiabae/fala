@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <vector>
 
 #include "ast.hpp"
@@ -34,6 +35,11 @@ struct Env {
 		ScopeID child_id {scope_count++};
 		parent_scope_vec.push_back(parent_id);
 		return child_id;
+	}
+
+	std::optional<ScopeID> get_parent_scope(ScopeID scope_id) {
+		if (scope_id.idx == 0) return {};
+		return parent_scope_vec[scope_id.idx - 1];
 	}
 
 	ScopeID root_scope_id {0};
