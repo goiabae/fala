@@ -1,10 +1,12 @@
 { pkgs ? import <nixpkgs> {} }:
 with pkgs; mkShell {
+  LD_LIBRARY_PATH = lib.makeLibraryPath [ gcc14Stdenv.cc.cc ];
+
   nativeBuildInputs = [
-    stdenv.cc
+    gcc14
     bison
     readline
-    cmake
+    (cmake.override { stdenv = gcc14Stdenv; })
     cppcheck
     clang-analyzer
 
@@ -15,6 +17,7 @@ with pkgs; mkShell {
     clang-tools
 
     gdb
+    gtest
   ];
 
   hardeningDisable = [ "fortify" ];

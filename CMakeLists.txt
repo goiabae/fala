@@ -82,3 +82,15 @@ test_example(pithagoras)
 test_example(print_int)
 test_example(print_str_int)
 test_example(vec_sort)
+
+find_package(GTest REQUIRED)
+include(GoogleTest)
+
+add_executable(test_vm
+	src/test_vm.cpp
+	src/lir.cpp
+	src/vm.cpp
+)
+
+target_link_libraries(test_vm PRIVATE GTest::gtest_main GTest::gtest)
+gtest_discover_tests(test_vm)
