@@ -6,16 +6,12 @@
 #include <cstring>
 #include <iostream>
 #include <stack>
-#include <stdexcept>
 
 #include "lir.hpp"
 
-using std::array;
-
-using lir::Opcode;
 using lir::Operand;
 
-namespace vm {
+namespace lir {
 
 void err(const char* msg) {
 	fprintf(stderr, "VM ERROR: %s\n", msg);
@@ -24,11 +20,7 @@ void err(const char* msg) {
 
 #define INDIRECT_LOAD(BASE, OFF) cells[(size_t)(fetch(BASE) + fetch(OFF))]
 
-void run(const lir::Chunk& code, bool should_print_result) {
-	array<int64_t, 2048> cells {};
-
-	std::stack<int64_t> stack {};
-
+void VM::run(const lir::Chunk& code) {
 	constexpr auto read_buffer_cap = 50;
 	char read_buffer[read_buffer_cap] {0};
 
@@ -187,4 +179,4 @@ void run(const lir::Chunk& code, bool should_print_result) {
 	}
 }
 
-} // namespace vm
+} // namespace lir

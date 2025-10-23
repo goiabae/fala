@@ -90,7 +90,9 @@ int interpret(Options opts) {
 				printf("\n");
 			}
 
-			vm::run(chunk, opts.from_stdin);
+			lir::VM vm {};
+			vm.should_print_result = opts.from_stdin;
+			vm.run(chunk);
 		}
 	}
 

@@ -3,12 +3,22 @@
 #ifndef VM_HPP
 #define VM_HPP
 
+#include <array>
+#include <stack>
+
 #include "lir.hpp"
 
-namespace vm {
+namespace lir {
 
-void run(const lir::Chunk&, bool should_print_result);
+struct VM {
+	bool should_print_result;
 
-}
+	std::array<int64_t, 2048> cells {};
+	std::stack<int64_t> stack {};
+
+	void run(const Chunk&);
+};
+
+} // namespace lir
 
 #endif
