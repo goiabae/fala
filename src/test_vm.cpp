@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <sstream>
+
 #include "lir.hpp"
 #include "vm.hpp"
 
@@ -9,7 +11,10 @@ TEST(VMTest, move_immediate) {
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand(69));
 
-	lir::VM vm {};
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -24,7 +29,10 @@ TEST(VMTest, move_integer_register) {
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand(69));
 	chunk.emit(lir::Opcode::MOV, b, a);
 
-	lir::VM vm {};
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -43,7 +51,10 @@ TEST(VMTest, arithmetic) {
 	chunk.emit(lir::Opcode::ADD, a, b, c);
 	chunk.emit(lir::Opcode::MUL, c, a, b);
 
-	lir::VM vm {};
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -57,7 +68,10 @@ TEST(VMTest, store_immediate) {
 	chunk.emit(lir::Opcode::MOV, a, 1);
 	chunk.emit(lir::Opcode::STORE, lir::Operand(69), lir::Operand(0), a);
 
-	lir::VM vm {};
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -73,7 +87,10 @@ TEST(VMTest, store_immediate_with_offset) {
 	chunk.emit(lir::Opcode::MOV, b, 3);
 	chunk.emit(lir::Opcode::STORE, lir::Operand(69), b, a);
 
-	lir::VM vm {};
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -86,7 +103,10 @@ TEST(VMTest, push_immediate) {
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PUSH, a);
 
-	lir::VM vm {};
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
 	vm.should_print_result = false;
 	vm.run(chunk);
 

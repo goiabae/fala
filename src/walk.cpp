@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
-#include <utility>
 #include <variant>
 
 #include "ast.hpp"
@@ -65,7 +64,7 @@ auto Interpreter::eval_application(
 	if (std::holds_alternative<BuiltinFunction>(*func_ptr)) {
 		auto builtin = std::get<BuiltinFunction>(*func_ptr);
 		if (builtin.param_count != args.size()) err("Wrong number of arguments");
-		auto val = builtin.builtin(args);
+		auto val = (*this.*(builtin.builtin))(args);
 		return val;
 	} else if (std::holds_alternative<CustomFunction>(*func_ptr)) {
 		auto custom = std::get<CustomFunction>(*func_ptr);
@@ -498,51 +497,39 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 	assert(false);
 }
 
-void print_value(ValueCell val) {
+std::ostream& operator<<(std::ostream& st, const ValueCell& val) {
 	if (std::holds_alternative<int>(*val)) {
-		printf("%d", std::get<int>(*val));
+		st << std::get<int>(*val);
 	} else if (std::holds_alternative<std::string>(*val)) {
-		printf("%s", std::get<std::string>(*val).c_str());
+		st << std::get<std::string>(*val);
 	} else if (std::holds_alternative<bool>(*val)) {
 		if (std::get<bool>(*val))
-			printf("1");
+			st << '1';
 		else
-			printf("0");
+			st << '0';
 	} else {
 		err("Can't print value");
 	}
+	return st;
 }
 
-std::ostream& operator<<(std::ostream& st, ValueCell& val) { print_value(val); }
-
-ValueCell builtin_read(std::vector<ValueCell>) {
-	char* buf = (char*)malloc(sizeof(char) * 100);
-	if (!buf) err("Could not allocate input buffer for `read' built-in");
-	if (fgets(buf, 100, stdin) == NULL) {
-		free(buf);
-		assert(false);
-		return {};
-	}
-	const size_t len = strlen(buf);
-	buf[len - 1] = '\0';
-
-	// try to parse as number
-	Number num = 0;
-	if (sscanf(buf, "%d", &num) != 0) {
-		free(buf);
+ValueCell Interpreter::builtin_read(std::vector<ValueCell>) {
+	std::string line {};
+	if (not std::getline(input, line)) err("Could not read input line");
+	try { // try parsing as a number
+		int num = std::stoi(line);
 		return std::make_shared<Value>(num);
+	} catch (...) { // otherwise return as string
+		return std::make_shared<Value>(line);
 	}
-
-	// otherwise return as string
-	return std::make_shared<Value>(std::string(buf));
 }
 
-ValueCell builtin_write(std::vector<ValueCell> args) {
-	for (size_t i = 0; i < args.size(); i++) print_value(args[i]);
+ValueCell Interpreter::builtin_write(std::vector<ValueCell> args) {
+	for (const auto& arg : args) output << arg;
 	return std::make_shared<Value>(Nil {});
 }
 
-ValueCell builtin_array(std::vector<ValueCell> args) {
+ValueCell Interpreter::builtin_array(std::vector<ValueCell> args) {
 	if (args.size() != 1) err("Expected a single numeric argument");
 	if (args[0] == nullptr) err("Expected a single numeric argument");
 	if (not std::holds_alternative<int>(*args[0]))
@@ -558,15 +545,17 @@ ValueCell builtin_array(std::vector<ValueCell> args) {
 	return val;
 }
 
-ValueCell builtin_exit(std::vector<ValueCell> args) {
+ValueCell Interpreter::builtin_exit(std::vector<ValueCell> args) {
 	if (args.size() != 1) err("exit takes exit code as a argument");
 	Number exit_code = std::get<int>(*args[0]);
 	exit(exit_code);
 	return {};
 }
 
-Interpreter::Interpreter(StringPool& pool, const AST& ast)
-: pool {pool}, ast {ast} {}
+Interpreter::Interpreter(
+	StringPool& pool, const AST& ast, std::istream& input, std::ostream& output
+)
+: pool {pool}, ast {ast}, input {input}, output {output} {}
 
 #define PUSH_BUILTIN(STR, FUNC, COUNT)                      \
 	*ctx.env.insert(ctx.scope_id, pool.intern(strdup(STR))) = \
@@ -574,11 +563,11 @@ Interpreter::Interpreter(StringPool& pool, const AST& ast)
 
 ValueCell Interpreter::eval() {
 	ctx.scope_id = ctx.env.root_scope_id;
-	PUSH_BUILTIN("read_int", builtin_read, 1);
-	PUSH_BUILTIN("write_int", builtin_write, 1);
-	PUSH_BUILTIN("write_str", builtin_write, 1);
-	PUSH_BUILTIN("make_array", builtin_array, 1);
-	PUSH_BUILTIN("exit", builtin_exit, 1);
+	PUSH_BUILTIN("read_int", &Interpreter::builtin_read, 1);
+	PUSH_BUILTIN("write_int", &Interpreter::builtin_write, 1);
+	PUSH_BUILTIN("write_str", &Interpreter::builtin_write, 1);
+	PUSH_BUILTIN("make_array", &Interpreter::builtin_array, 1);
+	PUSH_BUILTIN("exit", &Interpreter::builtin_exit, 1);
 	const auto val = eval_node(ast.root_index);
 	return val;
 }

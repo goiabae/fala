@@ -1,11 +1,6 @@
 #include "vm.hpp"
 
-#include <array>
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
 #include <iostream>
-#include <stack>
 
 #include "lir.hpp"
 
@@ -21,9 +16,6 @@ void err(const char* msg) {
 #define INDIRECT_LOAD(BASE, OFF) cells[(size_t)(fetch(BASE) + fetch(OFF))]
 
 void VM::run(const lir::Chunk& code) {
-	constexpr auto read_buffer_cap = 50;
-	char read_buffer[read_buffer_cap] {0};
-
 	size_t return_address = 0;
 
 	auto deref = [&](Operand opnd) -> int64_t& {
@@ -61,38 +53,31 @@ void VM::run(const lir::Chunk& code) {
 				char c;
 				while ((c = (char)INDIRECT_LOAD(inst.operands[0], Operand((Number)i)))
 				       != 0) {
-					printf("%c", c);
+					output << c;
 					i++;
 				}
-
 				break;
 			}
 			case Opcode::PRINTV: {
-				printf("%ld", fetch(inst.operands[0]));
+				output << fetch(inst.operands[0]);
 				break;
 			}
 			case Opcode::PRINTC: {
-				printf("%c", (char)fetch(inst.operands[0]));
+				output << (char)fetch(inst.operands[0]);
 				break;
 			}
 			case Opcode::READV: {
-				if (fgets(read_buffer, read_buffer_cap, stdin) == nullptr)
-					err("Couldn't read input");
-				const size_t len = strlen(read_buffer);
-				read_buffer[len - 1] = '\0';
-
-				char* endptr = nullptr;
-				int num = (int)strtol(read_buffer, &endptr, 10);
-				if (endptr == read_buffer) err("Could not convert input to integer");
-
+				std::string line {};
+				if (not std::getline(input, line)) err("Couldn't read input");
+				int num = std::stoi(line);
 				if (inst.operands[0].type != Operand::Type::REG)
 					err("First argument must be a register");
-
 				deref(inst.operands[0]) = num;
 				break;
 			}
 			case Opcode::READC: {
-				char c = (char)fgetc(stdin);
+				char c;
+				input >> c;
 				deref(inst.operands[0]) = (c == EOF) ? -1 : c;
 				break;
 			}

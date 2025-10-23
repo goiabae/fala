@@ -76,10 +76,10 @@ int interpret(Options opts) {
 		checker.typecheck();
 
 		if (opts.use_walk_interpreter) {
-			walk::Interpreter inter {pool, ast};
+			walk::Interpreter inter {pool, ast, std::cin, std::cout};
 			auto val = inter.eval();
 			if (opts.from_stdin) {
-				print_value(val);
+				std::cout << val;
 				printf("\n");
 			}
 		} else {
@@ -91,7 +91,7 @@ int interpret(Options opts) {
 				printf("\n");
 			}
 
-			lir::VM vm {};
+			lir::VM vm {std::cin, std::cout};
 			vm.should_print_result = opts.from_stdin;
 			vm.run(chunk);
 		}

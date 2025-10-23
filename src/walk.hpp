@@ -15,6 +15,8 @@
 
 namespace walk {
 
+struct Interpreter;
+
 struct BuiltinFunction;
 
 struct CustomFunction {
@@ -38,7 +40,7 @@ struct Array {
 
 struct BuiltinFunction {
 	size_t param_count;
-	ValueCell (*builtin)(std::vector<ValueCell>);
+	ValueCell (Interpreter::*builtin)(std::vector<ValueCell>);
 };
 
 struct Nothing {};
@@ -53,10 +55,14 @@ struct Context {
 };
 
 struct Interpreter {
-	Interpreter(StringPool& pool, const AST& ast);
+	Interpreter(
+		StringPool& pool, const AST& ast, std::istream& input, std::ostream& output
+	);
 
 	StringPool& pool;
 	const AST& ast;
+	std::istream& input;
+	std::ostream& output;
 
 	Context ctx;
 
@@ -100,10 +106,15 @@ struct Interpreter {
 	void enter_new_scope();
 	void close_current_scope();
 
+	ValueCell builtin_read(std::vector<ValueCell> args);
+	ValueCell builtin_write(std::vector<ValueCell> args);
+	ValueCell builtin_array(std::vector<ValueCell> args);
+	ValueCell builtin_exit(std::vector<ValueCell> args);
+
 	static_assert(evaluator<Interpreter, Context, ValueCell, Nothing>);
 };
 
-void print_value(ValueCell val);
+std::ostream& operator<<(std::ostream& st, const ValueCell& val);
 
 } // namespace walk
 
