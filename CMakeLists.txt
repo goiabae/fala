@@ -40,6 +40,7 @@ add_executable(fala
 	src/lir.cpp
 	src/vm.cpp
 	src/options.cpp
+	src/file_reader.cpp
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)
@@ -94,3 +95,11 @@ add_executable(test_vm
 
 target_link_libraries(test_vm PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_vm)
+
+add_executable(test_string_reader
+	src/test_string_reader.cpp
+	src/string_reader.cpp
+)
+
+target_link_libraries(test_string_reader PRIVATE GTest::gtest_main GTest::gtest)
+gtest_discover_tests(test_string_reader)

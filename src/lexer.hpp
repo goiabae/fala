@@ -2,7 +2,7 @@
 #define FALA_LEXER_HPP
 
 #include "ast.hpp"
-#include "file.hpp"
+#include "file_reader.hpp"
 #include "ring.h"
 
 union TokenValue {
@@ -13,10 +13,10 @@ union TokenValue {
 };
 
 struct Lexer {
-	File *file;
+	Reader *file;
 	Ring ring;
 
-	Lexer(File &_file);
+	Lexer(Reader *file);
 	~Lexer();
 
 	Location *loc;

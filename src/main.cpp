@@ -15,6 +15,7 @@
 #include "ast.hpp"
 #include "compiler.hpp"
 #include "file.hpp"
+#include "file_reader.hpp"
 #include "options.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
@@ -27,10 +28,10 @@
 typedef int Number;
 typedef char* String;
 
-static AST parse(File& file, StringPool& pool) {
-	Lexer lexer(file);
+static AST parse(Reader* reader, StringPool& pool) {
+	Lexer lexer {reader};
 	AST ast {};
-	ast.file_name = lexer.file->get_name();
+	ast.file_name = lexer.file->get_path();
 	yy::parser parser {&lexer, &ast, pool};
 	if (parser.parse()) exit(1); // FIXME propagate error up
 	ast.lines = lexer.get_lines();
@@ -57,12 +58,12 @@ static void usage() {
 }
 
 int interpret(Options opts) {
-	File fd = opts.from_stdin ? stdin : File(opts.argv[0], "r");
-	if (!fd) return 1;
+	Reader* fd =
+		opts.from_stdin ? new FileReader(stdin) : new FileReader(opts.argv[0], "r");
 
 	StringPool pool;
 
-	while (!fd.at_eof()) {
+	while (!fd->at_eof()) {
 		AST ast = parse(fd, pool);
 		if (ast.is_empty()) break;
 
@@ -100,8 +101,8 @@ int interpret(Options opts) {
 }
 
 int compile(Options opts) {
-	File input = opts.from_stdin ? stdin : File(opts.argv[0], "r");
-	if (!input) return 1;
+	Reader* input =
+		opts.from_stdin ? new FileReader(stdin) : new FileReader(opts.argv[0], "r");
 
 	StringPool pool;
 	AST ast = parse(input, pool);
@@ -126,7 +127,6 @@ int compile(Options opts) {
 	auto chunk = comp.compile();
 
 	File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
-	if (!output) return 1;
 
 	print_chunk(output.get_descriptor(), chunk);
 

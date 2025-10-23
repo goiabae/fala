@@ -4,9 +4,9 @@
 #include <stddef.h>
 
 #include <array>
+#include <string>
 #include <vector>
 
-#include "file.hpp"
 #include "str_pool.h"
 
 #define INVALID_NODE_INDEX -1

@@ -148,9 +148,7 @@ void Lexer::ensure() {
 	if (ring.len > 0) return;
 
 	char* buf = new char[ring.cap];
-	size_t read = (file->get_descriptor() == stdin)
-	              ? read_line(buf, ring.cap, file->get_descriptor())
-	              : fread(buf, sizeof(char), ring.cap, file->get_descriptor());
+	size_t read = file->read_at_most(buf, ring.cap);
 
 	if (read > 0) ring_write_many(&ring, buf, read);
 
@@ -314,10 +312,8 @@ int Lexer::lex() {
 	assert(false && "unreachable");
 }
 
-bool is_interactive(Lexer* lexer) {
-	return lexer->file->get_descriptor() == stdin;
-}
+bool is_interactive(Lexer* lexer) { return lexer->file->is_interactive(); }
 
-Lexer::Lexer(File& _file) : file(&_file), ring(ring_init()) {}
+Lexer::Lexer(Reader* file) : file {file}, ring {ring_init()} {}
 
 Lexer::~Lexer() { ring_deinit(&ring); }
