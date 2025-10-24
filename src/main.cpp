@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "lir.hpp"
+#include "logger.hpp"
 #include "vm.hpp"
 
 // clang-format off
@@ -57,6 +58,12 @@ static void usage() {
 	);
 }
 
+void print_phase(const Options& opts, std::string phase) {
+	if (opts.verbosity >= 1)
+		std::cerr << ANSI_COLOR_YELLOW << "INFO" << ANSI_COLOR_RESET << ": "
+							<< phase << "..." << '\n';
+}
+
 int interpret(Options opts) {
 	Reader* fd =
 		opts.from_stdin ? new FileReader(stdin) : new FileReader(opts.argv[0], "r");
@@ -64,18 +71,21 @@ int interpret(Options opts) {
 	StringPool pool;
 
 	while (!fd->at_eof()) {
+		print_phase(opts, "parsing");
 		AST ast = parse(fd, pool);
 		if (ast.is_empty()) break;
 
-		if (opts.verbose) {
+		if (opts.verbosity >= 2) {
 			ast_print(&ast, pool);
 			printf("\n");
 		}
 
+		print_phase(opts, "type checking");
 		Typechecker checker {ast, pool};
 		checker.typecheck();
 
 		if (opts.use_walk_interpreter) {
+			print_phase(opts, "interpreting(walk)");
 			walk::Interpreter inter {pool, ast, std::cin, std::cout};
 			auto val = inter.eval();
 			if (opts.from_stdin) {
@@ -83,14 +93,16 @@ int interpret(Options opts) {
 				printf("\n");
 			}
 		} else {
+			print_phase(opts, "compiling(lir)");
 			compiler::Compiler comp {ast, pool};
 			auto chunk = comp.compile();
 
-			if (opts.verbose) {
+			if (opts.verbosity >= 2) {
 				lir::print_chunk(stdout, chunk);
 				printf("\n");
 			}
 
+			print_phase(opts, "interpreting(lir)");
 			lir::VM vm {std::cin, std::cout};
 			vm.should_print_result = opts.from_stdin;
 			vm.run(chunk);
@@ -105,14 +117,16 @@ int compile(Options opts) {
 		opts.from_stdin ? new FileReader(stdin) : new FileReader(opts.argv[0], "r");
 
 	StringPool pool;
+	print_phase(opts, "parsing");
 	AST ast = parse(input, pool);
 	if (ast.is_empty()) return 1;
 
-	if (opts.verbose) {
+	if (opts.verbosity >= 2) {
 		ast_print(&ast, pool);
 		printf("\n");
 	}
 
+	print_phase(opts, "type checking");
 	Typechecker checker {ast, pool};
 	checker.typecheck();
 
@@ -123,11 +137,13 @@ int compile(Options opts) {
 	hir::print_code(stderr, code, pool, 0);
 #endif
 
+	print_phase(opts, "compiling(lir)");
 	compiler::Compiler comp {ast, pool};
 	auto chunk = comp.compile();
 
 	File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
 
+	print_phase(opts, "saving output");
 	print_chunk(output.get_descriptor(), chunk);
 
 	return 0;

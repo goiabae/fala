@@ -6,7 +6,7 @@ Options parse_args(int argc, char* argv[]) {
 	Options opts {};
 
 	for (char c = 0; (c = (char)getopt(argc, argv, "Vwo:ci")) != -1;) switch (c) {
-			case 'V': opts.verbose = true; break;
+			case 'V': opts.verbosity += 1; break;
 			case 'w': opts.use_walk_interpreter = true; break;
 			case 'o': opts.output_path = optarg; break;
 			case 'c': opts.compile = true; break;

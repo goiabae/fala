@@ -4,7 +4,7 @@
 struct Options {
 	bool use_walk_interpreter {false};
 	bool is_invalid {false};
-	bool verbose {false};
+	unsigned int verbosity {0};
 	bool from_stdin {false};
 	char* output_path {nullptr};
 	bool compile {false};
