@@ -2,7 +2,7 @@
 #define FALA_LEXER_HPP
 
 #include "ast.hpp"
-#include "file_reader.hpp"
+#include "reader.hpp"
 #include "ring.h"
 
 union TokenValue {

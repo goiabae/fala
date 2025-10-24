@@ -103,3 +103,15 @@ add_executable(test_string_reader
 
 target_link_libraries(test_string_reader PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_string_reader)
+
+add_executable(test_lexer
+	src/test_lexer.cpp
+	src/string_reader.cpp
+	src/lexer.cpp
+)
+
+target_include_directories(test_lexer PRIVATE src/)
+target_include_directories(test_lexer PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+target_link_libraries(test_lexer PRIVATE GTest::gtest_main GTest::gtest)
+gtest_discover_tests(test_lexer)
