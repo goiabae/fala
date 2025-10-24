@@ -1,3 +1,5 @@
+#include "lexer.hpp"
+
 #include <assert.h>
 #include <ctype.h>
 #include <stdbool.h>
@@ -7,12 +9,6 @@
 
 #include <string>
 
-#ifdef FALA_WITH_READLINE
-#	include <readline/history.h>
-#	include <readline/readline.h>
-#endif
-
-#include "lexer.hpp"
 #include "parser.hpp"
 #include "token_value.hpp"
 
@@ -122,28 +118,6 @@ int keyword_to_bison(size_t i) {
 	assert(false);
 }
 
-static size_t read_line(char* buf, size_t count, FILE* fd) {
-	size_t read = 0;
-#ifdef FALA_WITH_READLINE
-	(void)fd;
-	char* line = readline("fala> ");
-	if (!line) return 0;
-	add_history(line);
-	read = strlen(line);
-	if (read > count) return 0;
-	strncpy(buf, line, read);
-	buf[read++] = '\n';
-	buf[read] = '\0';
-	free(line);
-#else
-	printf("fala> ");
-	char c = '\0';
-	while (read < count && c != EOF)
-		buf[read++] = c = ((c = (char)getc(fd)) == '\n') ? EOF : c;
-#endif
-	return read;
-}
-
 // ensures that there are elements to read in the ring buffer
 void Lexer::ensure() {
 	if (ring.len > 0) return;
@@ -240,8 +214,8 @@ int Lexer::lex() {
 		case ' ':
 		case '\t': return lex();
 		case '\n': {
-			if (is_interactive(this))
-				return EOF;
+			if (file->is_interactive())
+				return tk::YYEOF;
 			else
 				return tk::NEWLINE;
 		}

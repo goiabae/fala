@@ -19,7 +19,7 @@ option(WITH_READLINE "Enable readline line editting" OFF)
 option(HIR_COMPILER "Enable experimental hir compiler" OFF)
 
 if(WITH_READLINE)
-	add_compile_options(-D FALA_WITH_READLINE)
+	add_compile_options(-D WITH_READLINE)
 endif()
 
 find_package(BISON REQUIRED)
