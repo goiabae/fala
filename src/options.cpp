@@ -1,33 +1,13 @@
 #include "options.hpp"
 
 #include <cstring>
+#include <iostream>
 
-Options parse_args(int argc, char* argv[]) {
-	Options opts {};
-
-	for (char c = 0; (c = (char)getopt(argc, argv, "Vwo:ci")) != -1;) switch (c) {
-			case 'V': opts.verbosity += 1; break;
-			case 'w': opts.use_walk_interpreter = true; break;
-			case 'o': opts.output_path = optarg; break;
-			case 'c': opts.compile = true; break;
-			case 'i': opts.interpret = true; break;
-			default: break;
-		}
-
-	opts.argv = &argv[optind];
-	opts.argc = argc - optind;
-
-	if (opts.argc < 1) {
-		opts.is_invalid = true;
-		return opts;
-	}
-
-	if (opts.argc > 0 && strcmp(opts.argv[0], "-") == 0) opts.from_stdin = true;
-
-	if (!(opts.compile || opts.interpret)) opts.is_invalid = true;
-
-	return opts;
-}
+#ifdef _WIN32
+int getopt(int argc, char** argv, const char* opts_);
+#else
+#	include <getopt.h>
+#endif
 
 // getopt comes from POSIX which is not available on Windows
 #ifdef _WIN32
@@ -75,3 +55,51 @@ int getopt(int argc, char** argv, const char* opts_) {
 	return -1;
 }
 #endif
+
+Options parse_args(int argc, char* argv[]) {
+	Options opts {};
+
+	for (char c = 0; (c = (char)getopt(argc, argv, "Vo:cib:")) != -1;)
+		switch (c) {
+			case 'V': opts.verbosity += 1; break;
+			case 'o': opts.output_path = optarg; break;
+			case 'c': opts.compile = true; break;
+			case 'i': opts.interpret = true; break;
+			case 'b': {
+				if (strcmp(optarg, "walk") == 0) {
+					opts.backend = Backend::WALK;
+				} else if (strcmp(optarg, "lir") == 0) {
+					opts.backend = Backend::LIR;
+				}
+#ifdef EXPERIMENTAL_HIR_COMPILER
+				else if (strcmp(optarg, "hir") == 0) {
+					opts.backend = Backend::HIR;
+				}
+#endif
+				else {
+					std::cerr << "Unknown backend: " << optarg << '\n';
+					opts.is_invalid = true;
+					return opts;
+				}
+				break;
+			}
+			default: {
+				opts.is_invalid = true;
+				return opts;
+			}
+		}
+
+	opts.argv = &argv[optind];
+	opts.argc = argc - optind;
+
+	if (opts.argc < 1) {
+		opts.is_invalid = true;
+		return opts;
+	}
+
+	if (opts.argc > 0 && strcmp(opts.argv[0], "-") == 0) opts.from_stdin = true;
+
+	if (!(opts.compile || opts.interpret)) opts.is_invalid = true;
+
+	return opts;
+}

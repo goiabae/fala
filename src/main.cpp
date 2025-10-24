@@ -75,7 +75,7 @@ int interpret(Options opts) {
 		Typechecker checker {ast, pool};
 		checker.typecheck();
 
-		if (opts.use_walk_interpreter) {
+		if (opts.backend == Backend::WALK) {
 			print_phase(opts, "interpreting(walk)");
 			walk::Interpreter inter {pool, ast, std::cin, std::cout};
 			auto val = inter.eval();
@@ -83,7 +83,7 @@ int interpret(Options opts) {
 				std::cout << val;
 				printf("\n");
 			}
-		} else {
+		} else if (opts.backend == Backend::LIR) {
 			print_phase(opts, "compiling(lir)");
 			compiler::Compiler comp {ast, pool};
 			auto chunk = comp.compile();
@@ -97,6 +97,9 @@ int interpret(Options opts) {
 			lir::VM vm {std::cin, std::cout};
 			vm.should_print_result = opts.from_stdin;
 			vm.run(chunk);
+		} else {
+			std::cerr << "Backend can't be used for interpreting" << '\n';
+			return 1;
 		}
 	}
 
@@ -112,7 +115,9 @@ int compile(Options opts) {
 	AST ast = parse(input, pool);
 	if (ast.is_empty()) return 1;
 
-	if (opts.verbosity >= 2) {
+	if (opts.verbosity >= 3) {
+		ast_print_detailed(&ast, pool);
+	} else if (opts.verbosity >= 2) {
 		ast_print(&ast, pool);
 		printf("\n");
 	}
@@ -121,23 +126,34 @@ int compile(Options opts) {
 	Typechecker checker {ast, pool};
 	checker.typecheck();
 
+	if (opts.backend == Backend::LIR) {
+		print_phase(opts, "compiling(lir)");
+		compiler::Compiler comp {ast, pool};
+		auto chunk = comp.compile();
+
+		File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
+
+		print_phase(opts, "saving output");
+		print_chunk(output.get_descriptor(), chunk);
+
+		return 0;
 #ifdef EXPERIMENTAL_HIR_COMPILER
-	ast_print_detailed(&ast, &pool);
-	hir_compiler::Compiler hir_comp {ast, pool, checker};
-	auto code = hir_comp.compile();
-	hir::print_code(stderr, code, pool, 0);
+	} else if (opts.backend == Backend::HIR) {
+		hir_compiler::Compiler hir_comp {ast, pool, checker};
+		print_phase(opts, "compiling(lir)");
+		auto code = hir_comp.compile();
+
+		File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
+
+		print_phase(opts, "saving output");
+		hir::print_code(output.get_descriptor(), code, pool, 0);
+
+		return 0;
 #endif
-
-	print_phase(opts, "compiling(lir)");
-	compiler::Compiler comp {ast, pool};
-	auto chunk = comp.compile();
-
-	File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
-
-	print_phase(opts, "saving output");
-	print_chunk(output.get_descriptor(), chunk);
-
-	return 0;
+	} else {
+		std::cerr << "Can't compile with backend\n";
+		return 1;
+	}
 }
 
 } // namespace

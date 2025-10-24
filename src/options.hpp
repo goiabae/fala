@@ -1,8 +1,16 @@
 #ifndef OPTIONS_HPP
 #define OPTIONS_HPP
 
+enum class Backend {
+	WALK,
+	LIR,
+#ifdef EXPERIMENTAL_HIR_COMPILER
+	HIR,
+#endif
+};
+
 struct Options {
-	bool use_walk_interpreter {false};
+	Backend backend {Backend::LIR};
 	bool is_invalid {false};
 	unsigned int verbosity {0};
 	bool from_stdin {false};
@@ -12,12 +20,6 @@ struct Options {
 	char** argv {nullptr};
 	int argc {0};
 };
-
-#ifdef _WIN32
-int getopt(int argc, char** argv, const char* opts_);
-#else
-#	include <getopt.h>
-#endif
 
 Options parse_args(int argc, char* argv[]);
 

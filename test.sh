@@ -47,7 +47,7 @@ interpret() {
 	timeout 10s $inter -i $file < $tmp/$test.in > $tmp/$test.actual
 	compare $test
 	test "INTERPRETED(walk) ${test}"
-	timeout 10s $inter -i -w $file < $tmp/$test.in > $tmp/$test.actual
+	timeout 10s $inter -i -b walk $file < $tmp/$test.in > $tmp/$test.actual
 	compare $test
 }
 
