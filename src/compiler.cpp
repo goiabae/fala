@@ -678,12 +678,14 @@ Result Compiler::compile(
 		}
 		case NodeType::AT: COMPILE_WITH_HANDLER(compile_at)
 		case NodeType::ID: {
+			Chunk chunk {};
 			Operand* opnd = env.find(scope_id, node.str_id);
 			if (opnd == nullptr) {
 				fprintf(stderr, "%s ", pool.find(node.str_id));
 				err("Variable not found");
 			}
-			return {{}, *opnd};
+			chunk.result_opnd = *opnd;
+			return {chunk, *opnd};
 		}
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
