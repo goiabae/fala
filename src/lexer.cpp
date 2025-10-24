@@ -240,11 +240,9 @@ int Lexer::lex() {
 		case ' ':
 		case '\t': return lex();
 		case '\n': {
-#ifdef FALA_WITH_READLINE
 			if (is_interactive(this))
 				return EOF;
 			else
-#endif
 				return tk::NEWLINE;
 		}
 

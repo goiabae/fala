@@ -41,6 +41,7 @@ add_executable(fala
 	src/vm.cpp
 	src/options.cpp
 	src/file_reader.cpp
+	src/line_reader.cpp
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)

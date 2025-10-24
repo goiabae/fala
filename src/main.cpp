@@ -5,6 +5,7 @@
 #include "file.hpp"
 #include "file_reader.hpp"
 #include "lexer.hpp"
+#include "line_reader.hpp"
 #include "lir.hpp"
 #include "logger.hpp"
 #include "options.hpp"
@@ -40,8 +41,13 @@ void usage() {
 		"started\n"
 		"\n"
 		"Options:\n"
-		"\t-V          verbose output\n"
+		"\t-V          verbose output. use multiple times to increase verbosity\n"
 		"\t-o <path>   output file path. if no path is provided, stdout is used\n"
+		"\t-b <name>   backend to be used. one of: walk, lir"
+#ifdef EXPERIMENTAL_HIR_COMPILER
+		", hir"
+#endif
+		"\n"
 		"\n"
 		"Modes:\n"
 		"\t-c          compile\n"
@@ -56,8 +62,9 @@ void print_phase(const Options& opts, std::string phase) {
 }
 
 int interpret(Options opts) {
-	Reader* fd =
-		opts.from_stdin ? new FileReader(stdin) : new FileReader(opts.argv[0], "r");
+	Reader* fd = opts.from_stdin
+	             ? static_cast<Reader*>(new LineReader())
+	             : static_cast<Reader*>(new FileReader(opts.argv[0], "r"));
 
 	StringPool pool;
 
@@ -107,8 +114,9 @@ int interpret(Options opts) {
 }
 
 int compile(Options opts) {
-	Reader* input =
-		opts.from_stdin ? new FileReader(stdin) : new FileReader(opts.argv[0], "r");
+	Reader* input = opts.from_stdin
+	                ? static_cast<Reader*>(new LineReader())
+	                : static_cast<Reader*>(new FileReader(opts.argv[0], "r"));
 
 	StringPool pool;
 	print_phase(opts, "parsing");
