@@ -5,13 +5,6 @@
 #include "reader.hpp"
 #include "ring.h"
 
-union TokenValue {
-	int num;
-	char *str;
-	char character;
-	NodeIndex node;
-};
-
 struct Lexer {
 	Reader *file;
 	Ring ring;

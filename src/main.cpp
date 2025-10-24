@@ -1,35 +1,26 @@
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "lir.hpp"
-#include "logger.hpp"
-#include "vm.hpp"
-
-// clang-format off
-// need to be included in this order
-#include "parser.hpp"
-#include "lexer.hpp"
-// clang-format on
+#include <utility>
 
 #include "ast.hpp"
 #include "compiler.hpp"
 #include "file.hpp"
 #include "file_reader.hpp"
+#include "lexer.hpp"
+#include "lir.hpp"
+#include "logger.hpp"
 #include "options.hpp"
+#include "parser.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
+#include "vm.hpp"
 #include "walk.hpp"
 
 #ifdef EXPERIMENTAL_HIR_COMPILER
 #	include "hir_compiler.hpp"
 #endif
 
-typedef int Number;
-typedef char* String;
+namespace {
 
-static AST parse(Reader* reader, StringPool& pool) {
+AST parse(Reader* reader, StringPool& pool) {
 	Lexer lexer {reader};
 	AST ast {};
 	ast.file_name = lexer.file->get_path();
@@ -39,7 +30,7 @@ static AST parse(Reader* reader, StringPool& pool) {
 	return ast;
 }
 
-static void usage() {
+void usage() {
 	printf(
 		"Usage:\n"
 		"\tfala <mode> [<options> ...] <filepath>\n"
@@ -149,6 +140,8 @@ int compile(Options opts) {
 	return 0;
 }
 
+} // namespace
+
 int main(int argc, char* argv[]) {
 	Options opts = parse_args(argc, argv);
 	if (opts.is_invalid) {
@@ -160,6 +153,8 @@ int main(int argc, char* argv[]) {
 		compile(opts);
 	else if (opts.interpret)
 		interpret(opts);
+	else
+		std::unreachable();
 
 	return 0;
 }

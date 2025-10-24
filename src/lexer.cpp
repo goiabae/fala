@@ -14,6 +14,7 @@
 
 #include "lexer.hpp"
 #include "parser.hpp"
+#include "token_value.hpp"
 
 #define FALA_RING_IMPL
 #include "ring.h"

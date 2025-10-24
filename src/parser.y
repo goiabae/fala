@@ -20,6 +20,7 @@
 #include "str_pool.h"
 #include "ast.hpp"
 #include "lexer.hpp"
+#include "token_value.hpp"
 
 #define yylex lexer_lex
 }
