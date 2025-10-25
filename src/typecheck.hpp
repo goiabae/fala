@@ -27,7 +27,6 @@ struct Typechecker {
 	TYPE eval(NodeIndex, Env<TYPE>::ScopeID scope_id);
 
 	bool unify(TYPE, TYPE);
-	void print_type(FILE* fd, TYPE);
 	void mismatch_error(Location, const char*, TYPE, TYPE);
 
 	TYPE make_nil();
@@ -42,24 +41,6 @@ struct Typechecker {
 
 	// the type of types
 	TYPE make_toat();
-
-	bool is_nil(TYPE);
-	bool is_bool(TYPE);
-	bool is_void(TYPE);
-	bool is_toat(TYPE);
-	bool is_integer(TYPE);
-	bool is_array(TYPE);
-	bool is_function(TYPE);
-	bool is_typevar(TYPE);
-	bool is_ref(TYPE);
-	bool is_general(TYPE);
-
-	INTEGER to_integer(TYPE);
-	ARRAY to_array(TYPE);
-	FUNCTION to_function(TYPE);
-	TYPE_VARIABLE to_typevar(TYPE);
-	REF to_ref(TYPE);
-	GENERAL to_general(TYPE);
 
 	TYPE deref(TYPE);
 

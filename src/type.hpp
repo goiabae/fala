@@ -1,9 +1,13 @@
 #ifndef TYPE_HPP
 #define TYPE_HPP
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
+#include <stdexcept>
 #include <vector>
+
+#include "utils.hpp"
 
 struct Type;
 
@@ -12,10 +16,13 @@ using TYPE = std::shared_ptr<Type>;
 struct Type {
 	virtual ~Type() {}
 	virtual size_t size_of() = 0;
+	virtual std::ostream& print(std::ostream&) const = 0;
 
  protected:
 	Type() {}
 };
+
+std::ostream& operator<<(std::ostream& st, const Type& t);
 
 enum Sign { SIGNED, UNSIGNED };
 
@@ -25,20 +32,40 @@ struct Integer : Type {
 	Sign sign;
 
 	size_t size_of() override { return 1; }
+
+	std::ostream& print(std::ostream& st) const override {
+		if (sign == SIGNED)
+			st << "Int<" << bit_count << ">";
+		else
+			st << "UInt<" << bit_count << ">";
+		return st;
+	}
 };
 
 using INTEGER = std::shared_ptr<Integer>;
 
 struct Nil : Type {
 	size_t size_of() override { return 0; }
+	std::ostream& print(std::ostream& st) const override {
+		st << "Nil";
+		return st;
+	}
 };
 
 struct Bool : Type {
 	size_t size_of() override { return 1; }
+	std::ostream& print(std::ostream& st) const override {
+		st << "Bool";
+		return st;
+	}
 };
 
 struct Void : Type {
 	size_t size_of() override { return 0; }
+	std::ostream& print(std::ostream& st) const override {
+		st << "Void";
+		return st;
+	}
 };
 
 struct Function : Type {
@@ -49,6 +76,10 @@ struct Function : Type {
 
 	// label to function?
 	size_t size_of() override { return 1; }
+	std::ostream& print(std::ostream& st) const override {
+		st << "(" << SeparatedPrinter(inputs, ", ") << ") -> " << *output;
+		return st;
+	}
 };
 
 using FUNCTION = std::shared_ptr<Function>;
@@ -61,6 +92,15 @@ struct TypeVariable : Type {
 			return bound_type->size_of();
 		else
 			assert(false);
+	}
+
+	std::ostream& print(std::ostream& st) const override {
+		if (is_bound) {
+			st << "(" << "t" << "vt->unbound_name" << " := " << *bound_type << ")";
+		} else {
+			st << "'t" << unbound_name;
+		}
+		return st;
 	}
 
 	void bind_to(TYPE t) {
@@ -82,6 +122,10 @@ struct Array : Type {
 
 	// pointer to beginning of allocated region
 	size_t size_of() override { return 1; }
+	std::ostream& print(std::ostream& st) const override {
+		st << "Array<" << *item_type << ">";
+		return st;
+	}
 };
 
 using ARRAY = std::shared_ptr<Array>;
@@ -89,6 +133,10 @@ using ARRAY = std::shared_ptr<Array>;
 struct Ref : Type {
 	Ref(TYPE ref_type) : ref_type(ref_type) {}
 	size_t size_of() override { return ref_type->size_of(); }
+	std::ostream& print(std::ostream& st) const override {
+		st << "&" << *ref_type;
+		return st;
+	}
 
 	TYPE ref_type;
 };
@@ -98,6 +146,9 @@ using REF = std::shared_ptr<Ref>;
 // Type of all types
 struct Toat : Type {
 	size_t size_of() override { assert(false); }
+	std::ostream& print(std::ostream&) const override {
+		throw std::domain_error("can't print toat");
+	}
 };
 
 using TOAT = std::shared_ptr<Toat>;
@@ -108,6 +159,9 @@ struct General : Type {
 	TYPE body;
 
 	size_t size_of() override { assert(false); }
+	std::ostream& print(std::ostream&) const override {
+		throw std::domain_error("can't print general type");
+	}
 };
 
 using GENERAL = std::shared_ptr<General>;
