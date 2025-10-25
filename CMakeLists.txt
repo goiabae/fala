@@ -49,6 +49,9 @@ set_property(TARGET fala PROPERTY CXX_STANDARD 23)
 target_include_directories(fala PRIVATE src/)
 target_include_directories(fala PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
+target_compile_options(fala PRIVATE -fsanitize=undefined)
+target_link_options(fala PRIVATE -fsanitize=undefined)
+
 if (WITH_READLINE)
 	target_link_libraries(fala readline history)
 endif()
