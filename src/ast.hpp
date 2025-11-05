@@ -135,4 +135,6 @@ struct AST {
 
 bool operator<(NodeIndex a, NodeIndex b);
 
+bool operator==(const AST& a, const AST& b);
+
 #endif

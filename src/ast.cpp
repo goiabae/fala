@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <ranges>
+#include <stdexcept>
 #include <vector>
 
 #include "str_pool.h"
@@ -12,6 +14,48 @@
 using std::vector;
 
 bool AST::is_empty() { return root_index.index == -1; }
+
+bool is_branch_node(NodeType type) {
+	switch (type) {
+		case NodeType::EMPTY: return false;
+		case NodeType::APP: return true;
+		case NodeType::NUM: return false;
+		case NodeType::BLK: return true;
+		case NodeType::IF: return true;
+		case NodeType::WHEN: return true;
+		case NodeType::FOR: return true;
+		case NodeType::WHILE: return true;
+		case NodeType::BREAK: return true;
+		case NodeType::CONTINUE: return true;
+		case NodeType::ASS: return true;
+		case NodeType::OR: return true;
+		case NodeType::AND: return true;
+		case NodeType::GTN: return true;
+		case NodeType::LTN: return true;
+		case NodeType::GTE: return true;
+		case NodeType::LTE: return true;
+		case NodeType::EQ: return true;
+		case NodeType::AT: return true;
+		case NodeType::ADD: return true;
+		case NodeType::SUB: return true;
+		case NodeType::MUL: return true;
+		case NodeType::DIV: return true;
+		case NodeType::MOD: return true;
+		case NodeType::NOT: return true;
+		case NodeType::ID: return false;
+		case NodeType::STR: return false;
+		case NodeType::VAR_DECL: return true;
+		case NodeType::FUN_DECL: return true;
+		case NodeType::NIL: return false;
+		case NodeType::TRUE: return false;
+		case NodeType::FALSE: return false;
+		case NodeType::LET: return true;
+		case NodeType::CHAR: return false;
+		case NodeType::PATH: return true;
+		case NodeType::AS: return true;
+		case NodeType::INSTANCE: return true;
+	}
+}
 
 const char* node_type_repr(enum NodeType type) {
 	switch (type) {
@@ -421,4 +465,45 @@ bool operator<(NodeIndex a, NodeIndex b) { return a.index < b.index; }
 size_t Node::size() const {
 	// FIXME: assert this is not a terminal node
 	return branch.children_count;
+}
+
+struct NodeRef {
+	NodeIndex index;
+	const AST& ast;
+	const Node& operator()() const { return ast.at(index); }
+};
+
+// NOTE: This assumes both ASTs use the same StringPool
+
+bool operator==(const NodeRef& a, const NodeRef& b) {
+	if (a().type != b().type) return false;
+
+	auto type = a().type;
+
+	if (type == NodeType::NUM) return a().num == b().num;
+
+	if (type == NodeType::ID or type == NodeType::STR)
+		return a().str_id.idx == b().str_id.idx;
+
+	if (type == NodeType::CHAR) return a().character == b().character;
+
+	if (type == NodeType::TRUE or type == NodeType::FALSE or type == NodeType::NIL
+	    or type == NodeType::EMPTY)
+		return true;
+
+	if (is_branch_node(a().type)) {
+		if (a().size() != b().size()) return false;
+		for (const auto& [ai, bi] : std::ranges::views::zip(a(), b()))
+			if (NodeRef {ai, a.ast} != NodeRef {bi, b.ast}) return false;
+	} else {
+		throw std::logic_error("");
+	}
+
+	return true;
+}
+
+bool operator==(const AST& a, const AST& b) {
+	NodeRef ra {a.root_index, a};
+	NodeRef rb {b.root_index, b};
+	return ra == rb;
 }
