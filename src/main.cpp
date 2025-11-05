@@ -21,16 +21,6 @@
 
 namespace {
 
-AST parse(Reader* reader, StringPool& pool) {
-	Lexer lexer {reader};
-	AST ast {};
-	ast.file_name = lexer.file->get_path();
-	yy::parser parser {&lexer, &ast, pool};
-	if (parser.parse()) exit(1); // FIXME propagate error up
-	ast.lines = lexer.get_lines();
-	return ast;
-}
-
 void usage() {
 	printf(
 		"Usage:\n"

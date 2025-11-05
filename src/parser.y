@@ -25,6 +25,10 @@
 #define yylex lexer_lex
 }
 
+%code provides {
+AST parse(Reader* reader, StringPool& pool);
+}
+
 %{
 #include <stdio.h>
 
@@ -248,3 +252,13 @@ void yy::parser::error(const location_type& loc, const std::string& msg) {
 
 // TODO: not implemented
 std::ostream& operator<<(std::ostream& st, Location) { return st; }
+
+AST parse(Reader* reader, StringPool& pool) {
+	Lexer lexer {reader};
+	AST ast {};
+	ast.file_name = lexer.file->get_path();
+	yy::parser parser {&lexer, &ast, pool};
+	if (parser.parse() != 0) throw std::runtime_error("Failed to parse");
+	ast.lines = lexer.get_lines();
+	return ast;
+}
