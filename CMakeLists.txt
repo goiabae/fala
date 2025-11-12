@@ -120,3 +120,11 @@ target_include_directories(test_lexer PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(test_lexer PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_lexer)
+
+add_executable(test_fixed_vector src/test_fixed_vector.cpp)
+
+set_property(TARGET test_fixed_vector PROPERTY CXX_STANDARD 23)
+target_include_directories(test_fixed_vector PRIVATE src/)
+
+target_link_libraries(test_fixed_vector PRIVATE GTest::gtest_main GTest::gtest)
+gtest_discover_tests(test_fixed_vector)
