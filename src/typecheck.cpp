@@ -799,10 +799,10 @@ TYPE Typechecker::eval(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 	node_to_type[node_idx] = make_toat();
 	switch (node.type) {
 		case NodeType::ID: {
-			if (node.str_id.idx == pool.intern(strdup("Bool")).idx) {
+			if (node.str_id == pool.intern(strdup("Bool"))) {
 				return make_bool();
 			}
-			if (node.str_id.idx == pool.intern(strdup("Nil")).idx) {
+			if (node.str_id == pool.intern(strdup("Nil"))) {
 				return make_nil();
 			}
 			assert(false);
@@ -825,17 +825,17 @@ TYPE Typechecker::eval(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto name_node = ast.at(name_idx);
 			auto args_node = ast.at(args_idx);
 
-			if (name_node.str_id.idx == pool.intern(strdup("Array")).idx) {
+			if (name_node.str_id == pool.intern(strdup("Array"))) {
 				auto elt_typ = eval(args_node[0], scope_id);
 				return make_array(elt_typ);
 			}
 
-			if (name_node.str_id.idx == pool.intern(strdup("Int")).idx) {
+			if (name_node.str_id == pool.intern(strdup("Int"))) {
 				auto bit_count = ast.at(args_node[0]).num;
 				return make_integer(bit_count, Sign::SIGNED);
 			}
 
-			if (name_node.str_id.idx == pool.intern(strdup("Uint")).idx) {
+			if (name_node.str_id == pool.intern(strdup("Uint"))) {
 				auto bit_count = ast.at(args_node[0]).num;
 				return make_integer(bit_count, Sign::UNSIGNED);
 			}

@@ -483,7 +483,7 @@ bool operator==(const NodeRef& a, const NodeRef& b) {
 	if (type == NodeType::NUM) return a().num == b().num;
 
 	if (type == NodeType::ID or type == NodeType::STR)
-		return a().str_id.idx == b().str_id.idx;
+		return a().str_id == b().str_id;
 
 	if (type == NodeType::CHAR) return a().character == b().character;
 

@@ -11,21 +11,21 @@ StringPool::StringPool()
 
 StringPool::~StringPool() { delete[] m_arr; }
 
-StrID StringPool::intern(char* str) {
-	for (size_t i = 0; i < m_len; i++) {
-		if (std::strcmp(m_arr[i], str) == 0) {
-			free(str);
-			return StrID {i};
-		}
-	}
-	m_arr[m_len++] = str;
+StrID StringPool::intern(const char* str) {
+	for (auto i = 0u; i < m_len; i++)
+		if (std::strcmp(m_arr[i], str) == 0) return StrID {i};
+
+	auto i = (unsigned int)m_len++;
+	auto len = strlen(str);
+	m_arr[i] = new char[len + 1];
+	std::memcpy(m_arr[i], str, sizeof(char) * (len + 1));
 	assert(
 		m_len <= m_cap && "String pool is already full. Can't intern more strings."
 	);
-	return StrID {m_len - 1};
+	return StrID {i};
 }
 
 const char* StringPool::find(StrID id) const {
-	assert(id.idx < m_cap);
-	return m_arr[id.idx];
+	assert((unsigned int)id < m_cap);
+	return m_arr[(unsigned int)id];
 }

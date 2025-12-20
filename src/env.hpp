@@ -98,7 +98,7 @@ T* Env<T>::find(ScopeID scope_id, StrID str_id) {
 	Id cur = find_last_entry(scope_id);
 	if (cur.idx < 0) return nullptr;
 
-	while (name[cur.idx].idx != str_id.idx) {
+	while (name[cur.idx] != str_id) {
 		if (cur.idx < 0) return nullptr;
 		if (cur.idx > (int)(previous_entries.size() - 1)) assert(false);
 		cur = previous_entries[cur.idx];
