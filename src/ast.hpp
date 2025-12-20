@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "location.hpp"
 #include "str_pool.h"
 
 #define INVALID_NODE_INDEX -1
@@ -52,17 +53,6 @@ enum class NodeType {
 	PATH,
 	AS,
 	INSTANCE,
-};
-
-struct Position {
-	int byte_offset {0};
-	int line {0};
-	int column {0};
-};
-
-struct Location {
-	Position begin {};
-	Position end {};
 };
 
 typedef struct NodeIndex {
