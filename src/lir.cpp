@@ -93,13 +93,21 @@ int print_str(FILE* fd, const char* str) {
 	return printed;
 }
 
+auto Operand::make_immediate_integer(int integer) -> Operand {
+	Operand opnd;
+	opnd.data_type = Operand::DataType::INTEGER;
+	opnd.type = Operand::Type::IMMEDIATE;
+	opnd.data.emplace<Number>(integer);
+	return opnd;
+}
+
 int print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
-		case Operand::Type::NIL: return fprintf(fd, "0");
-		case Operand::Type::REG:
+		case Operand::Type::NOTHING: return fprintf(fd, "0");
+		case Operand::Type::REGISTER:
 			return fprintf(fd, "%%%zu", opnd.as_register().index);
-		case Operand::Type::LAB: return fprintf(fd, "L%03zu", opnd.as_label().id);
-		case Operand::Type::NUM: return fprintf(fd, "%d", opnd.as_number());
+		case Operand::Type::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
+		case Operand::Type::IMMEDIATE: return fprintf(fd, "%d", opnd.as_number());
 		case Operand::Type::FUN: assert(false && "unreachable");
 		case Operand::Type::ARR:
 			return fprintf(fd, "%%%zu", opnd.as_array().start_pointer_reg.index);
@@ -145,9 +153,9 @@ const char* opcode_repr(Opcode op) {
 }
 
 int print_operand_indirect(FILE* fd, Operand opnd) {
-	if (opnd.type == Operand::Type::NUM) {
+	if (opnd.type == Operand::Type::IMMEDIATE) {
 		return fprintf(fd, "%d", opnd.as_number());
-	} else if (opnd.type == Operand::Type::REG) {
+	} else if (opnd.type == Operand::Type::REGISTER) {
 		if (opnd.as_register().has_num())
 			return fprintf(fd, "%zu", opnd.as_register().index);
 		else if (opnd.as_register().has_addr())
@@ -208,13 +216,17 @@ Chunk operator+(Chunk x, Chunk y) {
 
 const char* operand_type_repr(Operand::Type type) {
 	switch (type) {
-		case Operand::Type::NIL: return "Operand::Type::NIL";
-		case Operand::Type::REG: return "Operand::Type::REG";
-		case Operand::Type::LAB: return "Operand::Type::LAB";
-		case Operand::Type::NUM: return "Operand::Type::NUM";
+		case Operand::Type::NOTHING: return "Operand::Type::NIL";
+		case Operand::Type::REGISTER: return "Operand::Type::REG";
+		case Operand::Type::LABEL: return "Operand::Type::LAB";
+		case Operand::Type::IMMEDIATE: return "Operand::Type::NUM";
 		case Operand::Type::FUN: return "Operand::Type::FUN";
 		case Operand::Type::ARR: return "Operand::Type::ARR";
 	}
+}
+
+void Chunk::emit_store(Operand value, Operand offset, Operand base) {
+	emit(Opcode::STORE, value, offset, base);
 }
 
 } // namespace lir

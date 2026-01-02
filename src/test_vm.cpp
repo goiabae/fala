@@ -9,7 +9,7 @@ TEST(VMTest, move_immediate) {
 	auto a = lir::Operand(lir::Register(0).as_num());
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand(69));
+	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -26,7 +26,7 @@ TEST(VMTest, move_integer_register) {
 	auto b = lir::Operand(lir::Register(1).as_num());
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand(69));
+	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
 	chunk.emit(lir::Opcode::MOV, b, a);
 
 	std::istringstream input {""};
@@ -45,9 +45,9 @@ TEST(VMTest, arithmetic) {
 	auto c = lir::Operand(lir::Register(2).as_num());
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand(3));
-	chunk.emit(lir::Opcode::MOV, b, lir::Operand(4));
-	chunk.emit(lir::Opcode::MOV, c, lir::Operand(5));
+	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(3));
+	chunk.emit(lir::Opcode::MOV, b, lir::Operand::make_immediate_integer(4));
+	chunk.emit(lir::Opcode::MOV, c, lir::Operand::make_immediate_integer(5));
 	chunk.emit(lir::Opcode::ADD, a, b, c);
 	chunk.emit(lir::Opcode::MUL, c, a, b);
 
@@ -65,8 +65,12 @@ TEST(VMTest, store_immediate) {
 	auto a = lir::Operand(lir::Register(0).as_addr());
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, 1);
-	chunk.emit(lir::Opcode::STORE, lir::Operand(69), lir::Operand(0), a);
+	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(1));
+	chunk.emit_store(
+		lir::Operand::make_immediate_integer(69),
+		lir::Operand::make_immediate_integer(0),
+		a
+	);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -83,9 +87,9 @@ TEST(VMTest, store_immediate_with_offset) {
 	auto b = lir::Operand(lir::Register(1).as_num());
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, 2);
-	chunk.emit(lir::Opcode::MOV, b, 3);
-	chunk.emit(lir::Opcode::STORE, lir::Operand(69), b, a);
+	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(2));
+	chunk.emit(lir::Opcode::MOV, b, lir::Operand::make_immediate_integer(3));
+	chunk.emit_store(lir::Operand::make_immediate_integer(69), b, a);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -98,7 +102,7 @@ TEST(VMTest, store_immediate_with_offset) {
 }
 
 TEST(VMTest, push_immediate) {
-	auto a = lir::Operand(69);
+	auto a = lir::Operand::make_immediate_integer(69);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PUSH, a);

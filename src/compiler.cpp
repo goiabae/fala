@@ -53,7 +53,7 @@ Result write_int(Compiler&, vector<Operand> args) {
 	Chunk chunk {};
 
 	auto& op = args[0];
-	assert(!(op.type == Operand::Type::REG && op.as_register().has_addr()));
+	assert(!(op.type == Operand::Type::REGISTER && op.as_register().has_addr()));
 	chunk.emit(Opcode::PRINTV, op);
 	return {chunk, {}};
 }
@@ -64,7 +64,7 @@ Result write_char(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(!(op.type == Operand::Type::REG && op.as_register().has_addr()));
+	assert(!(op.type == Operand::Type::REGISTER && op.as_register().has_addr()));
 	chunk.emit(Opcode::PRINTC, op);
 	return {chunk, {}};
 }
@@ -75,7 +75,7 @@ Result write_str(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(op.type == Operand::Type::REG && op.as_register().has_addr());
+	assert(op.type == Operand::Type::REGISTER && op.as_register().has_addr());
 	chunk.emit(Opcode::PRINTF, op);
 	return {chunk, {}};
 }
@@ -100,9 +100,11 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 
 	Chunk chunk {};
 	// if size if constant we subtract the allocation start at compile time
-	if (args[0].type == Operand::Type::NUM) {
+	if (args[0].type == Operand::Type::IMMEDIATE) {
 		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
-		auto dyn = Operand(comp.dyn_alloc_start -= args[0].as_number());
+		auto dyn = Operand::make_immediate_integer(
+			comp.dyn_alloc_start -= args[0].as_number()
+		);
 
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");
 		return {chunk, addr};
@@ -138,7 +140,7 @@ Chunk Compiler::compile() {
 	auto res_ = compile(ast.root_index, handlers, scope_id);
 	chunk = chunk + res_.code;
 
-	Operand start(dyn_alloc_start);
+	auto start = Operand::make_immediate_integer(dyn_alloc_start);
 	preamble.m_vec[0].operands[1] =
 		start; // backpatching snd after static allocations
 
@@ -158,12 +160,14 @@ Operand Compiler::make_register() {
 	return Operand(Register(reg_count++).as_num());
 }
 
-Operand Compiler::make_label() { return {lir::Label {label_count++}}; }
+Operand Compiler::make_label() {
+	return lir::Operand(lir::Label(label_count++));
+}
 
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
-	if (opnd.type == Operand::Type::REG && opnd.as_register().has_addr()) {
+	if (opnd.type == Operand::Type::REGISTER && opnd.as_register().has_addr()) {
 		Operand tmp = make_register();
-		chunk->emit(Opcode::LOAD, tmp, Operand(0), opnd)
+		chunk->emit(Opcode::LOAD, tmp, Operand::make_immediate_integer(0), opnd)
 			.with_comment("casting to rvalue");
 		return tmp;
 	} else {
@@ -205,7 +209,7 @@ Result Compiler::compile_app(
 
 	Operand* func_opnd = env.find(scope_id, func_node.str_id);
 	if (!func_opnd) err("Function not found");
-	if (func_opnd->type != Operand::Type::LAB)
+	if (func_opnd->type != Operand::Type::LABEL)
 		err("Type of <name> is not function.");
 
 	// push arguments in the reverse order the parameters where declared
@@ -292,7 +296,7 @@ Result Compiler::compile_for(
 			chunk = chunk + step_res.code;
 			return to_rvalue(&chunk, step_res.opnd);
 		} else {
-			return Operand(1);
+			return Operand::make_immediate_integer(1);
 		}
 	}();
 
@@ -301,7 +305,7 @@ Result Compiler::compile_for(
 	auto var_res = compile(decl_idx, handlers, new_scope_id);
 	chunk = chunk + var_res.code;
 	Operand var = var_res.opnd;
-	if (var.type != Operand::Type::REG)
+	if (var.type != Operand::Type::REGISTER)
 		err("Declaration must be of a number lvalue");
 
 	auto to_res = compile(to_idx, handlers, new_scope_id);
@@ -420,7 +424,7 @@ Result Compiler::compile_var_decl(
 	// anything else
 	initial = to_rvalue(&chunk, initial);
 	Operand* var = env.insert(scope_id, id_node.str_id, make_register());
-	if (initial.type == Operand::Type::REG)
+	if (initial.type == Operand::Type::REGISTER)
 		var->as_register().type = initial.as_register().type;
 	chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
 	return {chunk, *var};
@@ -481,7 +485,7 @@ Result Compiler::compile_ass(
 	auto cell_res = compile(node[0], handlers, scope_id);
 	chunk = chunk + cell_res.code;
 	Operand cell = cell_res.opnd;
-	if (cell.type != Operand::Type::REG)
+	if (cell.type != Operand::Type::REGISTER)
 		err("Left-hand side of assignment must be an lvalue");
 
 	auto exp_res = compile(node[1], handlers, scope_id);
@@ -489,7 +493,7 @@ Result Compiler::compile_ass(
 	Operand exp = to_rvalue(&chunk, exp_res.opnd);
 
 	if (cell.as_register().has_addr())
-		chunk.emit(Opcode::STORE, exp, Operand(0), cell)
+		chunk.emit(Opcode::STORE, exp, Operand::make_immediate_integer(0), cell)
 			.with_comment("assigning to array variable");
 	else // contains number
 		chunk.emit(Opcode::MOV, cell, exp).with_comment("assigning to variable");
@@ -536,13 +540,15 @@ Result Compiler::compile_str(
 	buf.as_register() = buf.as_register().as_addr();
 	dyn_alloc_start -= (Number)str_len + 1;
 
-	chunk.emit(Opcode::MOV, buf, Operand(dyn_alloc_start));
+	chunk.emit(
+		Opcode::MOV, buf, Operand::make_immediate_integer(dyn_alloc_start)
+	);
 
 	for (size_t i = 0; i < str_len + 1; i++)
 		chunk.emit(
 			Opcode::MOV,
 			Operand(Register((size_t)dyn_alloc_start + i).as_num()),
-			Operand((Number)str[i])
+			Operand::make_immediate_integer(str[i])
 		);
 
 	chunk.result_opnd = buf;
@@ -585,7 +591,7 @@ Result Compiler::compile(
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
 		case NodeType::NUM: {
 			Chunk chunk {};
-			auto opnd = Operand(node.num);
+			auto opnd = Operand::make_immediate_integer(node.num);
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}
@@ -615,7 +621,10 @@ Result Compiler::compile(
 			chunk = chunk + res_res.code;
 			Operand res = to_rvalue(&chunk, res_res.opnd);
 			chunk.emit(Opcode::MOV, handlers.break_handler.result_register, res);
-			chunk.emit(Opcode::JMP, handlers.break_handler.destination_label)
+			chunk
+				.emit(
+					Opcode::JMP, lir::Operand(handlers.break_handler.destination_label)
+				)
 				.with_comment("break out of loop");
 			return {chunk, {}};
 		}
@@ -630,7 +639,10 @@ Result Compiler::compile(
 			chunk = chunk + res_res.code;
 			Operand res = to_rvalue(&chunk, res_res.opnd);
 			chunk.emit(Opcode::MOV, handlers.continue_handler.result_register, res);
-			chunk.emit(Opcode::JMP, handlers.continue_handler.destination_label)
+			chunk
+				.emit(
+					Opcode::JMP, lir::Operand(handlers.continue_handler.destination_label)
+				)
 				.with_comment("continue to next iteration of loop");
 			return {chunk, {}};
 		}
@@ -691,13 +703,13 @@ Result Compiler::compile(
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
 		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
 		case NodeType::NIL: return {{}, {}};
-		case NodeType::TRUE: return {{}, {1}};
-		case NodeType::FALSE: return {{}, {0}};
+		case NodeType::TRUE: return {{}, lir::Operand::make_immediate_integer(1)};
+		case NodeType::FALSE: return {{}, lir::Operand::make_immediate_integer(0)};
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: {
 			Chunk chunk {};
-			auto opnd = Operand {node.character};
+			auto opnd = lir::Operand::make_immediate_integer(node.character);
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}

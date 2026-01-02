@@ -19,7 +19,7 @@ void VM::run(const lir::Chunk& code) {
 	size_t return_address = 0;
 
 	auto deref = [&](Operand opnd) -> int64_t& {
-		if (opnd.type == Operand::Type::REG) {
+		if (opnd.type == Operand::Type::REGISTER) {
 			return cells[opnd.as_register().index];
 		} else if (opnd.type == Operand::Type::ARR) {
 			return cells[opnd.as_array().start_pointer_reg.index];
@@ -30,13 +30,13 @@ void VM::run(const lir::Chunk& code) {
 	};
 
 	auto fetch = [&](Operand opnd) -> int64_t {
-		if (opnd.type == Operand::Type::REG) {
+		if (opnd.type == Operand::Type::REGISTER) {
 			return cells[opnd.as_register().index];
 		} else if (opnd.type == Operand::Type::ARR) {
 			return cells[opnd.as_array().start_pointer_reg.index];
-		} else if (opnd.type == Operand::Type::NUM) {
+		} else if (opnd.type == Operand::Type::IMMEDIATE) {
 			return opnd.as_number();
-		} else if (opnd.type == Operand::Type::NIL) {
+		} else if (opnd.type == Operand::Type::NOTHING) {
 			return 0;
 		} else {
 			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
@@ -51,7 +51,9 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::PRINTF: {
 				size_t i = 0;
 				char c;
-				while ((c = (char)INDIRECT_LOAD(inst.operands[0], Operand((Number)i)))
+				while ((c = (char)INDIRECT_LOAD(
+									inst.operands[0], Operand::make_immediate_integer((int)i)
+								))
 				       != 0) {
 					output << c;
 					i++;
@@ -70,7 +72,7 @@ void VM::run(const lir::Chunk& code) {
 				std::string line {};
 				if (not std::getline(input, line)) err("Couldn't read input");
 				int num = std::stoi(line);
-				if (inst.operands[0].type != Operand::Type::REG)
+				if (inst.operands[0].type != Operand::Type::REGISTER)
 					err("First argument must be a register");
 				deref(inst.operands[0]) = num;
 				break;
@@ -148,10 +150,10 @@ void VM::run(const lir::Chunk& code) {
 
 	if (should_print_result and code.result_opnd.has_value()) {
 		if (auto result = code.result_opnd.value(); code.result_opnd.has_value()) {
-			if (result.type == Operand::Type::NUM) {
+			if (result.type == Operand::Type::IMMEDIATE) {
 				std::cout << "==> " << fetch(result) << '\n';
 			} else if (auto reg = result.as_register();
-			           result.type == Operand::Type::REG) {
+			           result.type == Operand::Type::REGISTER) {
 				if (reg.has_num()) {
 					std::cout << "==> " << fetch(result) << '\n';
 				} else if (reg.has_addr()) {

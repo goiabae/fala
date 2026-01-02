@@ -53,7 +53,7 @@ struct Register {
 		VAL_ADDR, // register contains an address of a r-register
 	} type;
 	size_t index;
-	Register(size_t idx) : index {idx} {}
+	explicit Register(size_t idx) : index {idx} {}
 	Register& as_num() { return (type = VAL_NUM), *this; }
 	Register& as_addr() { return (type = VAL_ADDR), *this; }
 	bool has_num() const { return type == VAL_NUM; }
@@ -77,23 +77,34 @@ struct Array {
 
 struct Operand {
 	enum class Type {
-		NIL, // no operand
-		REG, // variables register
-		LAB, // label
-		NUM, // immediate number
+		NOTHING,   // no operand
+		REGISTER,  // variables register
+		LABEL,     // label
+		IMMEDIATE, // immediate number
 		FUN,
 		ARR, // array
 	};
 
+	enum class DataType {
+		INVALID,
+		INTEGER,
+		POINTER,
+	};
+
+	DataType data_type;
 	Type type;
 	std::variant<Register, Label, Number, Function, Array> data;
 
-	Operand() : type {Type::NIL}, data {Number {0}} {}
-	Operand(Register reg) : type(Type::REG), data {reg} {}
-	Operand(Label lab) : type(Type::LAB), data {lab} {}
-	constexpr Operand(Number num) : type(Type::NUM), data {num} {}
-	Operand(Function fun) : type(Type::FUN), data {fun} {}
-	Operand(Array arr) : type(Type::ARR), data {arr} {}
+	Operand()
+	: data_type {DataType::INVALID}, type {Type::NOTHING}, data {Number {0}} {}
+	explicit Operand(Register reg)
+	: data_type {DataType::INVALID}, type(Type::REGISTER), data {reg} {}
+	explicit Operand(Label lab)
+	: data_type {DataType::INVALID}, type(Type::LABEL), data {lab} {}
+	explicit Operand(Function fun)
+	: data_type {DataType::INVALID}, type(Type::FUN), data {fun} {}
+	explicit Operand(Array arr)
+	: data_type {DataType::INVALID}, type(Type::ARR), data {arr} {}
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
@@ -106,6 +117,8 @@ struct Operand {
 	const Array& as_array() const { return std::get<Array>(data); }
 
 	void deinit() { return; }
+
+	static auto make_immediate_integer(int integer) -> Operand;
 };
 
 #define INSTRUCTION_MAX_OPERANDS 3
@@ -125,6 +138,8 @@ struct Chunk {
 	std::map<size_t, size_t> label_indexes;
 
 	std::optional<Operand> result_opnd;
+
+	void emit_store(Operand value, Operand offset, Operand base);
 };
 
 // return amount of operands of each opcode
