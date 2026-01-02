@@ -3,11 +3,14 @@ cmake_minimum_required(VERSION 3.17.0)
 project(fala)
 
 include(CTest)
+include(CheckIPOSupported)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(CMAKE_CXX_CPPCHECK "cppcheck")
+
+check_ipo_supported(RESULT is_ipo_supported OUTPUT error)
 
 if(MSVC)
 	add_compile_options(/W4 "$<$<CONFIG:DEBUG>:/Zi;/Od>")
@@ -60,6 +63,12 @@ endif()
 if(HIR_COMPILER)
 	target_compile_options(fala PRIVATE -D EXPERIMENTAL_HIR_COMPILER)
 	set_property(TARGET fala APPEND PROPERTY SOURCES src/hir_compiler.cpp src/hir.cpp)
+endif()
+
+if(is_ipo_supported)
+	set_property(TARGET fala PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+	message(STATUS "IPO/LTO not supported: <${error}>")
 endif()
 
 enable_testing()
