@@ -219,6 +219,7 @@ Result Compiler::compile_app(
 	chunk.emit(Opcode::CALL, *func_opnd);
 	Operand res = make_register();
 	chunk.emit(Opcode::POP, res);
+	chunk.result_opnd = res;
 
 	return {chunk, res};
 }
