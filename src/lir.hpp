@@ -45,6 +45,11 @@ enum class Opcode {
 	CALL,
 	RET,
 	FUNC,
+
+	// pointer operations
+	ALLOCA,
+	LOADA,
+	STOREA,
 };
 
 struct Register {
