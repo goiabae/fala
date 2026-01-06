@@ -57,10 +57,7 @@ struct Register {
 	} type;
 	size_t index;
 	explicit Register(size_t idx) : index {idx} {}
-	Register& as_num() { return (type = VAL_NUM), *this; }
-	Register& as_addr() { return (type = VAL_ADDR), *this; }
-	bool has_num() const { return type == VAL_NUM; }
-	bool has_addr() const { return type == VAL_ADDR; }
+	bool is_lvalue_pointer {false};
 };
 
 struct Function {

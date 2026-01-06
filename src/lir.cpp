@@ -163,10 +163,7 @@ int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::IMMEDIATE) {
 		return fprintf(fd, "%d", opnd.as_immediate().number);
 	} else if (opnd.type == Operand::Type::REGISTER) {
-		if (opnd.as_register().has_num())
-			return fprintf(fd, "%zu", opnd.as_register().index);
-		else if (opnd.as_register().has_addr())
-			return fprintf(fd, "%%r%zu", opnd.as_register().index);
+		return fprintf(fd, "%%r%zu", opnd.as_register().index);
 	} else
 		assert(false && "unreachable");
 	return 0;

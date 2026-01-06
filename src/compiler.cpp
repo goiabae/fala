@@ -53,7 +53,8 @@ Result write_int(Compiler&, vector<Operand> args) {
 	Chunk chunk {};
 
 	auto& op = args[0];
-	assert(!(op.type == Operand::Type::REGISTER && op.as_register().has_addr()));
+	if (op.type == Operand::Type::REGISTER)
+		assert(not op.as_register().is_lvalue_pointer);
 	chunk.emit(Opcode::PRINTV, op);
 	return {chunk, {}};
 }
@@ -64,7 +65,8 @@ Result write_char(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(!(op.type == Operand::Type::REGISTER && op.as_register().has_addr()));
+	if (op.type == Operand::Type::REGISTER)
+		assert(not op.as_register().is_lvalue_pointer);
 	chunk.emit(Opcode::PRINTC, op);
 	return {chunk, {}};
 }
@@ -75,7 +77,9 @@ Result write_str(Compiler&, vector<Operand> args) {
 
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(op.type == Operand::Type::REGISTER && op.as_register().has_addr());
+	assert(
+		op.type == Operand::Type::REGISTER and op.as_register().is_lvalue_pointer
+	);
 	chunk.emit(Opcode::PRINTF, op);
 	return {chunk, {}};
 }
@@ -101,7 +105,8 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 	Chunk chunk {};
 	// if size if constant we subtract the allocation start at compile time
 	if (args[0].type == Operand::Type::IMMEDIATE) {
-		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
+		auto addr = Operand(lir::Array {Register(comp.reg_count++)});
+		addr.as_array().start_pointer_reg.is_lvalue_pointer = true;
 		auto dyn = Operand::make_immediate_integer(
 			comp.dyn_alloc_start -= args[0].as_immediate().number
 		);
@@ -110,8 +115,9 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 		return {chunk, addr};
 
 	} else {
-		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
-		auto dyn = Operand(Register(0).as_num());
+		auto addr = Operand(lir::Array {Register(comp.reg_count++)});
+		addr.as_array().start_pointer_reg.is_lvalue_pointer = true;
+		auto dyn = Operand(Register(0));
 
 		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
@@ -156,16 +162,15 @@ Chunk Compiler::compile() {
 	return res;
 }
 
-Operand Compiler::make_register() {
-	return Operand(Register(reg_count++).as_num());
-}
+Operand Compiler::make_register() { return Operand(Register(reg_count++)); }
 
 Operand Compiler::make_label() {
 	return lir::Operand(lir::Label(label_count++));
 }
 
 Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
-	if (opnd.type == Operand::Type::REGISTER && opnd.as_register().has_addr()) {
+	if (opnd.type == Operand::Type::REGISTER
+	    and opnd.as_register().is_lvalue_pointer) {
 		Operand tmp = make_register();
 		chunk->emit(Opcode::LOAD, tmp, Operand::make_immediate_integer(0), opnd)
 			.with_comment("casting to rvalue");
@@ -493,7 +498,7 @@ Result Compiler::compile_ass(
 	chunk = chunk + exp_res.code;
 	Operand exp = to_rvalue(&chunk, exp_res.opnd);
 
-	if (cell.as_register().has_addr())
+	if (cell.as_register().is_lvalue_pointer)
 		chunk.emit(Opcode::STORE, exp, Operand::make_immediate_integer(0), cell)
 			.with_comment("assigning to array variable");
 	else // contains number
@@ -538,7 +543,7 @@ Result Compiler::compile_str(
 	const char* str = pool.find(node.str_id);
 	auto str_len = strlen(str);
 	auto buf = make_register();
-	buf.as_register() = buf.as_register().as_addr();
+	buf.as_register().is_lvalue_pointer = true;
 	dyn_alloc_start -= (Number)str_len + 1;
 
 	chunk.emit(
@@ -548,7 +553,7 @@ Result Compiler::compile_str(
 	for (size_t i = 0; i < str_len + 1; i++)
 		chunk.emit(
 			Opcode::MOV,
-			Operand(Register((size_t)dyn_alloc_start + i).as_num()),
+			Operand(Register((size_t)dyn_alloc_start + i)),
 			Operand::make_immediate_integer(str[i])
 		);
 
@@ -575,10 +580,11 @@ Result Compiler::compile_at(
 	if (base.type != Operand::Type::ARR) err("Base must be an lvalue");
 
 	Operand tmp = make_register();
+	tmp.as_register().is_lvalue_pointer = true;
 	chunk.emit(Opcode::ADD, tmp, base, off)
 		.with_comment("accessing allocated array");
 
-	return {chunk, Operand(tmp.as_register().as_addr())};
+	return {chunk, Operand(tmp)};
 }
 
 // FIXME: Temporary workaround

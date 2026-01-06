@@ -6,7 +6,7 @@
 #include "vm.hpp"
 
 TEST(VMTest, move_immediate) {
-	auto a = lir::Operand(lir::Register(0).as_num());
+	auto a = lir::Operand(lir::Register(0));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
@@ -22,8 +22,8 @@ TEST(VMTest, move_immediate) {
 }
 
 TEST(VMTest, move_integer_register) {
-	auto a = lir::Operand(lir::Register(0).as_num());
-	auto b = lir::Operand(lir::Register(1).as_num());
+	auto a = lir::Operand(lir::Register(0));
+	auto b = lir::Operand(lir::Register(1));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
@@ -40,9 +40,9 @@ TEST(VMTest, move_integer_register) {
 }
 
 TEST(VMTest, arithmetic) {
-	auto a = lir::Operand(lir::Register(0).as_num());
-	auto b = lir::Operand(lir::Register(1).as_num());
-	auto c = lir::Operand(lir::Register(2).as_num());
+	auto a = lir::Operand(lir::Register(0));
+	auto b = lir::Operand(lir::Register(1));
+	auto c = lir::Operand(lir::Register(2));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(3));
@@ -62,7 +62,7 @@ TEST(VMTest, arithmetic) {
 }
 
 TEST(VMTest, store_immediate) {
-	auto a = lir::Operand(lir::Register(0).as_addr());
+	auto a = lir::Operand(lir::Register(0));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(1));
@@ -83,8 +83,8 @@ TEST(VMTest, store_immediate) {
 }
 
 TEST(VMTest, store_immediate_with_offset) {
-	auto a = lir::Operand(lir::Register(0).as_addr());
-	auto b = lir::Operand(lir::Register(1).as_num());
+	auto a = lir::Operand(lir::Register(0));
+	auto b = lir::Operand(lir::Register(1));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(2));

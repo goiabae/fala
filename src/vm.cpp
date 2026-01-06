@@ -211,9 +211,9 @@ void VM::run(const lir::Chunk& code) {
 			std::cout << "==> " << fetch(result) << '\n';
 		} else if (auto reg = result.as_register();
 		           result.type == Operand::Type::REGISTER) {
-			if (reg.has_num()) {
+			if (not reg.is_lvalue_pointer) {
 				std::cout << "==> " << fetch(result) << '\n';
-			} else if (reg.has_addr()) {
+			} else {
 				std::cout << "==> 0d" << std::get<int64_t>(cells[reg.index]) << '\n';
 			}
 		} else {
