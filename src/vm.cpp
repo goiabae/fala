@@ -35,7 +35,7 @@ void VM::run(const lir::Chunk& code) {
 		} else if (opnd.type == Operand::Type::ARR) {
 			return std::get<int64_t>(cells[opnd.as_array().start_pointer_reg.index]);
 		} else if (opnd.type == Operand::Type::IMMEDIATE) {
-			return opnd.as_number();
+			return opnd.as_immediate().number;
 		} else if (opnd.type == Operand::Type::NOTHING) {
 			return 0;
 		} else {
@@ -137,7 +137,7 @@ void VM::run(const lir::Chunk& code) {
 				goto dont_inc;
 			case Opcode::PUSH: {
 				if (inst.operands[0].type == Operand::Type::IMMEDIATE) {
-					stack.push(Value(inst.operands[0].as_number()));
+					stack.push(Value(inst.operands[0].as_immediate().number));
 				} else if (inst.operands[0].type == Operand::Type::REGISTER) {
 					stack.push(cells[inst.operands[0].as_register().index]);
 				} else {

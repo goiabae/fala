@@ -12,8 +12,6 @@
 
 namespace lir {
 
-using Number = int;
-
 enum class Opcode {
 	PRINTF,
 	PRINTV,
@@ -80,6 +78,11 @@ struct Array {
 	Register start_pointer_reg;
 };
 
+struct Immediate {
+	Immediate(int number) : number {number} {}
+	int number;
+};
+
 struct Operand {
 	enum class Type {
 		NOTHING,   // no operand
@@ -98,10 +101,10 @@ struct Operand {
 
 	DataType data_type;
 	Type type;
-	std::variant<Register, Label, Number, Function, Array> data;
+	std::variant<Register, Label, Immediate, Function, Array> data;
 
 	Operand()
-	: data_type {DataType::INVALID}, type {Type::NOTHING}, data {Number {0}} {}
+	: data_type {DataType::INVALID}, type {Type::NOTHING}, data {Immediate {0}} {}
 	explicit Operand(Register reg)
 	: data_type {DataType::INVALID}, type(Type::REGISTER), data {reg} {}
 	explicit Operand(Label lab)
@@ -113,12 +116,12 @@ struct Operand {
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
-	Number& as_number() { return std::get<Number>(data); }
+	Immediate& as_immediate() { return std::get<Immediate>(data); }
 	Array& as_array() { return std::get<Array>(data); }
 
 	const Label& as_label() const { return std::get<Label>(data); }
 	const Register& as_register() const { return std::get<Register>(data); }
-	const Number& as_number() const { return std::get<Number>(data); }
+	const Immediate& as_immediate() const { return std::get<Immediate>(data); }
 	const Array& as_array() const { return std::get<Array>(data); }
 
 	void deinit() { return; }

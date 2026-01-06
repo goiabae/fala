@@ -103,7 +103,7 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 	if (args[0].type == Operand::Type::IMMEDIATE) {
 		auto addr = Operand(lir::Array {Register(comp.reg_count++).as_addr()});
 		auto dyn = Operand::make_immediate_integer(
-			comp.dyn_alloc_start -= args[0].as_number()
+			comp.dyn_alloc_start -= args[0].as_immediate().number
 		);
 
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");

@@ -97,7 +97,7 @@ auto Operand::make_immediate_integer(int integer) -> Operand {
 	Operand opnd;
 	opnd.data_type = Operand::DataType::INTEGER;
 	opnd.type = Operand::Type::IMMEDIATE;
-	opnd.data.emplace<Number>(integer);
+	opnd.data.emplace<Immediate>(integer);
 	return opnd;
 }
 
@@ -107,7 +107,8 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::REGISTER:
 			return fprintf(fd, "%%%zu", opnd.as_register().index);
 		case Operand::Type::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
-		case Operand::Type::IMMEDIATE: return fprintf(fd, "%d", opnd.as_number());
+		case Operand::Type::IMMEDIATE:
+			return fprintf(fd, "%d", opnd.as_immediate().number);
 		case Operand::Type::FUN: assert(false && "unreachable");
 		case Operand::Type::ARR:
 			return fprintf(fd, "%%%zu", opnd.as_array().start_pointer_reg.index);
@@ -154,7 +155,7 @@ const char* opcode_repr(Opcode op) {
 
 int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::IMMEDIATE) {
-		return fprintf(fd, "%d", opnd.as_number());
+		return fprintf(fd, "%d", opnd.as_immediate().number);
 	} else if (opnd.type == Operand::Type::REGISTER) {
 		if (opnd.as_register().has_num())
 			return fprintf(fd, "%zu", opnd.as_register().index);
