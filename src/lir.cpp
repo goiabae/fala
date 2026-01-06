@@ -50,6 +50,9 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::CALL: return 1;
 		case Opcode::RET: return 0;
 		case Opcode::FUNC: return 0;
+		case Opcode::ALLOCA: return 2;
+		case Opcode::LOADA: return 3;
+		case Opcode::STOREA: return 3;
 	}
 	assert(false);
 };
@@ -149,6 +152,9 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::CALL: return "call";
 		case Opcode::RET: return "ret";
 		case Opcode::FUNC: return "func";
+		case Opcode::ALLOCA: return "alloca";
+		case Opcode::LOADA: return "loada";
+		case Opcode::STOREA: return "storea";
 	}
 	assert(false);
 }
