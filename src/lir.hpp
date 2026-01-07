@@ -121,11 +121,10 @@ struct Operand {
 	static auto make_immediate_integer(int integer) -> Operand;
 };
 
-#define INSTRUCTION_MAX_OPERANDS 3
-
 struct Instruction {
+	static constexpr auto max_operands = 3;
 	Opcode opcode;
-	Operand operands[INSTRUCTION_MAX_OPERANDS];
+	Operand operands[max_operands];
 	std::string comment;
 };
 
