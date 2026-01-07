@@ -118,8 +118,6 @@ struct Operand {
 	const Register& as_register() const { return std::get<Register>(data); }
 	const Immediate& as_immediate() const { return std::get<Immediate>(data); }
 
-	void deinit() { return; }
-
 	static auto make_immediate_integer(int integer) -> Operand;
 };
 
