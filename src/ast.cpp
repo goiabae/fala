@@ -55,6 +55,7 @@ bool is_branch_node(NodeType type) {
 		case NodeType::AS: return true;
 		case NodeType::INSTANCE: return true;
 	}
+	assert(false);
 }
 
 const char* node_type_repr(enum NodeType type) {
@@ -97,6 +98,7 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::INSTANCE: return "NodeType::INSTANCE";
 		case NodeType::AS: return "NodeType::AS";
 	}
+	assert(false);
 }
 
 bool node_has_fixed_repr(enum NodeType type) {

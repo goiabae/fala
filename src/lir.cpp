@@ -236,6 +236,7 @@ const char* operand_type_repr(Operand::Type type) {
 		case Operand::Type::IMMEDIATE: return "Operand::Type::NUM";
 		case Operand::Type::FUN: return "Operand::Type::FUN";
 	}
+	assert(false);
 }
 
 void Chunk::emit_store(Operand value, Operand offset, Operand base) {
