@@ -53,6 +53,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::ALLOCA: return 2;
 		case Opcode::LOADA: return 3;
 		case Opcode::STOREA: return 3;
+		case Opcode::SHIFTA: return 3;
 	}
 	assert(false);
 };
@@ -152,6 +153,7 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::ALLOCA: return "alloca";
 		case Opcode::LOADA: return "loada";
 		case Opcode::STOREA: return "storea";
+		case Opcode::SHIFTA: return "shifta";
 	}
 	assert(false);
 }

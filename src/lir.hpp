@@ -49,6 +49,7 @@ enum class Opcode {
 	ALLOCA,
 	LOADA,
 	STOREA,
+	SHIFTA,
 };
 
 class Type;

@@ -195,6 +195,19 @@ void VM::run(const lir::Chunk& code) {
 				cell = value;
 				break;
 			}
+			case Opcode::SHIFTA: {
+				auto result_register = inst.operands[0];
+				auto offset_register = inst.operands[1];
+				auto pointer_register = inst.operands[2];
+				assert(result_register.type == Operand::Type::REGISTER);
+				assert(offset_register.type == Operand::Type::REGISTER);
+				assert(pointer_register.type == Operand::Type::REGISTER);
+				auto offset = fetch(offset_register);
+				auto pointer =
+					std::get<Value*>(cells[pointer_register.as_register().index]);
+				cells[result_register.as_register().index] = &pointer[offset];
+				break;
+			}
 		}
 		pc++;
 	dont_inc:
