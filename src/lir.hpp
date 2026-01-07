@@ -70,12 +70,14 @@ class Type : public std::variant<Pointer, Integer> {
 	Type(const Pointer& p) : std::variant<Pointer, Integer> {p} {}
 	static Type make_integer();
 	static Type make_integer_array();
+	static Type make_integer_pointer();
 };
 
 struct Register {
-	explicit Register(size_t idx, Type type) : index {idx}, type {type} {}
+	explicit Register(size_t idx, Type type, bool is_lvalue_pointer = false)
+	: index {idx}, is_lvalue_pointer {is_lvalue_pointer}, type {type} {}
 	size_t index;
-	bool is_lvalue_pointer {false};
+	bool is_lvalue_pointer;
 	Type type;
 };
 

@@ -169,6 +169,12 @@ Type Type::make_integer_array() {
 	return t;
 }
 
+Type Type::make_integer_pointer() {
+	return lir::Type {
+		lir::Pointer {std::make_shared<lir::Type>(lir::Integer {}), false}
+	};
+}
+
 int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::IMMEDIATE) {
 		return fprintf(fd, "%d", opnd.as_immediate().number);
