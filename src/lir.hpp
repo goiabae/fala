@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <variant>
@@ -50,14 +51,31 @@ enum class Opcode {
 	STOREA,
 };
 
+class Type;
+
+class Pointer {
+ public:
+	std::shared_ptr<Type> pointed_type;
+	bool is_many_pointer;
+	Pointer(std::shared_ptr<Type> pointed_type, bool is_many_pointer)
+	: pointed_type {pointed_type}, is_many_pointer {is_many_pointer} {}
+};
+
+class Integer {};
+
+class Type : public std::variant<Pointer, Integer> {
+ public:
+	Type(const Integer& i) : std::variant<Pointer, Integer> {i} {}
+	Type(const Pointer& p) : std::variant<Pointer, Integer> {p} {}
+	static Type make_integer();
+	static Type make_integer_array();
+};
+
 struct Register {
-	enum {
-		VAL_NUM,  // register contains a plain number
-		VAL_ADDR, // register contains an address of a r-register
-	} type;
+	explicit Register(size_t idx, Type type) : index {idx}, type {type} {}
 	size_t index;
-	explicit Register(size_t idx) : index {idx} {}
 	bool is_lvalue_pointer {false};
+	Type type;
 };
 
 struct Function {
@@ -68,11 +86,6 @@ struct Function {
 
 struct Label {
 	size_t id;
-};
-
-// simple wrapper around Register
-struct Array {
-	Register start_pointer_reg;
 };
 
 struct Immediate {
@@ -87,39 +100,23 @@ struct Operand {
 		LABEL,     // label
 		IMMEDIATE, // immediate number
 		FUN,
-		ARR, // array
 	};
 
-	enum class DataType {
-		INVALID,
-		INTEGER,
-		POINTER,
-	};
-
-	DataType data_type;
 	Type type;
-	std::variant<Register, Label, Immediate, Function, Array> data;
+	std::variant<Register, Label, Immediate, Function> data;
 
-	Operand()
-	: data_type {DataType::INVALID}, type {Type::NOTHING}, data {Immediate {0}} {}
-	explicit Operand(Register reg)
-	: data_type {DataType::INVALID}, type(Type::REGISTER), data {reg} {}
-	explicit Operand(Label lab)
-	: data_type {DataType::INVALID}, type(Type::LABEL), data {lab} {}
-	explicit Operand(Function fun)
-	: data_type {DataType::INVALID}, type(Type::FUN), data {fun} {}
-	explicit Operand(Array arr)
-	: data_type {DataType::INVALID}, type(Type::ARR), data {arr} {}
+	Operand() : type {Type::NOTHING}, data {Immediate {0}} {}
+	explicit Operand(Register reg) : type(Type::REGISTER), data {reg} {}
+	explicit Operand(Label lab) : type(Type::LABEL), data {lab} {}
+	explicit Operand(Function fun) : type(Type::FUN), data {fun} {}
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
 	Immediate& as_immediate() { return std::get<Immediate>(data); }
-	Array& as_array() { return std::get<Array>(data); }
 
 	const Label& as_label() const { return std::get<Label>(data); }
 	const Register& as_register() const { return std::get<Register>(data); }
 	const Immediate& as_immediate() const { return std::get<Immediate>(data); }
-	const Array& as_array() const { return std::get<Array>(data); }
 
 	void deinit() { return; }
 

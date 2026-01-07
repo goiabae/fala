@@ -21,8 +21,6 @@ void VM::run(const lir::Chunk& code) {
 	auto deref = [&](Operand opnd) -> int64_t& {
 		if (opnd.type == Operand::Type::REGISTER) {
 			return std::get<int64_t>(cells[opnd.as_register().index]);
-		} else if (opnd.type == Operand::Type::ARR) {
-			return std::get<int64_t>(cells[opnd.as_array().start_pointer_reg.index]);
 		} else {
 			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
 			exit(1);
@@ -32,8 +30,6 @@ void VM::run(const lir::Chunk& code) {
 	auto fetch = [&](Operand opnd) -> int64_t {
 		if (opnd.type == Operand::Type::REGISTER) {
 			return std::get<int64_t>(cells[opnd.as_register().index]);
-		} else if (opnd.type == Operand::Type::ARR) {
-			return std::get<int64_t>(cells[opnd.as_array().start_pointer_reg.index]);
 		} else if (opnd.type == Operand::Type::IMMEDIATE) {
 			return opnd.as_immediate().number;
 		} else if (opnd.type == Operand::Type::NOTHING) {

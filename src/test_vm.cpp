@@ -5,8 +5,12 @@
 #include "lir.hpp"
 #include "vm.hpp"
 
+static lir::Operand make_integer_register(std::size_t index) {
+	return lir::Operand(lir::Register(index, lir::Type::make_integer()));
+}
+
 TEST(VMTest, move_immediate) {
-	auto a = lir::Operand(lir::Register(0));
+	auto a = make_integer_register(0);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
@@ -22,8 +26,8 @@ TEST(VMTest, move_immediate) {
 }
 
 TEST(VMTest, move_integer_register) {
-	auto a = lir::Operand(lir::Register(0));
-	auto b = lir::Operand(lir::Register(1));
+	auto a = make_integer_register(0);
+	auto b = make_integer_register(1);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
@@ -40,9 +44,9 @@ TEST(VMTest, move_integer_register) {
 }
 
 TEST(VMTest, arithmetic) {
-	auto a = lir::Operand(lir::Register(0));
-	auto b = lir::Operand(lir::Register(1));
-	auto c = lir::Operand(lir::Register(2));
+	auto a = make_integer_register(0);
+	auto b = make_integer_register(1);
+	auto c = make_integer_register(2);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(3));
@@ -62,7 +66,7 @@ TEST(VMTest, arithmetic) {
 }
 
 TEST(VMTest, store_immediate) {
-	auto a = lir::Operand(lir::Register(0));
+	auto a = make_integer_register(0);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(1));
@@ -83,8 +87,8 @@ TEST(VMTest, store_immediate) {
 }
 
 TEST(VMTest, store_immediate_with_offset) {
-	auto a = lir::Operand(lir::Register(0));
-	auto b = lir::Operand(lir::Register(1));
+	auto a = make_integer_register(0);
+	auto b = make_integer_register(1);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(2));
@@ -122,11 +126,11 @@ TEST(VMTest, heap_allocation) {
 	auto b = lir::Operand::make_immediate_integer(69);
 	auto c = lir::Operand::make_immediate_integer(0);
 
-	auto r1 = lir::Operand(lir::Register(1));
-	auto r2 = lir::Operand(lir::Register(2));
-	auto r3 = lir::Operand(lir::Register(3));
-	auto r4 = lir::Operand(lir::Register(4));
-	auto r5 = lir::Operand(lir::Register(5));
+	auto r1 = make_integer_register(1);
+	auto r2 = make_integer_register(2);
+	auto r3 = make_integer_register(3);
+	auto r4 = make_integer_register(4);
+	auto r5 = make_integer_register(5);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, r1, a);
@@ -174,11 +178,11 @@ TEST(VMTest, function_call) {
 	auto l0 = lir::Operand(lir::Label {0});
 	auto l1 = lir::Operand(lir::Label {1});
 
-	auto r0 = lir::Operand(lir::Register(0));
-	auto r1 = lir::Operand(lir::Register(1));
-	auto r2 = lir::Operand(lir::Register(2));
-	auto r3 = lir::Operand(lir::Register(3));
-	auto r4 = lir::Operand(lir::Register(4));
+	auto r0 = make_integer_register(0);
+	auto r1 = make_integer_register(1);
+	auto r2 = make_integer_register(2);
+	auto r3 = make_integer_register(3);
+	auto r4 = make_integer_register(4);
 
 	lir::Chunk chunk {};
 
@@ -252,18 +256,18 @@ TEST(VMTest, function_out_parameter) {
 	auto l0 = lir::Operand(lir::Label {0});
 	auto l1 = lir::Operand(lir::Label {1});
 
-	auto r0 = lir::Operand(lir::Register(0));
-	auto r1 = lir::Operand(lir::Register(1));
-	auto r2 = lir::Operand(lir::Register(2));
-	auto r3 = lir::Operand(lir::Register(3));
-	auto r4 = lir::Operand(lir::Register(4));
-	auto r5 = lir::Operand(lir::Register(5));
-	auto r6 = lir::Operand(lir::Register(6));
-	auto r7 = lir::Operand(lir::Register(7));
-	auto r8 = lir::Operand(lir::Register(8));
-	auto r9 = lir::Operand(lir::Register(9));
-	auto r10 = lir::Operand(lir::Register(10));
-	auto r11 = lir::Operand(lir::Register(11));
+	auto r0 = make_integer_register(0);
+	auto r1 = make_integer_register(1);
+	auto r2 = make_integer_register(2);
+	auto r3 = make_integer_register(3);
+	auto r4 = make_integer_register(4);
+	auto r5 = make_integer_register(5);
+	auto r6 = make_integer_register(6);
+	auto r7 = make_integer_register(7);
+	auto r8 = make_integer_register(8);
+	auto r9 = make_integer_register(9);
+	auto r10 = make_integer_register(10);
+	auto r11 = make_integer_register(11);
 
 	lir::Chunk chunk {};
 

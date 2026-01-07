@@ -7,11 +7,13 @@
 #include <string.h>
 
 #include <iostream>
+#include <memory>
 #include <vector>
 
 #include "ast.hpp"
 #include "lir.hpp"
 #include "str_pool.h"
+#include "utils.hpp"
 
 namespace compiler {
 
@@ -105,8 +107,9 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 	Chunk chunk {};
 	// if size if constant we subtract the allocation start at compile time
 	if (args[0].type == Operand::Type::IMMEDIATE) {
-		auto addr = Operand(lir::Array {Register(comp.reg_count++)});
-		addr.as_array().start_pointer_reg.is_lvalue_pointer = true;
+		auto addr =
+			Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
+		addr.as_register().is_lvalue_pointer = true;
 		auto dyn = Operand::make_immediate_integer(
 			comp.dyn_alloc_start -= args[0].as_immediate().number
 		);
@@ -115,9 +118,10 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 		return {chunk, addr};
 
 	} else {
-		auto addr = Operand(lir::Array {Register(comp.reg_count++)});
-		addr.as_array().start_pointer_reg.is_lvalue_pointer = true;
-		auto dyn = Operand(Register(0));
+		auto addr =
+			Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
+		addr.as_register().is_lvalue_pointer = true;
+		auto dyn = Operand(Register(0, lir::Type::make_integer()));
 
 		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
 		chunk.emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
@@ -162,7 +166,9 @@ Chunk Compiler::compile() {
 	return res;
 }
 
-Operand Compiler::make_register() { return Operand(Register(reg_count++)); }
+Operand Compiler::make_register() {
+	return Operand(Register(reg_count++, lir::Type::make_integer()));
+}
 
 Operand Compiler::make_label() {
 	return lir::Operand(lir::Label(label_count++));
@@ -424,14 +430,22 @@ Result Compiler::compile_var_decl(
 	Operand initial = initial_res.opnd;
 
 	// initial is an array
-	if (initial.type == Operand::Type::ARR)
-		return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
+	auto is_array = MATCH(
+		initial.data,
+		(const lir::Register& reg) {
+			return MATCH(
+				reg.type,
+				(const lir::Pointer& ptr) { return ptr.is_many_pointer; },
+				(const auto&) { return false; }
+			);
+		},
+		(const auto&) { return false; }
+	);
+	if (is_array) return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
 
 	// anything else
 	initial = to_rvalue(&chunk, initial);
 	Operand* var = env.insert(scope_id, id_node.str_id, make_register());
-	if (initial.type == Operand::Type::REGISTER)
-		var->as_register().type = initial.as_register().type;
 	chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
 	return {chunk, *var};
 }
@@ -553,7 +567,7 @@ Result Compiler::compile_str(
 	for (size_t i = 0; i < str_len + 1; i++)
 		chunk.emit(
 			Opcode::MOV,
-			Operand(Register((size_t)dyn_alloc_start + i)),
+			Operand(Register((size_t)dyn_alloc_start + i, lir::Type::make_integer())),
 			Operand::make_immediate_integer(str[i])
 		);
 
@@ -577,7 +591,18 @@ Result Compiler::compile_at(
 	chunk = chunk + off_res.code;
 	Operand off = to_rvalue(&chunk, off_res.opnd);
 
-	if (base.type != Operand::Type::ARR) err("Base must be an lvalue");
+	auto is_array = MATCH(
+		base.data,
+		(const lir::Register& reg) {
+			return MATCH(
+				reg.type,
+				(const lir::Pointer& ptr) { return ptr.is_many_pointer; },
+				(const auto&) { return false; }
+			);
+		},
+		(const auto&) { return false; }
+	);
+	if (not is_array) err("Base must be an lvalue");
 
 	Operand tmp = make_register();
 	tmp.as_register().is_lvalue_pointer = true;

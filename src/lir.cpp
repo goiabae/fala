@@ -98,7 +98,6 @@ int print_str(FILE* fd, const char* str) {
 
 auto Operand::make_immediate_integer(int integer) -> Operand {
 	Operand opnd;
-	opnd.data_type = Operand::DataType::INTEGER;
 	opnd.type = Operand::Type::IMMEDIATE;
 	opnd.data.emplace<Immediate>(integer);
 	return opnd;
@@ -113,8 +112,6 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::IMMEDIATE:
 			return fprintf(fd, "%d", opnd.as_immediate().number);
 		case Operand::Type::FUN: assert(false && "unreachable");
-		case Operand::Type::ARR:
-			return fprintf(fd, "%%%zu", opnd.as_array().start_pointer_reg.index);
 	}
 	return 0;
 }
@@ -157,6 +154,17 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::STOREA: return "storea";
 	}
 	assert(false);
+}
+
+Type Type::make_integer() {
+	lir::Type t {lir::Integer {}};
+	return t;
+}
+
+Type Type::make_integer_array() {
+	lir::Type t {lir::Pointer {std::make_shared<lir::Type>(lir::Integer {}), true}
+	};
+	return t;
 }
 
 int print_operand_indirect(FILE* fd, Operand opnd) {
@@ -225,7 +233,6 @@ const char* operand_type_repr(Operand::Type type) {
 		case Operand::Type::LABEL: return "Operand::Type::LAB";
 		case Operand::Type::IMMEDIATE: return "Operand::Type::NUM";
 		case Operand::Type::FUN: return "Operand::Type::FUN";
-		case Operand::Type::ARR: return "Operand::Type::ARR";
 	}
 }
 
