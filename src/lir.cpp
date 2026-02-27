@@ -1,6 +1,7 @@
 #include "lir.hpp"
 
 #include <cassert>
+#include <stdexcept>
 
 namespace lir {
 
@@ -14,8 +15,9 @@ Chunk& Chunk::with_comment(std::string comment) {
 	return *this;
 }
 
-void Chunk::add_label(Operand label) {
+Chunk& Chunk::add_label(Operand label) {
 	label_indexes[label.as_label().id] = m_vec.size();
+	return *this;
 }
 
 size_t opcode_opnd_count(Opcode op) {
@@ -164,7 +166,8 @@ Type Type::make_integer() {
 }
 
 Type Type::make_integer_array() {
-	lir::Type t {lir::Pointer {std::make_shared<lir::Type>(lir::Integer {}), true}
+	lir::Type t {
+		lir::Pointer {std::make_shared<lir::Type>(lir::Integer {}), true}
 	};
 	return t;
 }
@@ -245,8 +248,53 @@ const char* operand_type_repr(Operand::Type type) {
 	assert(false);
 }
 
-void Chunk::emit_store(Operand value, Operand offset, Operand base) {
-	emit(Opcode::STORE, value, offset, base);
+static bool is_value_operand(const Operand& opnd) {
+	return opnd.type == Operand::Type::REGISTER
+	    or opnd.type == Operand::Type::IMMEDIATE;
+}
+
+Chunk& Chunk::emit_store(Operand value, Operand offset, Operand base) {
+	return emit(Opcode::STORE, value, offset, base);
+}
+
+Chunk& Chunk::emit_binop(
+	BinaryOperator binop, Operand result, Operand left, Operand right
+) {
+	// FIXME: add the rest of the operators
+	switch (binop) {
+		case BinaryOperator::PLUS: return emit(Opcode::ADD, result, left, right);
+		case BinaryOperator::MINUS:
+		case BinaryOperator::MULTIPLY:
+		case BinaryOperator::DIVIDE:
+		case BinaryOperator::MODULO: break;
+	}
+	throw std::runtime_error("unhandled binary operator");
+}
+
+Chunk& Chunk::emit_mov(Operand result, Operand value) {
+	return emit(Opcode::MOV, result, value);
+}
+
+Chunk& Chunk::emit_jmp(Operand destination) {
+	return emit(Opcode::JMP, destination);
+}
+
+Chunk& Chunk::emit_alloca(Operand result, Operand size) {
+	if (not is_value_operand(size))
+		throw std::runtime_error("size must be a value operand");
+	return emit(Opcode::ALLOCA, result, size);
+}
+
+Chunk& Chunk::emit_storea(Operand value, Operand offset, Operand base) {
+	if (not is_value_operand(offset))
+		throw std::runtime_error("offset must be a value operand");
+	return emit(Opcode::STOREA, value, offset, base);
+}
+
+Chunk& Chunk::emit_loada(Operand result, Operand offset, Operand base) {
+	if (not is_value_operand(offset))
+		throw std::runtime_error("offset must be a value operand");
+	return emit(Opcode::LOADA, result, offset, base);
 }
 
 } // namespace lir

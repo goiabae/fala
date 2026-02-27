@@ -161,7 +161,10 @@ void VM::run(const lir::Chunk& code) {
 				auto result_register = inst.operands[0];
 				auto size_register = inst.operands[1];
 				assert(result_register.type == Operand::Type::REGISTER);
-				assert(size_register.type == Operand::Type::REGISTER);
+				assert(
+					size_register.type == Operand::Type::REGISTER
+					or size_register.type == Operand::Type::IMMEDIATE
+				);
 				auto size_integer = fetch(size_register);
 				assert(size_integer > 0);
 				auto register_index = result_register.as_register().index;
@@ -174,7 +177,10 @@ void VM::run(const lir::Chunk& code) {
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2].as_register();
 				assert(value_register.type == Operand::Type::REGISTER);
-				assert(offset_register.type == Operand::Type::REGISTER);
+				assert(
+					offset_register.type == Operand::Type::REGISTER
+					or offset_register.type == Operand::Type::IMMEDIATE
+				);
 				auto value = fetch(value_register);
 				auto offset = fetch(offset_register);
 				auto pointer = std::get<Value*>(cells[pointer_register.index]);
@@ -187,7 +193,6 @@ void VM::run(const lir::Chunk& code) {
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2].as_register();
 				assert(result_register.type == Operand::Type::REGISTER);
-				assert(offset_register.type == Operand::Type::REGISTER);
 				auto offset = fetch(offset_register);
 				auto pointer = std::get<Value*>(cells[pointer_register.index]);
 				auto value = pointer[offset];

@@ -317,7 +317,7 @@ NodeIndex new_list_node(AST* ast) {
 }
 
 NodeIndex new_string_node(
-	AST* ast, NodeType type, Location loc, StringPool& pool, String str
+	AST* ast, NodeType type, Location loc, StringPool& pool, const char* str
 ) {
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);

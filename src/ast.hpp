@@ -55,6 +55,15 @@ enum class NodeType {
 	INSTANCE,
 };
 
+enum class BinaryOperator {
+	PLUS,
+	MINUS,
+	MULTIPLY,
+	DIVIDE,
+	MODULO,
+	// FIXME: add the rest of the operators
+};
+
 typedef struct NodeIndex {
 	int index;
 } NodeIndex;
@@ -70,7 +79,7 @@ void ast_set_root(AST* ast, NodeIndex node_idx);
 NodeIndex new_node(AST* ast, NodeType type, std::vector<NodeIndex> children);
 NodeIndex new_list_node(AST* ast);
 NodeIndex new_string_node(
-	AST* ast, NodeType type, Location loc, StringPool& pool, String str
+	AST* ast, NodeType type, Location loc, StringPool& pool, const char* str
 );
 NodeIndex new_number_node(AST* ast, Location loc, Number num);
 NodeIndex new_nil_node(AST* ast, Location loc);

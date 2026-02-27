@@ -134,14 +134,22 @@ struct Instruction {
 struct Chunk {
 	Chunk& emit(Opcode, Operand fst = {}, Operand snd = {}, Operand trd = {});
 	Chunk& with_comment(std::string comment);
-	void add_label(Operand label);
+	Chunk& add_label(Operand label);
 
 	std::vector<Instruction> m_vec;
 	std::map<size_t, size_t> label_indexes;
 
 	std::optional<Operand> result_opnd;
 
-	void emit_store(Operand value, Operand offset, Operand base);
+	Chunk& emit_store(Operand value, Operand offset, Operand base);
+	Chunk& emit_binop(
+		BinaryOperator binop, Operand result, Operand left, Operand right
+	);
+	Chunk& emit_mov(Operand result, Operand value);
+	Chunk& emit_jmp(Operand destination);
+	Chunk& emit_alloca(Operand result, Operand size);
+	Chunk& emit_storea(Operand value, Operand offset, Operand base);
+	Chunk& emit_loada(Operand result, Operand offset, Operand base);
 };
 
 // return amount of operands of each opcode

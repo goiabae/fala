@@ -134,23 +134,21 @@ TEST(VMTest, push_immediate) {
 }
 
 TEST(VMTest, heap_allocation) {
-	auto a = lir::Operand::make_immediate_integer(1);
-	auto b = lir::Operand::make_immediate_integer(69);
-	auto c = lir::Operand::make_immediate_integer(0);
+	auto _1 = lir::Operand::make_immediate_integer(1);
+	auto _69 = lir::Operand::make_immediate_integer(69);
+	auto _0 = lir::Operand::make_immediate_integer(0);
 
 	auto r1 = make_integer_register(1);
 	auto r2 = make_integer_register(2);
 	auto r3 = make_integer_register(3);
-	auto r4 = make_integer_register(4);
-	auto r5 = make_integer_register(5);
+	auto r4 = make_integer_register(5);
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, r1, a);
-	chunk.emit(lir::Opcode::ALLOCA, r2, r1);
-	chunk.emit(lir::Opcode::MOV, r3, b);
-	chunk.emit(lir::Opcode::MOV, r4, c);
-	chunk.emit(lir::Opcode::STOREA, r3, r4, r2);
-	chunk.emit(lir::Opcode::LOADA, r5, r4, r2);
+	chunk
+		.emit_alloca(r2, _1) //
+		.emit_mov(r3, _69)
+		.emit_storea(r3, _0, r2)
+		.emit_loada(r4, _0, r2);
 
 	std::istringstream input {""};
 	std::ostringstream output {};

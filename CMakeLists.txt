@@ -137,3 +137,11 @@ target_include_directories(test_fixed_vector PRIVATE src/)
 
 target_link_libraries(test_fixed_vector PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_fixed_vector)
+
+add_executable(test_compiler src/test_compiler.cpp src/str_pool.cpp src/ast.cpp src/lir.cpp src/compiler.cpp)
+
+set_property(TARGET test_compiler PROPERTY CXX_STANDARD 23)
+target_include_directories(test_compiler PRIVATE src/)
+
+target_link_libraries(test_compiler PRIVATE GTest::gtest_main GTest::gtest)
+gtest_discover_tests(test_compiler)
