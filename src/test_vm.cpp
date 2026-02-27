@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <sstream>
+#include <string>
 
 #include "lir.hpp"
 #include "vm.hpp"
@@ -426,4 +427,55 @@ TEST(VMTest, function_integer_array_out_parameter) {
 
 	auto integer_value = std::get<int64_t>(vm.cells[8]);
 	EXPECT_EQ(integer_value, 70);
+}
+
+TEST(VMTest, io_operations) {
+	const auto _69 = lir::Operand::make_immediate_integer(69);
+	const auto _A = lir::Operand::make_immediate_integer('A');
+
+	const auto r1 =
+		lir::Operand(lir::Register(1, lir::Type::make_integer_array()));
+	const auto r2 = lir::Operand(lir::Register(2, lir::Type::make_integer()));
+	const auto r3 = lir::Operand(lir::Register(2, lir::Type::make_integer()));
+
+	lir::Chunk chunk {};
+	chunk.emit_mov(
+		lir::Operand(lir::Register(2044, lir::Type::make_integer())),
+		lir::Operand::make_immediate_integer('f')
+	);
+	chunk.emit_mov(
+		lir::Operand(lir::Register(2045, lir::Type::make_integer())),
+		lir::Operand::make_immediate_integer('o')
+	);
+	chunk.emit_mov(
+		lir::Operand(lir::Register(2046, lir::Type::make_integer())),
+		lir::Operand::make_immediate_integer('o')
+	);
+	chunk.emit_mov(
+		lir::Operand(lir::Register(2047, lir::Type::make_integer())),
+		lir::Operand::make_immediate_integer('\0')
+	);
+	chunk.emit(lir::Opcode::PRINTV, _69);
+	chunk.emit(lir::Opcode::PRINTC, _A);
+	chunk.emit_mov(r1, lir::Operand::make_immediate_integer(2044));
+	chunk.emit(lir::Opcode::PRINTF, r1);
+	chunk.emit(lir::Opcode::READV, r2);
+	chunk.emit(lir::Opcode::PRINTV, r2);
+	chunk.emit(lir::Opcode::READC, r3);
+	chunk.emit(lir::Opcode::PRINTC, r3);
+	chunk.emit(lir::Opcode::PRINTV, r3);
+
+	std::istringstream input {
+		"32\n"
+		"H\n"
+	};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
+	vm.should_print_result = false;
+	vm.run(chunk);
+
+	const auto expected = std::string("69Afoo32H") + std::to_string('H');
+
+	EXPECT_STREQ(output.str().c_str(), expected.c_str());
 }
