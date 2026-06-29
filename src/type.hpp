@@ -166,4 +166,6 @@ struct General : Type {
 
 using GENERAL = std::shared_ptr<General>;
 
+TYPE get_datatype(TYPE);
+
 #endif

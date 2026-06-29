@@ -10,6 +10,7 @@
 #include "compiler.hpp"
 #include "lir.hpp"
 #include "str_pool.h"
+#include "typecheck.hpp"
 
 bool compare_maps(
 	const std::map<size_t, size_t>& a, const std::map<size_t, size_t>& b
@@ -192,7 +193,9 @@ TEST(CompilerTest, add_integers) {
 		const auto _3 = new_node(&ast, NodeType::ADD, {_1, _2});
 		ast.root_index = _3;
 	}
-	compiler::Compiler comp {ast, pool};
+	Typechecker checker {ast, pool};
+	checker.typecheck();
+	compiler::Compiler comp {ast, pool, checker};
 	const auto chunk = comp.compile();
 	lir::Chunk expected {};
 	{
@@ -232,7 +235,9 @@ TEST(CompilerTest, let_expression) {
 		const auto _8 = new_node(&ast, NodeType::LET, {_6, _7});
 		ast.root_index = _8;
 	}
-	compiler::Compiler comp {ast, pool};
+	Typechecker checker {ast, pool};
+	checker.typecheck();
+	compiler::Compiler comp {ast, pool, checker};
 	const auto chunk = comp.compile();
 	lir::Chunk expected {};
 	{

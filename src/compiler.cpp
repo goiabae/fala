@@ -13,6 +13,7 @@
 #include "ast.hpp"
 #include "lir.hpp"
 #include "str_pool.h"
+#include "type.hpp"
 #include "utils.hpp"
 
 namespace compiler {
@@ -430,17 +431,12 @@ Result Compiler::compile_var_decl(
 	Operand initial = initial_res.opnd;
 
 	// initial is an array
-	auto is_array = MATCH(
-		initial.data,
-		(const lir::Register& reg) {
-			return MATCH(
-				reg.type,
-				(const lir::Pointer& ptr) { return ptr.is_many_pointer; },
-				(const auto&) { return false; }
-			);
-		},
-		(const auto&) { return false; }
-	);
+	auto is_array = false;
+	TYPE t1 = tpc.node_to_type.at(exp_idx);
+	TYPE t3 = get_datatype(t1);
+	if (auto t2 = std::dynamic_pointer_cast<Array>(t3)) {
+		is_array = true;
+	}
 	if (is_array) return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
 
 	// anything else
@@ -591,17 +587,12 @@ Result Compiler::compile_at(
 	chunk = chunk + off_res.code;
 	Operand off = to_rvalue(&chunk, off_res.opnd);
 
-	auto is_array = MATCH(
-		base.data,
-		(const lir::Register& reg) {
-			return MATCH(
-				reg.type,
-				(const lir::Pointer& ptr) { return ptr.is_many_pointer; },
-				(const auto&) { return false; }
-			);
-		},
-		(const auto&) { return false; }
-	);
+	auto is_array = false;
+	TYPE t1 = tpc.node_to_type.at(node[0]);
+	TYPE t3 = get_datatype(t1);
+	if (auto t2 = std::dynamic_pointer_cast<Array>(t3)) {
+		is_array = true;
+	}
 	if (not is_array) err("Base must be an lvalue");
 
 	Operand tmp = make_register();

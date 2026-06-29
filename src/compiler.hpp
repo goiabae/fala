@@ -12,6 +12,7 @@
 #include "env.hpp"
 #include "lir.hpp"
 #include "str_pool.h"
+#include "typecheck.hpp"
 
 namespace compiler {
 
@@ -52,7 +53,8 @@ struct SignalHandlers {
 };
 
 struct Compiler {
-	Compiler(const AST& ast, const StringPool& pool) : ast(ast), pool(pool) {}
+	Compiler(const AST& ast, const StringPool& pool, const Typechecker& tpc)
+	: ast(ast), pool(pool), tpc(tpc) {}
 
 	Chunk compile();
 
@@ -62,6 +64,7 @@ struct Compiler {
 
 	const AST& ast;
 	const StringPool& pool;
+	const Typechecker& tpc;
 
 	// these are monotonically increasing as the compiler goes on
 	size_t label_count {0};

@@ -82,7 +82,7 @@ int interpret(Options opts) {
 			}
 		} else if (opts.backend == Backend::LIR) {
 			print_phase(opts, "compiling(lir)");
-			compiler::Compiler comp {ast, pool};
+			compiler::Compiler comp {ast, pool, checker};
 			auto chunk = comp.compile();
 
 			if (opts.verbosity >= 2) {
@@ -126,7 +126,7 @@ int compile(Options opts) {
 
 	if (opts.backend == Backend::LIR) {
 		print_phase(opts, "compiling(lir)");
-		compiler::Compiler comp {ast, pool};
+		compiler::Compiler comp {ast, pool, checker};
 		auto chunk = comp.compile();
 
 		File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
