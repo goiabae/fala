@@ -3,10 +3,10 @@ with pkgs; mkShell {
   LD_LIBRARY_PATH = lib.makeLibraryPath [ gcc14Stdenv.cc.cc ];
 
   nativeBuildInputs = [
-    gcc14
+    gcc
     bison
     readline
-    (cmake.override { stdenv = gcc14Stdenv; })
+    cmake
     cppcheck
     clang-analyzer
 
