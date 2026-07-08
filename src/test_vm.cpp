@@ -35,7 +35,7 @@ TEST(VMTest, move_immediate) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(std::get<int64_t>(vm.cells[a.as_register().index]), 69);
+	EXPECT_EQ(vm.cells[a.as_register().index].as_integer(), 69);
 }
 
 TEST(VMTest, move_integer_register) {
@@ -53,7 +53,7 @@ TEST(VMTest, move_integer_register) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(std::get<int64_t>(vm.cells[b.as_register().index]), 69);
+	EXPECT_EQ(vm.cells[b.as_register().index].as_integer(), 69);
 }
 
 TEST(VMTest, arithmetic) {
@@ -75,7 +75,7 @@ TEST(VMTest, arithmetic) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(std::get<int64_t>(vm.cells[c.as_register().index]), 36);
+	EXPECT_EQ(vm.cells[c.as_register().index].as_integer(), 36);
 }
 
 TEST(VMTest, store_immediate) {
@@ -96,7 +96,7 @@ TEST(VMTest, store_immediate) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(std::get<int64_t>(vm.cells[1]), 69);
+	EXPECT_EQ(vm.cells[1].as_integer(), 69);
 }
 
 TEST(VMTest, store_immediate_with_offset) {
@@ -115,7 +115,7 @@ TEST(VMTest, store_immediate_with_offset) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(std::get<int64_t>(vm.cells[5]), 69);
+	EXPECT_EQ(vm.cells[5].as_integer(), 69);
 }
 
 TEST(VMTest, push_immediate) {
@@ -131,7 +131,7 @@ TEST(VMTest, push_immediate) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(std::get<int64_t>(vm.stack.top()), 69);
+	EXPECT_EQ(vm.stack.top().as_integer(), 69);
 }
 
 TEST(VMTest, heap_allocation) {
@@ -158,7 +158,7 @@ TEST(VMTest, heap_allocation) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	auto integer_value = std::get<int64_t>(vm.cells[5]);
+	auto integer_value = vm.cells[5].as_integer();
 	EXPECT_EQ(integer_value, 69);
 }
 
@@ -219,7 +219,7 @@ TEST(VMTest, function_call) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	auto integer_value = std::get<int64_t>(vm.cells[4]);
+	auto integer_value = vm.cells[4].as_integer();
 	EXPECT_EQ(integer_value, 4);
 }
 
@@ -314,7 +314,7 @@ TEST(VMTest, function_integer_out_parameter) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	auto integer_value = std::get<int64_t>(vm.cells[6]);
+	auto integer_value = vm.cells[6].as_integer();
 	EXPECT_EQ(integer_value, 4);
 }
 
@@ -425,7 +425,7 @@ TEST(VMTest, function_integer_array_out_parameter) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	auto integer_value = std::get<int64_t>(vm.cells[8]);
+	auto integer_value = vm.cells[8].as_integer();
 	EXPECT_EQ(integer_value, 70);
 }
 

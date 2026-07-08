@@ -16,20 +16,21 @@ void err(const char* msg) {
 }
 
 void VM::run(const lir::Chunk& code) {
+	// cells.fill(Value(0));
 	size_t return_address = 0;
 
-	auto deref = [&](Operand opnd) -> int64_t& {
+	auto deref = [&](Operand opnd) -> Value& {
 		if (opnd.type == Operand::Type::REGISTER) {
-			return std::get<int64_t>(cells[opnd.as_register().index]);
+			return cells[opnd.as_register().index];
 		} else {
 			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
 			exit(1);
 		}
 	};
 
-	auto fetch = [&](Operand opnd) -> int64_t {
+	auto fetch = [&](Operand opnd) -> Value {
 		if (opnd.type == Operand::Type::REGISTER) {
-			return std::get<int64_t>(cells[opnd.as_register().index]);
+			return cells[opnd.as_register().index];
 		} else if (opnd.type == Operand::Type::IMMEDIATE) {
 			return opnd.as_immediate().number;
 		} else if (opnd.type == Operand::Type::NOTHING) {
@@ -40,8 +41,11 @@ void VM::run(const lir::Chunk& code) {
 		}
 	};
 
-	auto indirect_load = [&](Operand base, Operand off) -> int64_t& {
-		return std::get<int64_t>(cells[(size_t)(fetch(base) + fetch(off))]);
+	auto indirect_load = [&](Operand base, Operand off) -> Value& {
+		auto b = fetch(base).as_integer();
+		auto o = fetch(off).as_integer();
+		auto p = b + o;
+		return cells[(size_t)p];
 	};
 
 	size_t pc = 0;
@@ -52,8 +56,9 @@ void VM::run(const lir::Chunk& code) {
 				size_t i = 0;
 				char c;
 				while ((c = (char)indirect_load(
-									inst.operands[0], Operand::make_immediate_integer((int)i)
-								))
+											inst.operands[0], Operand::make_immediate_integer((int)i)
+								)
+				              .as_integer())
 				       != 0) {
 					output << c;
 					i++;
@@ -61,11 +66,11 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::PRINTV: {
-				output << fetch(inst.operands[0]);
+				output << fetch(inst.operands[0]).as_integer();
 				break;
 			}
 			case Opcode::PRINTC: {
-				output << (char)fetch(inst.operands[0]);
+				output << (char)fetch(inst.operands[0]).as_integer();
 				break;
 			}
 			case Opcode::READV: {
@@ -86,12 +91,15 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::MOV: {
 				const auto& dest = inst.operands[0];
 				const auto& src = inst.operands[1];
-				auto& cell = deref(dest);
+				auto& cell = cells[dest.as_register().index];
 				cell = fetch(src);
 				break;
 			}
-#define BIN_ARITH_OP(OP) \
-	deref(inst.operands[0]) = fetch(inst.operands[1]) OP fetch(inst.operands[2]);
+#define BIN_ARITH_OP(OP)                                                       \
+	cells[inst.operands[0].as_register().index] = fetch(inst.operands[1])        \
+	                                                .as_integer()                \
+	                                                  OP fetch(inst.operands[2]) \
+	                                                .as_integer();
 			case Opcode::ADD: BIN_ARITH_OP(+); break;
 			case Opcode::SUB: BIN_ARITH_OP(-); break;
 			case Opcode::MUL: BIN_ARITH_OP(*); break;
@@ -106,7 +114,7 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::GREATER: BIN_ARITH_OP(>); break;
 			case Opcode::GREATER_EQ: BIN_ARITH_OP(>=); break;
 			case Opcode::NOT:
-				deref(inst.operands[0]) = !fetch(inst.operands[1]);
+				deref(inst.operands[0]) = !fetch(inst.operands[1]).as_integer();
 				break;
 			case Opcode::LOAD:
 				deref(inst.operands[0]) =
@@ -120,13 +128,13 @@ void VM::run(const lir::Chunk& code) {
 				pc = code.label_indexes.at(inst.operands[0].as_label().id);
 				goto dont_inc;
 			case Opcode::JMP_FALSE:
-				if (!fetch(inst.operands[0]))
+				if (!fetch(inst.operands[0]).as_integer())
 					pc = code.label_indexes.at(inst.operands[1].as_label().id);
 				else
 					pc++;
 				goto dont_inc;
 			case Opcode::JMP_TRUE:
-				if (fetch(inst.operands[0]))
+				if (fetch(inst.operands[0]).as_integer())
 					pc = code.label_indexes.at(inst.operands[1].as_label().id);
 				else
 					pc++;
@@ -154,7 +162,7 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			case Opcode::RET: pc = return_address; break;
 			case Opcode::FUNC:
-				return_address = (size_t)std::get<int64_t>(stack.top());
+				return_address = (size_t)stack.top().as_integer();
 				stack.pop();
 				break;
 			case Opcode::ALLOCA: {
@@ -165,11 +173,11 @@ void VM::run(const lir::Chunk& code) {
 					size_register.type == Operand::Type::REGISTER
 					or size_register.type == Operand::Type::IMMEDIATE
 				);
-				auto size_integer = fetch(size_register);
+				auto size_integer = fetch(size_register).as_integer();
 				assert(size_integer > 0);
 				auto register_index = result_register.as_register().index;
 				auto& cell = cells[register_index];
-				cell = Value(new Value[(size_t)size_integer]);
+				cell = Value(new Value[(size_t)size_integer], (size_t)size_integer);
 				break;
 			}
 			case Opcode::STOREA: {
@@ -182,10 +190,10 @@ void VM::run(const lir::Chunk& code) {
 					or offset_register.type == Operand::Type::IMMEDIATE
 				);
 				auto value = fetch(value_register);
-				auto offset = fetch(offset_register);
-				auto pointer = std::get<Value*>(cells[pointer_register.index]);
-				auto& cell = pointer[offset];
-				cell = Value(value);
+				auto offset = fetch(offset_register).as_integer();
+				auto pointer = cells[pointer_register.index].as_pointer();
+				auto cell = pointer[(size_t)offset];
+				*cell = Value(value);
 				break;
 			}
 			case Opcode::LOADA: {
@@ -193,11 +201,11 @@ void VM::run(const lir::Chunk& code) {
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2].as_register();
 				assert(result_register.type == Operand::Type::REGISTER);
-				auto offset = fetch(offset_register);
-				auto pointer = std::get<Value*>(cells[pointer_register.index]);
-				auto value = pointer[offset];
+				auto offset = fetch(offset_register).as_integer();
+				auto pointer = cells[pointer_register.index].as_pointer();
+				auto value = pointer[(size_t)offset];
 				auto& cell = cells[result_register.as_register().index];
-				cell = value;
+				cell = *value;
 				break;
 			}
 			case Opcode::SHIFTA: {
@@ -207,10 +215,10 @@ void VM::run(const lir::Chunk& code) {
 				assert(result_register.type == Operand::Type::REGISTER);
 				assert(offset_register.type == Operand::Type::REGISTER);
 				assert(pointer_register.type == Operand::Type::REGISTER);
-				auto offset = fetch(offset_register);
-				auto pointer =
-					std::get<Value*>(cells[pointer_register.as_register().index]);
-				cells[result_register.as_register().index] = &pointer[offset];
+				auto offset = fetch(offset_register).as_integer();
+				auto pointer = cells[pointer_register.as_register().index].as_pointer();
+				auto x = &pointer[(size_t)offset];
+				cells[result_register.as_register().index] = x;
 				break;
 			}
 		}
@@ -222,13 +230,14 @@ void VM::run(const lir::Chunk& code) {
 	if (should_print_result and code.result_opnd.has_value()) {
 		auto result = code.result_opnd.value();
 		if (result.type == Operand::Type::IMMEDIATE) {
-			std::cout << "==> " << fetch(result) << '\n';
+			std::cout << "==> " << fetch(result).as_integer() << '\n';
 		} else if (auto reg = result.as_register();
 		           result.type == Operand::Type::REGISTER) {
 			if (not reg.is_lvalue_pointer) {
-				std::cout << "==> " << fetch(result) << '\n';
+				std::cout << "==> " << fetch(result).as_integer() << '\n';
 			} else {
-				std::cout << "==> 0d" << std::get<int64_t>(cells[reg.index]) << '\n';
+				std::cout << "==> 0d" << cells[reg.index].as_pointer().address()
+									<< '\n';
 			}
 		} else {
 			std::cout << "VM ERROR: Couldn't print value" << '\n';
