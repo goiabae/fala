@@ -209,8 +209,7 @@ bool Typechecker::unify(TYPE a, TYPE b) {
 	if (auto fa = to<Function>(a), fb = to<Function>(b); fa and fb) {
 		if (fa->inputs.size() != fb->inputs.size()) return false;
 		auto unified_inputs = std::ranges::all_of(
-			std::ranges::views::zip(fa->inputs, fb->inputs),
-			[&](const auto& p) {
+			std::ranges::views::zip(fa->inputs, fb->inputs), [&](const auto& p) {
 				const auto& [a, b] = p;
 				return unify(a, b);
 			}
@@ -457,6 +456,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto exp_typ = typecheck(exp_idx, scope_id);
 			return ASSOC_TYPE(node_idx, exp_typ);
 		}
+
 			// FIXME: add typing rules
 		case NodeType::ASS: {
 			auto path = typecheck(node[0], scope_id);
