@@ -30,7 +30,7 @@ struct Logger {
 
  private:
 	void print_lines(Location loc) {
-		assert(loc.begin.line >= 0 && loc.begin.line < lines.size());
+		assert(loc.begin.line >= 0 && (size_t)loc.begin.line < lines.size());
 
 		if (loc.begin.line > 0) {
 			const auto& prev_line = lines[(size_t)loc.begin.line - 1];
@@ -40,11 +40,11 @@ struct Logger {
 		const auto& line = lines[(size_t)loc.begin.line];
 		fprintf(stderr, " %3d |\t", loc.begin.line);
 		for (size_t i = 0; i < line.size(); i++) {
-			if (i == loc.begin.column) {
+			if (i == (size_t)loc.begin.column) {
 				fprintf(stderr, ANSI_STYLE_BOLD);
 			}
 			fprintf(stderr, "%c", line[i]);
-			if (loc.begin.line == loc.end.line && i == loc.end.column) {
+			if (loc.begin.line == loc.end.line && i == (size_t)loc.end.column) {
 				fprintf(stderr, ANSI_COLOR_RESET);
 			}
 		}
@@ -52,7 +52,7 @@ struct Logger {
 
 		fprintf(stderr, "     |\t");
 		for (size_t i = 0; i < line.size(); i++) {
-			if (i == loc.begin.column) {
+			if (i == (size_t)loc.begin.column) {
 				fprintf(stderr, "^");
 			} else {
 				fprintf(stderr, "~");

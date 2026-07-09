@@ -61,7 +61,7 @@ struct Env {
 
 	Id find_last_entry(ScopeID scope_id) {
 		auto has_parent =
-			scope_id.idx > 0 and parent_scope_vec.size() >= scope_id.idx;
+			scope_id.idx > 0 and (int) parent_scope_vec.size() >= scope_id.idx;
 		auto scope_not_empty = scope_last_entry.contains(scope_id);
 
 		if (scope_not_empty) {
