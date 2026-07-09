@@ -1,0 +1,8 @@
+# ==> 374
+let
+  fun at x y = (x+1)*(8+2) + (y+1)
+in
+let
+  var z = 36
+in
+  at z 3

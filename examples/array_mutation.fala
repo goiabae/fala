@@ -1,0 +1,7 @@
+# ==> 4
+let
+  var xs = make_array 10
+in do
+  xs[3] = 4;
+	xs[3]
+end

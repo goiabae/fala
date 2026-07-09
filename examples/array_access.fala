@@ -1,0 +1,5 @@
+# ERROR: undefined result
+let
+  var xs = make_array 10
+in
+  xs[3]
