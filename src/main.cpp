@@ -1,3 +1,4 @@
+#include <exception>
 #include <utility>
 
 #include "ast.hpp"
@@ -92,8 +93,12 @@ int interpret(Options opts) {
 
 			print_phase(opts, "interpreting(lir)");
 			lir::VM vm {std::cin, std::cout};
-			vm.should_print_result = opts.from_stdin;
-			vm.run(chunk);
+			vm.should_print_result = opts.from_stdin or opts.verbosity >= 2;
+			try {
+				vm.run(chunk);
+			} catch (std::exception& exn) {
+				std::cerr << "ERROR: " << exn.what() << '\n';
+			}
 		} else {
 			std::cerr << "Backend can't be used for interpreting" << '\n';
 			return 1;
