@@ -1,9 +1,28 @@
 #include "lir.hpp"
 
 #include <cassert>
+#include <ostream>
 #include <stdexcept>
 
 namespace lir {
+
+static std::ostream& operator<<(std::ostream& st, const Instruction& inst);
+static std::ostream& operator<<(std::ostream& st, const Operand& opnd);
+static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd);
+
+std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
+	switch (opnd.type) {
+		case Operand::Type::NOTHING: return st << '0';
+		case Operand::Type::REGISTER:
+			return st << std::format("%{}", opnd.as_register().index);
+		case Operand::Type::LABEL:
+			return st << std::format("L{:03}", opnd.as_label().id);
+		case Operand::Type::IMMEDIATE:
+			return st << std::format("{}", opnd.as_immediate().number);
+		case Operand::Type::FUN: assert(false && "unreachable");
+	}
+	return st;
+}
 
 Chunk& Chunk::emit(Opcode opcode, Operand fst, Operand snd, Operand trd) {
 	m_vec.push_back(Instruction {opcode, {fst, snd, trd}, ""});
@@ -42,8 +61,6 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::LESS_EQ: return 3;
 		case Opcode::GREATER: return 3;
 		case Opcode::GREATER_EQ: return 3;
-		case Opcode::LOAD: return 3;
-		case Opcode::STORE: return 3;
 		case Opcode::JMP: return 1;
 		case Opcode::JMP_FALSE: return 2;
 		case Opcode::JMP_TRUE: return 2;
@@ -56,6 +73,8 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::LOADA: return 3;
 		case Opcode::STOREA: return 3;
 		case Opcode::SHIFTA: return 3;
+		case Opcode::CLONEA: return 2;
+		case Opcode::NOP: return 0;
 	}
 	assert(false);
 };
@@ -79,6 +98,28 @@ void print_chunk(FILE* fd, const Chunk& chunk) {
 	}
 	for (auto l : chunk.label_indexes)
 		if (l.second == i) fprintf(fd, "L%03zu:\n", l.first);
+}
+
+std::ostream& operator<<(std::ostream& st, const Chunk& chunk) {
+	int max = 0;
+	int printed = 0;
+	size_t i = 0;
+	for (const auto& inst : chunk.m_vec) {
+		for (auto l : chunk.label_indexes)
+			if (l.second == i) st << std::format("L{:03}:\n", l.first);
+		st << inst;
+		if (printed > max) max = printed;
+		if (inst.comment != "") {
+			for (int i = 0; i < (max - printed); i++) st << ' ';
+			st << "  ; ";
+			st << inst.comment;
+		}
+		st << '\n';
+		i++;
+	}
+	for (auto l : chunk.label_indexes)
+		if (l.second == i) st << std::format("L%03zu:\n", l.first);
+	return st;
 }
 
 int print_str(FILE* fd, const char* str) {
@@ -142,8 +183,6 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::LESS_EQ: return "lesseq";
 		case Opcode::GREATER: return "greater";
 		case Opcode::GREATER_EQ: return "greatereq";
-		case Opcode::LOAD: return "load";
-		case Opcode::STORE: return "store";
 		case Opcode::JMP: return "jump";
 		case Opcode::JMP_FALSE: return "jf";
 		case Opcode::JMP_TRUE: return "jt";
@@ -156,6 +195,8 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::LOADA: return "loada";
 		case Opcode::STOREA: return "storea";
 		case Opcode::SHIFTA: return "shifta";
+		case Opcode::CLONEA: return "clonea";
+		case Opcode::NOP: return "nop";
 	}
 	assert(false);
 }
@@ -182,10 +223,20 @@ int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.type == Operand::Type::IMMEDIATE) {
 		return fprintf(fd, "%d", opnd.as_immediate().number);
 	} else if (opnd.type == Operand::Type::REGISTER) {
-		return fprintf(fd, "%%r%zu", opnd.as_register().index);
+		return fprintf(fd, "%%%zu", opnd.as_register().index);
 	} else
 		assert(false && "unreachable");
 	return 0;
+}
+
+static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd) {
+	if (opnd.type == Operand::Type::IMMEDIATE) {
+		st << opnd.as_immediate().number;
+	} else if (opnd.type == Operand::Type::REGISTER) {
+		st << std::format("%{}", opnd.as_register().index);
+	} else
+		assert(false && "unreachable");
+	return st;
 }
 
 // print an indirect memory access instruction (OP_STORE or OP_LOAD), where
@@ -205,8 +256,22 @@ int print_inst_indirect(FILE* fd, const Instruction& inst) {
 	return printed;
 }
 
+std::ostream& print_inst_indirect(std::ostream& st, const Instruction& inst) {
+	st << "    ";
+	st << opcode_repr(inst.opcode);
+	st << " ";
+	st << inst.operands[0];
+	st << ", ";
+	print_operand_indirect(st, inst.operands[1]);
+	st << "(";
+	print_operand_indirect(st, inst.operands[2]);
+	st << ")";
+	return st;
+}
+
 int print_inst(FILE* fd, const Instruction& inst) {
-	if (inst.opcode == Opcode::LOAD || inst.opcode == Opcode::STORE) {
+	if (inst.opcode == Opcode::LOADA || inst.opcode == Opcode::STOREA
+	    || inst.opcode == Opcode::SHIFTA) {
 		return print_inst_indirect(fd, inst);
 	} else {
 		constexpr const char* separators[3] = {" ", ", ", ", "};
@@ -219,6 +284,22 @@ int print_inst(FILE* fd, const Instruction& inst) {
 		}
 		return printed;
 	}
+}
+
+std::ostream& operator<<(std::ostream& st, const Instruction& inst) {
+	if (inst.opcode == Opcode::LOADA || inst.opcode == Opcode::STOREA
+	    || inst.opcode == Opcode::SHIFTA) {
+		print_inst_indirect(st, inst);
+	} else {
+		constexpr const char* separators[3] = {" ", ", ", ", "};
+		st << "    ";
+		st << opcode_repr(inst.opcode);
+		for (size_t i = 0; i < lir::opcode_opnd_count(inst.opcode); i++) {
+			st << separators[i];
+			st << inst.operands[i];
+		}
+	}
+	return st;
 }
 
 Chunk operator+(Chunk x, Chunk y) {
@@ -251,10 +332,6 @@ const char* operand_type_repr(Operand::Type type) {
 static bool is_value_operand(const Operand& opnd) {
 	return opnd.type == Operand::Type::REGISTER
 	    or opnd.type == Operand::Type::IMMEDIATE;
-}
-
-Chunk& Chunk::emit_store(Operand value, Operand offset, Operand base) {
-	return emit(Opcode::STORE, value, offset, base);
 }
 
 Chunk& Chunk::emit_binop(
@@ -296,5 +373,17 @@ Chunk& Chunk::emit_loada(Operand result, Operand offset, Operand base) {
 		throw std::runtime_error("offset must be a value operand");
 	return emit(Opcode::LOADA, result, offset, base);
 }
+
+Chunk& Chunk::emit_shifta(Operand result, Operand offset, Operand base) {
+	if (not is_value_operand(offset))
+		throw std::runtime_error("offset must be a value operand");
+	return emit(Opcode::SHIFTA, result, offset, base);
+}
+
+Chunk& Chunk::emit_clonea(Operand destination, Operand source) {
+	return emit(Opcode::CLONEA, destination, source);
+}
+
+Chunk& Chunk::emit_nop() { return emit(Opcode::NOP); }
 
 } // namespace lir

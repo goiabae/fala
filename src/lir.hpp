@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <variant>
 #include <vector>
@@ -34,8 +35,6 @@ enum class Opcode {
 	LESS_EQ,
 	GREATER,
 	GREATER_EQ,
-	LOAD,
-	STORE,
 	JMP,
 	JMP_FALSE,
 	JMP_TRUE,
@@ -44,12 +43,14 @@ enum class Opcode {
 	CALL,
 	RET,
 	FUNC,
+	NOP,
 
 	// pointer operations
 	ALLOCA,
 	LOADA,
 	STOREA,
 	SHIFTA,
+	CLONEA,
 };
 
 class Type;
@@ -141,7 +142,6 @@ struct Chunk {
 
 	std::optional<Operand> result_opnd;
 
-	Chunk& emit_store(Operand value, Operand offset, Operand base);
 	Chunk& emit_binop(
 		BinaryOperator binop, Operand result, Operand left, Operand right
 	);
@@ -150,6 +150,9 @@ struct Chunk {
 	Chunk& emit_alloca(Operand result, Operand size);
 	Chunk& emit_storea(Operand value, Operand offset, Operand base);
 	Chunk& emit_loada(Operand result, Operand offset, Operand base);
+	Chunk& emit_shifta(Operand result, Operand offset, Operand base);
+	Chunk& emit_clonea(Operand destination, Operand source);
+	Chunk& emit_nop();
 };
 
 // return amount of operands of each opcode
@@ -157,6 +160,8 @@ size_t opcode_opnd_count(Opcode op);
 
 void print_chunk(FILE*, const Chunk&);
 int print_inst(FILE*, const Instruction& inst);
+
+std::ostream& operator<<(std::ostream&, const Chunk&);
 
 Chunk operator+(Chunk x, Chunk y);
 

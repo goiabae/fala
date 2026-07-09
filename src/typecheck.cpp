@@ -637,7 +637,18 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			return ASSOC_TYPE(node_idx, make_array(uint8_typ));
 		}
 
-			// FIXME: add typing rules
+		// If e1 is an lvalue
+		//
+		// | G |- e1 : Ref<t1>
+		// +---------------
+		// | G |- m x = e1 -> G, (x : t1)
+		//
+		// If e1 is an rvalue
+		//
+		// | G |- e1 : t1
+		// +---------------
+		// | G |- m x = e1 -> G, (x : t1)
+		//
 		case NodeType::VAR_DECL: {
 			auto id_idx = node[0];
 			auto opt_type_idx = node[1];
@@ -647,6 +658,10 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			const auto& opt_type_node = ast.at(opt_type_idx);
 
 			auto exp = typecheck(exp_idx, scope_id);
+
+			if (is<Ref>(exp)) {
+				exp = to<Ref>(exp)->ref_type;
+			}
 
 			if (opt_type_node.type != NodeType::EMPTY) {
 				auto annot = eval(opt_type_idx, scope_id);

@@ -61,6 +61,12 @@ struct Compiler {
 	Result compile(
 		NodeIndex node_idxz, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
 	);
+	Result compile_lvalue(
+		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
+	);
+	Result compile_or_allocate_lvalue(
+		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
+	);
 
 	const AST& ast;
 	const StringPool& pool;
@@ -72,8 +78,6 @@ struct Compiler {
 
 	Operand make_register();
 	Operand make_label();
-
-	Operand to_rvalue(Chunk* chunk, Operand opnd);
 
 	// used to backpatch the location of the dynamic allocation region start
 	Number dyn_alloc_start {2047};

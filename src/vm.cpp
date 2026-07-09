@@ -1,14 +1,53 @@
 #include "vm.hpp"
 
 #include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <format>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 
 #include "lir.hpp"
 
 using lir::Operand;
 
+template<typename... Args>
+std::string join(Args&&... args) {
+	std::string result;
+	((result += std::format("{} ", std::forward<Args>(args))), ...);
+	return result;
+}
+
+template<typename T, typename... Args>
+void assert_oneof(T v, Args&&... args) {
+	if (not((v == args) || ...)) {
+		throw std::domain_error(
+			std::format("value {} is not one of {}", v, join(args...))
+		);
+	}
+}
+
+template<>
+struct std::formatter<Operand::Type> {
+	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+	auto format(const Operand::Type& opnd_ty, std::format_context& ctx) const {
+		switch (opnd_ty) {
+			case lir::Operand::Type::NOTHING:
+				return std::format_to(ctx.out(), "NOTHING");
+			case lir::Operand::Type::REGISTER:
+				return std::format_to(ctx.out(), "REGISTER");
+			case lir::Operand::Type::LABEL: return std::format_to(ctx.out(), "LABEL");
+			case lir::Operand::Type::IMMEDIATE:
+				return std::format_to(ctx.out(), "IMMEDIATE");
+			case lir::Operand::Type::FUN: return std::format_to(ctx.out(), "FUN");
+		}
+	}
+};
+
 namespace lir {
+static Value clone(Value);
+Value::Pointer clone_pointer(Value::Pointer);
 
 void err(const char* msg) {
 	fprintf(stderr, "VM ERROR: %s\n", msg);
@@ -42,9 +81,19 @@ void VM::run(const lir::Chunk& code) {
 	};
 
 	auto indirect_load = [&](Operand base, Operand off) -> Value& {
-		auto b = fetch(base).as_integer();
-		auto o = fetch(off).as_integer();
-		auto p = b + o;
+		const auto a = fetch(base);
+		if (not a.is_integer())
+			throw std::runtime_error(
+				"base operand of indirect load was not an integer"
+			);
+		const auto b = a.as_integer();
+		const auto t2 = fetch(off);
+		if (not t2.is_integer())
+			throw std::runtime_error(
+				"offset operand of indirect load was not an integer"
+			);
+		const auto o = t2.as_integer();
+		const auto p = b + o;
 		return cells[(size_t)p];
 	};
 
@@ -53,24 +102,29 @@ void VM::run(const lir::Chunk& code) {
 		const auto& inst = code.m_vec[pc];
 		switch (inst.opcode) {
 			case Opcode::PRINTF: {
-				size_t i = 0;
-				char c;
-				while ((c = (char)indirect_load(
-											inst.operands[0], Operand::make_immediate_integer((int)i)
-								)
-				              .as_integer())
-				       != 0) {
-					output << c;
-					i++;
+				auto t1 = inst.operands[0];
+				auto t2 = cells[t1.as_register().index];
+				if (not t2.is_pointer())
+					throw std::runtime_error("printf operand was not a pointer");
+				auto base = t2.as_pointer();
+				auto size = base.size();
+				for (size_t i = 0; i < size; i++) {
+					auto c = (*base[i]).as_integer();
+					if (c == 0) break;
+					output << (char)c;
 				}
 				break;
 			}
 			case Opcode::PRINTV: {
-				output << fetch(inst.operands[0]).as_integer();
+				auto t1 = fetch(inst.operands[0]);
+				assert(t1.is_integer());
+				output << t1.as_integer();
 				break;
 			}
 			case Opcode::PRINTC: {
-				output << (char)fetch(inst.operands[0]).as_integer();
+				auto t1 = fetch(inst.operands[0]);
+				assert(t1.is_integer());
+				output << (char)t1.as_integer();
 				break;
 			}
 			case Opcode::READV: {
@@ -79,7 +133,7 @@ void VM::run(const lir::Chunk& code) {
 				int num = std::stoi(line);
 				if (inst.operands[0].type != Operand::Type::REGISTER)
 					err("First argument must be a register");
-				deref(inst.operands[0]) = num;
+				deref(inst.operands[0]) = Value::Integer(num);
 				break;
 			}
 			case Opcode::READC: {
@@ -95,11 +149,15 @@ void VM::run(const lir::Chunk& code) {
 				cell = fetch(src);
 				break;
 			}
-#define BIN_ARITH_OP(OP)                                                       \
-	cells[inst.operands[0].as_register().index] = fetch(inst.operands[1])        \
-	                                                .as_integer()                \
-	                                                  OP fetch(inst.operands[2]) \
-	                                                .as_integer();
+#define BIN_ARITH_OP(OP)                          \
+	{                                               \
+		auto t1 = fetch(inst.operands[1]);            \
+		assert(t1.is_integer());                      \
+		auto t2 = fetch(inst.operands[2]);            \
+		assert(t2.is_integer());                      \
+		cells[inst.operands[0].as_register().index] = \
+			t1.as_integer() OP t2.as_integer();         \
+	}
 			case Opcode::ADD: BIN_ARITH_OP(+); break;
 			case Opcode::SUB: BIN_ARITH_OP(-); break;
 			case Opcode::MUL: BIN_ARITH_OP(*); break;
@@ -115,14 +173,6 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::GREATER_EQ: BIN_ARITH_OP(>=); break;
 			case Opcode::NOT:
 				deref(inst.operands[0]) = !fetch(inst.operands[1]).as_integer();
-				break;
-			case Opcode::LOAD:
-				deref(inst.operands[0]) =
-					indirect_load(inst.operands[2], inst.operands[1]);
-				break;
-			case Opcode::STORE:
-				indirect_load(inst.operands[2], inst.operands[1]) =
-					fetch(inst.operands[0]);
 				break;
 			case Opcode::JMP:
 				pc = code.label_indexes.at(inst.operands[0].as_label().id);
@@ -173,25 +223,42 @@ void VM::run(const lir::Chunk& code) {
 					size_register.type == Operand::Type::REGISTER
 					or size_register.type == Operand::Type::IMMEDIATE
 				);
+				auto a = fetch(size_register);
+				if (not a.is_integer())
+					throw std::runtime_error("alloca size was not an integer");
 				auto size_integer = fetch(size_register).as_integer();
 				assert(size_integer > 0);
 				auto register_index = result_register.as_register().index;
 				auto& cell = cells[register_index];
 				cell = Value(new Value[(size_t)size_integer], (size_t)size_integer);
+				if (not cell.is_pointer())
+					throw std::runtime_error("allocated value was not a pointer");
 				break;
 			}
 			case Opcode::STOREA: {
 				auto value_register = inst.operands[0];
 				auto offset_register = inst.operands[1];
-				auto pointer_register = inst.operands[2].as_register();
-				assert(value_register.type == Operand::Type::REGISTER);
+				auto base_register = inst.operands[2].as_register();
+				assert_oneof(
+					value_register.type, Operand::Type::REGISTER, Operand::Type::IMMEDIATE
+				);
+				assert(
+					value_register.type == Operand::Type::REGISTER
+					or value_register.type == Operand::Type::IMMEDIATE
+				);
 				assert(
 					offset_register.type == Operand::Type::REGISTER
 					or offset_register.type == Operand::Type::IMMEDIATE
 				);
 				auto value = fetch(value_register);
-				auto offset = fetch(offset_register).as_integer();
-				auto pointer = cells[pointer_register.index].as_pointer();
+				auto a = fetch(offset_register);
+				if (not a.is_integer())
+					throw std::runtime_error("storea offset operand was not an integer");
+				auto offset = a.as_integer();
+				if (not cells[base_register.index].is_pointer())
+					throw std::runtime_error("storea base operand was not a pointer");
+				auto t1 = cells[base_register.index];
+				auto pointer = t1.as_pointer();
 				auto cell = pointer[(size_t)offset];
 				*cell = Value(value);
 				break;
@@ -201,8 +268,14 @@ void VM::run(const lir::Chunk& code) {
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2].as_register();
 				assert(result_register.type == Operand::Type::REGISTER);
-				auto offset = fetch(offset_register).as_integer();
-				auto pointer = cells[pointer_register.index].as_pointer();
+				auto a = fetch(offset_register);
+				if (not a.is_integer())
+					throw std::runtime_error("loada offset operand was not an integer");
+				auto offset = a.as_integer();
+				auto t1 = cells[pointer_register.index];
+				if (not t1.is_pointer())
+					throw std::runtime_error("loada base operand was not a pointer");
+				auto pointer = t1.as_pointer();
 				auto value = pointer[(size_t)offset];
 				auto& cell = cells[result_register.as_register().index];
 				cell = *value;
@@ -213,12 +286,34 @@ void VM::run(const lir::Chunk& code) {
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2];
 				assert(result_register.type == Operand::Type::REGISTER);
-				assert(offset_register.type == Operand::Type::REGISTER);
+				assert(
+					offset_register.type == Operand::Type::REGISTER
+					|| offset_register.type == Operand::Type::IMMEDIATE
+				);
 				assert(pointer_register.type == Operand::Type::REGISTER);
-				auto offset = fetch(offset_register).as_integer();
-				auto pointer = cells[pointer_register.as_register().index].as_pointer();
+				auto t1 = fetch(offset_register);
+				if (not t1.is_integer())
+					throw std::runtime_error("shifta offset operand was not an integer");
+				auto offset = t1.as_integer();
+				auto t2 = cells[pointer_register.as_register().index];
+				if (not t2.is_pointer())
+					throw std::runtime_error("shifta base operand was not a pointer");
+				auto pointer = t2.as_pointer();
 				auto x = &pointer[(size_t)offset];
 				cells[result_register.as_register().index] = x;
+				break;
+			}
+			case Opcode::CLONEA: {
+				auto result_register = inst.operands[0];
+				auto source_register = inst.operands[1];
+				assert(result_register.type == Operand::Type::REGISTER);
+				assert(source_register.type == Operand::Type::REGISTER);
+				auto source = cells[source_register.as_register().index];
+				auto& destination = cells[result_register.as_register().index];
+				destination = clone(source);
+				break;
+			}
+			case Opcode::NOP: {
 				break;
 			}
 		}
@@ -230,19 +325,42 @@ void VM::run(const lir::Chunk& code) {
 	if (should_print_result and code.result_opnd.has_value()) {
 		auto result = code.result_opnd.value();
 		if (result.type == Operand::Type::IMMEDIATE) {
-			std::cout << "==> " << fetch(result).as_integer() << '\n';
-		} else if (auto reg = result.as_register();
-		           result.type == Operand::Type::REGISTER) {
-			if (not reg.is_lvalue_pointer) {
-				std::cout << "==> " << fetch(result).as_integer() << '\n';
-			} else {
-				std::cout << "==> 0d" << cells[reg.index].as_pointer().address()
-									<< '\n';
+			auto t1 = fetch(result);
+			assert(t1.is_integer());
+			std::cout << "==> " << t1.as_integer() << '\n';
+		} else if (result.type == Operand::Type::REGISTER) {
+			std::cout << '%' << result.as_register().index << ' ';
+			auto reg = cells[result.as_register().index];
+			if (reg.is_integer()) {
+				std::cout << "==> " << reg.as_integer() << '\n';
+			} else if (reg.is_pointer()) {
+				std::cout << "==> 0d" << reg.as_pointer().address() << '\n';
+			} else if (reg.is_undefined()) {
+				throw std::runtime_error("undefined result");
 			}
 		} else {
 			std::cout << "VM ERROR: Couldn't print value" << '\n';
 		}
 	}
+}
+
+static Value clone(Value val) {
+	if (val.is_undefined()) {
+		return Value();
+	} else if (val.is_integer()) {
+		return Value::Integer(val.as_integer());
+	} else if (val.is_pointer()) {
+		return clone_pointer(val.as_pointer());
+	} else {
+		assert(false);
+	}
+}
+
+Value::Pointer clone_pointer(Value::Pointer ptr) {
+	auto a = new Value[ptr.m_size];
+	for (auto i = 0ul; i < ptr.m_size; i++) a[i] = clone(ptr.m_pointer[i]);
+	Value::Pointer ptr2(a, ptr.m_size);
+	return ptr2;
 }
 
 } // namespace lir

@@ -49,40 +49,32 @@ constexpr auto builtins = {
 	Builtin {make_array, "make_array"}
 };
 
-Result write_int(Compiler&, vector<Operand> args) {
+Result write_int(Compiler& comp, vector<Operand> args) {
 	if (args.size() != 1)
 		err("write_int accepts only a single integer as argument");
-
 	Chunk chunk {};
-
-	auto& op = args[0];
-	if (op.type == Operand::Type::REGISTER)
-		assert(not op.as_register().is_lvalue_pointer);
-	chunk.emit(Opcode::PRINTV, op);
+	auto t1 = comp.make_register();
+	chunk.emit_loada(t1, Operand::make_immediate_integer(0), args[0]);
+	chunk.emit(Opcode::PRINTV, t1);
 	return {chunk, {}};
 }
 
-Result write_char(Compiler&, vector<Operand> args) {
+Result write_char(Compiler& comp, vector<Operand> args) {
 	if (args.size() != 1)
 		err("write_int accepts only a single character as argument");
-
 	Chunk chunk {};
-	auto& op = args[0];
-	if (op.type == Operand::Type::REGISTER)
-		assert(not op.as_register().is_lvalue_pointer);
-	chunk.emit(Opcode::PRINTC, op);
+	auto op = args[0];
+	auto t1 = comp.make_register();
+	chunk.emit_loada(t1, Operand::make_immediate_integer(0), op);
+	chunk.emit(Opcode::PRINTC, t1);
 	return {chunk, {}};
 }
 
 Result write_str(Compiler&, vector<Operand> args) {
 	if (args.size() != 1)
 		err("write_str accepts only a single pointer to character as argument");
-
 	Chunk chunk {};
 	auto& op = args[0];
-	assert(
-		op.type == Operand::Type::REGISTER and op.as_register().is_lvalue_pointer
-	);
 	chunk.emit(Opcode::PRINTF, op);
 	return {chunk, {}};
 }
@@ -106,28 +98,14 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 		err("The `array' builtin expects a size as the first and only argument.");
 
 	Chunk chunk {};
-	// if size if constant we subtract the allocation start at compile time
-	if (args[0].type == Operand::Type::IMMEDIATE) {
-		auto addr =
-			Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
-		addr.as_register().is_lvalue_pointer = true;
-		auto dyn = Operand::make_immediate_integer(
-			comp.dyn_alloc_start -= args[0].as_immediate().number
-		);
+	auto addr =
+		Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
+	addr.as_register().is_lvalue_pointer = true;
 
-		chunk.emit(Opcode::MOV, addr, dyn).with_comment("static array");
-		return {chunk, addr};
-
-	} else {
-		auto addr =
-			Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
-		addr.as_register().is_lvalue_pointer = true;
-		auto dyn = Operand(Register(0, lir::Type::make_integer()));
-
-		chunk.emit(Opcode::SUB, dyn, dyn, args[0]);
-		chunk.emit(Opcode::MOV, addr, dyn).with_comment("allocating array");
-		return {chunk, addr};
-	}
+	auto t1 = comp.make_register();
+	chunk.emit_loada(t1, Operand::make_immediate_integer(0), args[0]);
+	chunk.emit_alloca(addr, t1).with_comment("allocating array");
+	return {chunk, addr};
 }
 
 } // namespace builtin
@@ -175,15 +153,31 @@ Operand Compiler::make_label() {
 	return lir::Operand(lir::Label(label_count++));
 }
 
-Operand Compiler::to_rvalue(Chunk* chunk, Operand opnd) {
-	if (opnd.type == Operand::Type::REGISTER
-	    and opnd.as_register().is_lvalue_pointer) {
-		Operand tmp = make_register();
-		chunk->emit(Opcode::LOAD, tmp, Operand::make_immediate_integer(0), opnd)
-			.with_comment("casting to rvalue");
-		return tmp;
+Result Compiler::compile_or_allocate_lvalue(
+	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
+) {
+	const auto& node = ast.at(node_idx);
+	if (node.type == NodeType::PATH) {
+		return compile_lvalue(node_idx, handlers, scope_id);
 	} else {
-		return opnd;
+		bool is_array = false;
+		{
+			auto t1 = tpc.node_to_type.at(node_idx);
+			auto t2 = get_datatype(t1);
+			if (nullptr != std::dynamic_pointer_cast<Array>(t2)) is_array = true;
+		}
+		if (is_array) {
+			return compile(node_idx, handlers, scope_id);
+		} else {
+			Chunk chunk {};
+			auto res = compile(node_idx, handlers, scope_id);
+			chunk = chunk + res.code;
+			auto res_opnd = res.opnd;
+			auto t1 = make_register();
+			chunk.emit_alloca(t1, Operand::make_immediate_integer(1));
+			chunk.emit_storea(res_opnd, Operand::make_immediate_integer(0), t1);
+			return {chunk, t1};
+		}
 	}
 }
 
@@ -201,12 +195,9 @@ Result Compiler::compile_app(
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
 		const auto& arg_node = ast.at(arg_idx);
-
-		auto res = compile(arg_idx, handlers, scope_id);
+		auto res = compile_or_allocate_lvalue(arg_idx, handlers, scope_id);
 		chunk = chunk + res.code;
 		args.push_back(res.opnd);
-
-		if (arg_node.type == NodeType::PATH) args[i] = to_rvalue(&chunk, args[i]);
 	}
 
 	const char* func_name = pool.find(func_node.str_id);
@@ -252,7 +243,7 @@ Result Compiler::compile_if(
 
 	auto cond_res = compile(cond_idx, handlers, scope_id);
 	chunk = chunk + cond_res.code;
-	Operand cond_opnd = to_rvalue(&chunk, cond_res.opnd);
+	Operand cond_opnd = cond_res.opnd;
 
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1).with_comment("if branch");
 
@@ -307,7 +298,7 @@ Result Compiler::compile_for(
 		if (step_node.type != NodeType::EMPTY) {
 			auto step_res = compile(step_idx, handlers, scope_id);
 			chunk = chunk + step_res.code;
-			return to_rvalue(&chunk, step_res.opnd);
+			return step_res.opnd;
 		} else {
 			return Operand::make_immediate_integer(1);
 		}
@@ -318,15 +309,17 @@ Result Compiler::compile_for(
 	auto var_res = compile(decl_idx, handlers, new_scope_id);
 	chunk = chunk + var_res.code;
 	Operand var = var_res.opnd;
-	if (var.type != Operand::Type::REGISTER)
-		err("Declaration must be of a number lvalue");
 
 	auto to_res = compile(to_idx, handlers, new_scope_id);
 	chunk = chunk + to_res.code;
-	Operand to = to_rvalue(&chunk, to_res.opnd);
+	Operand to = to_res.opnd;
+
+	const auto t1 = make_register();
+	const auto t2 = make_register();
 
 	chunk.add_label(beg);
-	chunk.emit(Opcode::EQ, cmp, var, to);
+	chunk.emit_loada(t1, Operand::make_immediate_integer(0), var);
+	chunk.emit(Opcode::EQ, cmp, t1, to);
 	chunk.emit(Opcode::JMP_TRUE, cmp, end);
 
 	auto exp_res = compile(then_idx, new_handlers, new_scope_id);
@@ -336,7 +329,8 @@ Result Compiler::compile_for(
 	chunk.emit(Opcode::MOV, result_register, exp);
 
 	chunk.add_label(inc);
-	chunk.emit(Opcode::ADD, var, var, step);
+	chunk.emit(Opcode::ADD, t2, t1, step);
+	chunk.emit_storea(t2, Operand::make_immediate_integer(0), var);
 	chunk.emit(Opcode::JMP, beg);
 	chunk.add_label(end);
 
@@ -357,7 +351,7 @@ Result Compiler::compile_when(
 
 	auto cond_res = compile(cond_idx, handlers, scope_id);
 	chunk = chunk + cond_res.code;
-	Operand cond_opnd = to_rvalue(&chunk, cond_res.opnd);
+	Operand cond_opnd = cond_res.opnd;
 
 	chunk.emit(Opcode::MOV, res, {}).with_comment("when conditional");
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1);
@@ -396,13 +390,13 @@ Result Compiler::compile_while(
 
 	auto cond_res = compile(node[0], handlers, scope_id);
 	chunk = chunk + cond_res.code;
-	Operand cond = to_rvalue(&chunk, cond_res.opnd);
+	Operand cond = cond_res.opnd;
 
 	chunk.emit(Opcode::JMP_FALSE, cond, end);
 
 	auto exp_res = compile(node[1], new_handlers, scope_id);
 	chunk = chunk + exp_res.code;
-	Operand exp = to_rvalue(&chunk, exp_res.opnd);
+	Operand exp = exp_res.opnd;
 
 	chunk.emit(Opcode::MOV, result_register, exp);
 
@@ -410,6 +404,78 @@ Result Compiler::compile_while(
 	chunk.add_label(end);
 
 	return {chunk, result_register};
+}
+
+Result Compiler::compile_lvalue(
+	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
+) {
+	const auto& node = ast.at(node_idx);
+	switch (node.type) {
+		case NodeType::EMPTY: assert(false);
+		case NodeType::APP: assert(false);
+		case NodeType::NUM: assert(false);
+		case NodeType::BLK: assert(false);
+		case NodeType::IF: assert(false);
+		case NodeType::WHEN: assert(false);
+		case NodeType::FOR: assert(false);
+		case NodeType::WHILE: assert(false);
+		case NodeType::BREAK: assert(false);
+		case NodeType::CONTINUE: assert(false);
+		case NodeType::ASS: assert(false);
+		case NodeType::OR: assert(false);
+		case NodeType::AND: assert(false);
+		case NodeType::GTN: assert(false);
+		case NodeType::LTN: assert(false);
+		case NodeType::GTE: assert(false);
+		case NodeType::LTE: assert(false);
+		case NodeType::EQ: assert(false);
+		case NodeType::AT: {
+			Chunk chunk {};
+			const auto& node = ast.at(node_idx);
+			auto base_res = compile_lvalue(node[0], handlers, scope_id);
+			chunk = chunk + base_res.code;
+			auto base = base_res.opnd;
+			auto off_res = compile(node[1], handlers, scope_id);
+			chunk = chunk + off_res.code;
+			auto off = off_res.opnd;
+
+			auto tmp = make_register();
+			auto t1 = make_register();
+			chunk.emit_shifta(tmp, off, base)
+				.with_comment("accessing allocated array");
+			return {chunk, tmp};
+		}
+		case NodeType::ADD: assert(false);
+		case NodeType::SUB: assert(false);
+		case NodeType::MUL: assert(false);
+		case NodeType::DIV: assert(false);
+		case NodeType::MOD: assert(false);
+		case NodeType::NOT: assert(false);
+		case NodeType::ID: {
+			Chunk chunk {};
+			Operand* opnd = env.find(scope_id, node.str_id);
+			if (opnd == nullptr) {
+				fprintf(stderr, "%s ", pool.find(node.str_id));
+				err("Variable not found");
+			}
+			chunk.result_opnd = *opnd;
+			return {chunk, *opnd};
+		}
+		case NodeType::STR: assert(false);
+		case NodeType::VAR_DECL: assert(false);
+		case NodeType::FUN_DECL: assert(false);
+		case NodeType::NIL: assert(false);
+		case NodeType::TRUE: assert(false);
+		case NodeType::FALSE: assert(false);
+		case NodeType::LET: assert(false);
+		case NodeType::CHAR: assert(false);
+		case NodeType::PATH: {
+			return compile_lvalue(node[0], handlers, scope_id);
+		}
+		case NodeType::AS: assert(false);
+		case NodeType::INSTANCE: assert(false);
+	}
+	assert(false);
 }
 
 Result Compiler::compile_var_decl(
@@ -425,25 +491,41 @@ Result Compiler::compile_var_decl(
 	(void)opt_type_idx;
 
 	const auto& id_node = ast.at(id_idx);
+	const auto& exp_node = ast.at(exp_idx);
 
-	auto initial_res = compile(exp_idx, handlers, scope_id);
-	chunk = chunk + initial_res.code;
-	Operand initial = initial_res.opnd;
+	const auto comment =
+		std::format("creating variable \"{}\"", pool.find(id_node.str_id));
 
-	// initial is an array
-	auto is_array = false;
-	TYPE t1 = tpc.node_to_type.at(exp_idx);
-	TYPE t3 = get_datatype(t1);
-	if (auto t2 = std::dynamic_pointer_cast<Array>(t3)) {
-		is_array = true;
+	bool is_array = false;
+	{
+		auto t1 = tpc.node_to_type.at(exp_idx);
+		auto t2 = get_datatype(t1);
+		if (nullptr != std::dynamic_pointer_cast<Array>(t2)) is_array = true;
 	}
-	if (is_array) return {chunk, *env.insert(scope_id, id_node.str_id, initial)};
 
-	// anything else
-	initial = to_rvalue(&chunk, initial);
-	Operand* var = env.insert(scope_id, id_node.str_id, make_register());
-	chunk.emit(Opcode::MOV, *var, initial).with_comment("creating variable");
-	return {chunk, *var};
+	if (exp_node.type == NodeType::PATH) {
+		auto initial_res = compile_lvalue(exp_idx, handlers, scope_id);
+		chunk = chunk + initial_res.code;
+		auto initial = initial_res.opnd;
+		// FIXME: properly set register type
+		auto* var = env.insert(scope_id, id_node.str_id, make_register());
+		chunk.emit_clonea(*var, initial).with_comment(comment);
+		return {chunk, *var};
+	} else {
+		auto initial_res = compile(exp_idx, handlers, scope_id);
+		chunk = chunk + initial_res.code;
+		auto initial = initial_res.opnd;
+		// FIXME: properly set register type
+		auto* var = env.insert(scope_id, id_node.str_id, make_register());
+		if (is_array) {
+			chunk.emit_mov(*var, initial);
+		} else {
+			chunk.emit_alloca(*var, Operand::make_immediate_integer(1))
+				.with_comment(comment);
+			chunk.emit_storea(initial, Operand::make_immediate_integer(0), *var);
+		}
+		return {chunk, *var};
+	}
 }
 
 Result Compiler::compile_fun_decl(
@@ -498,21 +580,16 @@ Result Compiler::compile_ass(
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	auto cell_res = compile(node[0], handlers, scope_id);
+	auto cell_res = compile_lvalue(node[0], handlers, scope_id);
 	chunk = chunk + cell_res.code;
 	Operand cell = cell_res.opnd;
-	if (cell.type != Operand::Type::REGISTER)
-		err("Left-hand side of assignment must be an lvalue");
 
 	auto exp_res = compile(node[1], handlers, scope_id);
 	chunk = chunk + exp_res.code;
-	Operand exp = to_rvalue(&chunk, exp_res.opnd);
+	Operand exp = exp_res.opnd;
 
-	if (cell.as_register().is_lvalue_pointer)
-		chunk.emit(Opcode::STORE, exp, Operand::make_immediate_integer(0), cell)
-			.with_comment("assigning to array variable");
-	else // contains number
-		chunk.emit(Opcode::MOV, cell, exp).with_comment("assigning to variable");
+	chunk.emit_storea(exp, Operand::make_immediate_integer(0), cell)
+		.with_comment("assigning to array variable");
 
 	return {chunk, exp};
 }
@@ -552,24 +629,20 @@ Result Compiler::compile_str(
 
 	const char* str = pool.find(node.str_id);
 	auto str_len = strlen(str);
-	auto buf = make_register();
-	buf.as_register().is_lvalue_pointer = true;
 	dyn_alloc_start -= (Number)str_len + 1;
 
-	chunk.emit(
-		Opcode::MOV, buf, Operand::make_immediate_integer(dyn_alloc_start)
-	);
-
-	for (size_t i = 0; i < str_len + 1; i++)
-		chunk.emit(
-			Opcode::MOV,
-			Operand(Register((size_t)dyn_alloc_start + i, lir::Type::make_integer())),
-			Operand::make_immediate_integer(str[i])
+	auto t1 = make_register();
+	chunk.emit_alloca(t1, Operand::make_immediate_integer((int)str_len));
+	for (size_t i = 0; i < str_len; i++) {
+		chunk.emit_storea(
+			Operand::make_immediate_integer(str[i]),
+			Operand::make_immediate_integer((int)i),
+			t1
 		);
+	}
 
-	chunk.result_opnd = buf;
-
-	return {chunk, buf};
+	chunk.result_opnd = t1;
+	return {chunk, t1};
 }
 
 Result Compiler::compile_at(
@@ -585,7 +658,7 @@ Result Compiler::compile_at(
 	Operand base = base_res.opnd;
 	auto off_res = compile(node[1], handlers, scope_id);
 	chunk = chunk + off_res.code;
-	Operand off = to_rvalue(&chunk, off_res.opnd);
+	Operand off = off_res.opnd;
 
 	auto is_array = false;
 	TYPE t1 = tpc.node_to_type.at(node[0]);
@@ -642,7 +715,7 @@ Result Compiler::compile(
 
 			auto res_res = compile(node[0], handlers, scope_id);
 			chunk = chunk + res_res.code;
-			Operand res = to_rvalue(&chunk, res_res.opnd);
+			Operand res = res_res.opnd;
 			chunk.emit(Opcode::MOV, handlers.break_handler.result_register, res);
 			chunk
 				.emit(
@@ -660,7 +733,7 @@ Result Compiler::compile(
 
 			auto res_res = compile(node[0], handlers, scope_id);
 			chunk = chunk + res_res.code;
-			Operand res = to_rvalue(&chunk, res_res.opnd);
+			Operand res = res_res.opnd;
 			chunk.emit(Opcode::MOV, handlers.continue_handler.result_register, res);
 			chunk
 				.emit(
@@ -681,8 +754,8 @@ Result Compiler::compile(
 		chunk = chunk + left_res.code;                            \
 		auto right_res = compile(right_node, handlers, scope_id); \
 		chunk = chunk + right_res.code;                           \
-		Operand left = to_rvalue(&chunk, left_res.opnd);          \
-		Operand right = to_rvalue(&chunk, right_res.opnd);        \
+		Operand left = left_res.opnd;                             \
+		Operand right = right_res.opnd;                           \
 		Operand res = make_register();                            \
                                                               \
 		chunk.emit(OPCODE, res, left, right);                     \
@@ -707,25 +780,32 @@ Result Compiler::compile(
 			Operand res = make_register();
 			auto inverse_res = compile(node[0], handlers, scope_id);
 			chunk = chunk + inverse_res.code;
-			Operand inverse = to_rvalue(&chunk, inverse_res.opnd);
+			Operand inverse = inverse_res.opnd;
 			chunk.emit(Opcode::NOT, res, inverse);
 			return {chunk, res};
 		}
-		case NodeType::AT: COMPILE_WITH_HANDLER(compile_at)
+		case NodeType::AT: {
+			Chunk chunk {};
+			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			chunk = chunk + res.code;
+			auto res_opnd = res.opnd;
+			auto tmp = make_register();
+			chunk.emit_loada(tmp, Operand::make_immediate_integer(0), res_opnd);
+			return {chunk, tmp};
+		}
 		case NodeType::ID: {
 			Chunk chunk {};
-			Operand* opnd = env.find(scope_id, node.str_id);
-			if (opnd == nullptr) {
-				fprintf(stderr, "%s ", pool.find(node.str_id));
-				err("Variable not found");
-			}
-			chunk.result_opnd = *opnd;
-			return {chunk, *opnd};
+			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			chunk = chunk + res.code;
+			auto res_opnd = res.opnd;
+			auto tmp = make_register();
+			chunk.emit_loada(tmp, Operand::make_immediate_integer(0), res_opnd);
+			return {chunk, tmp};
 		}
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
 		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
-		case NodeType::NIL: return {{}, {}};
+		case NodeType::NIL: return {{}, Operand::make_immediate_integer(0)};
 		case NodeType::TRUE: return {{}, lir::Operand::make_immediate_integer(1)};
 		case NodeType::FALSE: return {{}, lir::Operand::make_immediate_integer(0)};
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
@@ -736,7 +816,16 @@ Result Compiler::compile(
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}
-		case NodeType::PATH: return compile(node[0], handlers, scope_id);
+		case NodeType::PATH: {
+			Chunk chunk {};
+			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			chunk = chunk + res.code;
+			auto res_opnd = res.opnd;
+			auto tmp = make_register();
+			chunk.emit_loada(tmp, Operand::make_immediate_integer(0), res_opnd);
+			chunk.result_opnd = tmp;
+			return {chunk, tmp};
+		}
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");
 		case NodeType::AS: return compile(node[0], handlers, scope_id);

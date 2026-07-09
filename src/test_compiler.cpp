@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <sstream>
 #include <stdexcept>
 #include <variant>
 
@@ -256,8 +257,18 @@ TEST(CompilerTest, let_expression) {
 		expected.result_opnd = r1;
 	}
 	try {
-		auto are_equal = chunk == expected;
-		EXPECT_TRUE(are_equal);
+		const char* b =
+			"    mov %0, 2047  ; contains address to start of the last "
+			"allocated region\n"
+			"    jump L000\n"
+			"L000:\n"
+			"    alloca %1, 1  ; creating variable \"x\"\n"
+			"    storea 3, 0(%1)\n"
+			"    loada %2, 0(%1)\n";
+		std::string a = std::string(b);
+		std::stringstream expected2;
+		expected2 << chunk;
+		EXPECT_EQ(expected2.str(), a);
 	} catch (std::exception& exn) {
 		EXPECT_TRUE(false) << exn.what();
 	}

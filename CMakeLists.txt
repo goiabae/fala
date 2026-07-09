@@ -106,6 +106,7 @@ add_executable(test_vm
 	src/lir.cpp
 	src/vm.cpp
 )
+set_property(TARGET test_vm PROPERTY CXX_STANDARD 23)
 
 target_link_libraries(test_vm PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_vm)

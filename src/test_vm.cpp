@@ -78,46 +78,6 @@ TEST(VMTest, arithmetic) {
 	EXPECT_EQ(vm.cells[c.as_register().index].as_integer(), 36);
 }
 
-TEST(VMTest, store_immediate) {
-	auto a = make_integer_register(0);
-
-	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(1));
-	chunk.emit_store(
-		lir::Operand::make_immediate_integer(69),
-		lir::Operand::make_immediate_integer(0),
-		a
-	);
-
-	std::istringstream input {""};
-	std::ostringstream output {};
-
-	lir::VM vm {input, output};
-	vm.should_print_result = false;
-	vm.run(chunk);
-
-	EXPECT_EQ(vm.cells[1].as_integer(), 69);
-}
-
-TEST(VMTest, store_immediate_with_offset) {
-	auto a = make_integer_register(0);
-	auto b = make_integer_register(1);
-
-	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(2));
-	chunk.emit(lir::Opcode::MOV, b, lir::Operand::make_immediate_integer(3));
-	chunk.emit_store(lir::Operand::make_immediate_integer(69), b, a);
-
-	std::istringstream input {""};
-	std::ostringstream output {};
-
-	lir::VM vm {input, output};
-	vm.should_print_result = false;
-	vm.run(chunk);
-
-	EXPECT_EQ(vm.cells[5].as_integer(), 69);
-}
-
 TEST(VMTest, push_immediate) {
 	auto a = lir::Operand::make_immediate_integer(69);
 
@@ -439,25 +399,24 @@ TEST(VMTest, io_operations) {
 	const auto r3 = lir::Operand(lir::Register(2, lir::Type::make_integer()));
 
 	lir::Chunk chunk {};
-	chunk.emit_mov(
-		lir::Operand(lir::Register(2044, lir::Type::make_integer())),
-		lir::Operand::make_immediate_integer('f')
-	);
-	chunk.emit_mov(
-		lir::Operand(lir::Register(2045, lir::Type::make_integer())),
-		lir::Operand::make_immediate_integer('o')
-	);
-	chunk.emit_mov(
-		lir::Operand(lir::Register(2046, lir::Type::make_integer())),
-		lir::Operand::make_immediate_integer('o')
-	);
-	chunk.emit_mov(
-		lir::Operand(lir::Register(2047, lir::Type::make_integer())),
-		lir::Operand::make_immediate_integer('\0')
-	);
 	chunk.emit(lir::Opcode::PRINTV, _69);
 	chunk.emit(lir::Opcode::PRINTC, _A);
-	chunk.emit_mov(r1, lir::Operand::make_immediate_integer(2044));
+	chunk.emit_alloca(r1, lir::Operand::make_immediate_integer(3));
+	chunk.emit_storea(
+		lir::Operand::make_immediate_integer('f'),
+		lir::Operand::make_immediate_integer(0),
+		r1
+	);
+	chunk.emit_storea(
+		lir::Operand::make_immediate_integer('o'),
+		lir::Operand::make_immediate_integer(1),
+		r1
+	);
+	chunk.emit_storea(
+		lir::Operand::make_immediate_integer('o'),
+		lir::Operand::make_immediate_integer(2),
+		r1
+	);
 	chunk.emit(lir::Opcode::PRINTF, r1);
 	chunk.emit(lir::Opcode::READV, r2);
 	chunk.emit(lir::Opcode::PRINTV, r2);

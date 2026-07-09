@@ -4,10 +4,12 @@
 #define VM_HPP
 
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <istream>
 #include <stack>
 #include <stdexcept>
+#include <utility>
 #include <variant>
 
 #include "lir.hpp"
@@ -33,8 +35,12 @@ class Value {
 		: m_pointer(pointer), m_size(size) {}
 
 		Pointer operator+(std::size_t offset) {
-			if (offset > m_size)
-				throw std::runtime_error("out of bounds pointer access");
+			if (offset >= m_size)
+				throw std::runtime_error(
+					std::format(
+						"out of bounds pointer access (size={}, offset={})", m_size, offset
+					)
+				);
 			return Pointer(&m_pointer[offset], m_size - offset);
 		}
 		Pointer operator[](std::size_t offset) { return *this + offset; }
@@ -42,6 +48,8 @@ class Value {
 		Value& operator*() { return *m_pointer; }
 		std::size_t size() const { return m_size; }
 		void* address() const { return m_pointer; }
+
+		friend Pointer clone_pointer(Pointer);
 
 	 private:
 		Value* m_pointer;
@@ -56,11 +64,13 @@ class Value {
 	Value() : data(std::monostate {}) {}
 
  public:
-	bool is_integer() { return std::holds_alternative<Integer>(data); }
-	bool is_pointer() { return std::holds_alternative<Pointer>(data); }
-	bool is_undefined() { return std::holds_alternative<std::monostate>(data); }
+	bool is_integer() const { return std::holds_alternative<Integer>(data); }
+	bool is_pointer() const { return std::holds_alternative<Pointer>(data); }
+	bool is_undefined() const {
+		return std::holds_alternative<std::monostate>(data);
+	}
 
-	Integer& as_integer() {
+	Integer const& as_integer() const {
 		if (is_pointer())
 			throw std::runtime_error("expected integer, but was pointer");
 		if (is_undefined())
@@ -68,12 +78,20 @@ class Value {
 		return std::get<Integer>(data);
 	}
 
-	Pointer& as_pointer() {
+	Integer& as_integer() {
+		return const_cast<Integer&>(std::as_const(*this).as_integer());
+	}
+
+	Pointer const& as_pointer() const {
 		if (is_integer())
 			throw std::runtime_error("expected pointer, but was integer");
 		if (is_undefined())
 			throw std::runtime_error("expected pointer, but was monostate");
 		return std::get<Pointer>(data);
+	}
+
+	Pointer& as_pointer() {
+		return const_cast<Pointer&>(std::as_const(*this).as_pointer());
 	}
 
  private:
