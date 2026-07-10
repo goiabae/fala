@@ -32,8 +32,7 @@ BISON_TARGET(
 	DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/parser.hpp
 	COMPILE_FLAGS "-v -Werror")
 
-add_executable(fala
-	src/main.cpp
+add_library(falalib SHARED
 	src/str_pool.cpp
 	src/lexer.cpp
 	src/ast.cpp
@@ -42,16 +41,27 @@ add_executable(fala
 	src/compiler.cpp
 	src/lir.cpp
 	src/vm.cpp
-	src/options.cpp
 	src/file_reader.cpp
 	src/line_reader.cpp
 	src/type.cpp
+	src/string_reader.cpp
 	${BISON_PARSER_OUTPUTS})
+
+set_property(TARGET falalib PROPERTY C_STANDARD 11)
+set_property(TARGET falalib PROPERTY CXX_STANDARD 23)
+
+target_include_directories(falalib PUBLIC src/)
+target_include_directories(falalib PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(fala
+	src/main.cpp
+	src/options.cpp)
+
+target_link_libraries(fala falalib)
 
 set_property(TARGET fala PROPERTY C_STANDARD 11)
 set_property(TARGET fala PROPERTY CXX_STANDARD 23)
 target_include_directories(fala PRIVATE src/)
-target_include_directories(fala PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 target_compile_options(fala PRIVATE -fsanitize=undefined)
 target_link_options(fala PRIVATE -fsanitize=undefined)
@@ -108,31 +118,29 @@ include(GoogleTest)
 
 add_executable(test_vm
 	src/test_vm.cpp
-	src/lir.cpp
-	src/vm.cpp
 )
 set_property(TARGET test_vm PROPERTY CXX_STANDARD 23)
 
+target_link_libraries(test_vm PRIVATE falalib)
 target_link_libraries(test_vm PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_vm)
 
 add_executable(test_string_reader
 	src/test_string_reader.cpp
-	src/string_reader.cpp
 )
 
+target_link_libraries(test_string_reader PRIVATE falalib)
 target_link_libraries(test_string_reader PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_string_reader)
 
 add_executable(test_lexer
 	src/test_lexer.cpp
-	src/string_reader.cpp
-	src/lexer.cpp
 )
 
 target_include_directories(test_lexer PRIVATE src/)
 target_include_directories(test_lexer PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
+target_link_libraries(test_lexer PRIVATE falalib)
 target_link_libraries(test_lexer PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_lexer)
 
@@ -141,13 +149,15 @@ add_executable(test_fixed_vector src/test_fixed_vector.cpp)
 set_property(TARGET test_fixed_vector PROPERTY CXX_STANDARD 23)
 target_include_directories(test_fixed_vector PRIVATE src/)
 
+target_link_libraries(test_fixed_vector PRIVATE falalib)
 target_link_libraries(test_fixed_vector PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_fixed_vector)
 
-add_executable(test_compiler src/test_compiler.cpp src/str_pool.cpp src/ast.cpp src/lir.cpp src/compiler.cpp src/typecheck.cpp src/type.cpp)
+add_executable(test_compiler src/test_compiler.cpp)
 
 set_property(TARGET test_compiler PROPERTY CXX_STANDARD 23)
 target_include_directories(test_compiler PRIVATE src/)
 
+target_link_libraries(test_compiler PRIVATE falalib)
 target_link_libraries(test_compiler PRIVATE GTest::gtest_main GTest::gtest)
 gtest_discover_tests(test_compiler)
