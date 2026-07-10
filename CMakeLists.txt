@@ -116,48 +116,16 @@ test_example(function_call)
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
-add_executable(test_vm
-	src/test_vm.cpp
-)
-set_property(TARGET test_vm PROPERTY CXX_STANDARD 23)
+function(test_component component)
+	add_executable("test_${component}" "src/test_${component}.cpp")
+	set_property(TARGET "test_${component}" PROPERTY CXX_STANDARD 23)
+	target_link_libraries("test_${component}" PRIVATE falalib)
+	target_link_libraries("test_${component}" PRIVATE GTest::gtest_main GTest::gtest)
+	gtest_discover_tests("test_${component}")
+endfunction()
 
-target_link_libraries(test_vm PRIVATE falalib)
-target_link_libraries(test_vm PRIVATE GTest::gtest_main GTest::gtest)
-gtest_discover_tests(test_vm)
-
-add_executable(test_string_reader
-	src/test_string_reader.cpp
-)
-
-target_link_libraries(test_string_reader PRIVATE falalib)
-target_link_libraries(test_string_reader PRIVATE GTest::gtest_main GTest::gtest)
-gtest_discover_tests(test_string_reader)
-
-add_executable(test_lexer
-	src/test_lexer.cpp
-)
-
-target_include_directories(test_lexer PRIVATE src/)
-target_include_directories(test_lexer PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-
-target_link_libraries(test_lexer PRIVATE falalib)
-target_link_libraries(test_lexer PRIVATE GTest::gtest_main GTest::gtest)
-gtest_discover_tests(test_lexer)
-
-add_executable(test_fixed_vector src/test_fixed_vector.cpp)
-
-set_property(TARGET test_fixed_vector PROPERTY CXX_STANDARD 23)
-target_include_directories(test_fixed_vector PRIVATE src/)
-
-target_link_libraries(test_fixed_vector PRIVATE falalib)
-target_link_libraries(test_fixed_vector PRIVATE GTest::gtest_main GTest::gtest)
-gtest_discover_tests(test_fixed_vector)
-
-add_executable(test_compiler src/test_compiler.cpp)
-
-set_property(TARGET test_compiler PROPERTY CXX_STANDARD 23)
-target_include_directories(test_compiler PRIVATE src/)
-
-target_link_libraries(test_compiler PRIVATE falalib)
-target_link_libraries(test_compiler PRIVATE GTest::gtest_main GTest::gtest)
-gtest_discover_tests(test_compiler)
+test_component(vm)
+test_component(string_reader)
+test_component(lexer)
+test_component(fixed_vector)
+test_component(compiler)
