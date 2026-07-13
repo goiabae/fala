@@ -1,32 +1,35 @@
 #ifndef TYPE_HPP
 #define TYPE_HPP
 
-#include <algorithm>
 #include <cassert>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
 #include "utils.hpp"
+#include "variable.hpp"
 
 struct Type;
+struct Datatype;
 
-using TYPE = std::shared_ptr<Type>;
+std::ostream& operator<<(std::ostream& st, const Type& t);
+std::ostream& operator<<(std::ostream& st, const Datatype& t);
 
-struct Type {
-	virtual ~Type() {}
+using DATATYPE = std::shared_ptr<Datatype>;
+
+struct Datatype {
+	virtual ~Datatype() {}
 	virtual size_t size_of() = 0;
 	virtual std::ostream& print(std::ostream&) const = 0;
 
  protected:
-	Type() {}
+	Datatype() {}
 };
-
-std::ostream& operator<<(std::ostream& st, const Type& t);
 
 enum Sign { SIGNED, UNSIGNED };
 
-struct Integer : Type {
+struct Integer : Datatype {
 	Integer(int bit_count, Sign sign) : bit_count(bit_count), sign(sign) {}
 	int bit_count;
 	Sign sign;
@@ -44,7 +47,7 @@ struct Integer : Type {
 
 using INTEGER = std::shared_ptr<Integer>;
 
-struct Nil : Type {
+struct Nil : Datatype {
 	size_t size_of() override { return 0; }
 	std::ostream& print(std::ostream& st) const override {
 		st << "Nil";
@@ -52,15 +55,7 @@ struct Nil : Type {
 	}
 };
 
-struct Bool : Type {
-	size_t size_of() override { return 1; }
-	std::ostream& print(std::ostream& st) const override {
-		st << "Bool";
-		return st;
-	}
-};
-
-struct Void : Type {
+struct Void : Datatype {
 	size_t size_of() override { return 0; }
 	std::ostream& print(std::ostream& st) const override {
 		st << "Void";
@@ -68,11 +63,11 @@ struct Void : Type {
 	}
 };
 
-struct Function : Type {
-	Function(std::vector<TYPE> inputs, TYPE output)
+struct Function : Datatype {
+	Function(std::vector<std::shared_ptr<Type>> inputs, DATATYPE output)
 	: inputs(inputs), output(output) {}
-	std::vector<TYPE> inputs;
-	TYPE output;
+	std::vector<std::shared_ptr<Type>> inputs;
+	DATATYPE output;
 
 	// label to function?
 	size_t size_of() override { return 1; }
@@ -84,7 +79,7 @@ struct Function : Type {
 
 using FUNCTION = std::shared_ptr<Function>;
 
-struct TypeVariable : Type {
+struct TypeVariable : Datatype {
 	TypeVariable(std::size_t name) : unbound_name(name) {}
 
 	size_t size_of() override {
@@ -103,22 +98,22 @@ struct TypeVariable : Type {
 		return st;
 	}
 
-	void bind_to(TYPE t) {
+	void bind_to(DATATYPE t) {
 		bound_type = t;
 		is_bound = true;
 	}
 
 	std::size_t unbound_name {};
-	TYPE bound_type {nullptr};
+	DATATYPE bound_type {nullptr};
 	bool is_bound {false};
 };
 
 using TYPE_VARIABLE = std::shared_ptr<TypeVariable>;
 
 // Array of Int 64, really
-struct Array : Type {
-	Array(TYPE item_type) : item_type(item_type) {}
-	TYPE item_type;
+struct Array : Datatype {
+	Array(DATATYPE item_type) : item_type(item_type) {}
+	DATATYPE item_type;
 
 	// pointer to beginning of allocated region
 	size_t size_of() override { return 1; }
@@ -130,21 +125,8 @@ struct Array : Type {
 
 using ARRAY = std::shared_ptr<Array>;
 
-struct Ref : Type {
-	Ref(TYPE ref_type) : ref_type(ref_type) {}
-	size_t size_of() override { return ref_type->size_of(); }
-	std::ostream& print(std::ostream& st) const override {
-		st << "&" << *ref_type;
-		return st;
-	}
-
-	TYPE ref_type;
-};
-
-using REF = std::shared_ptr<Ref>;
-
 // Type of all types
-struct Toat : Type {
+struct Toat : Datatype {
 	size_t size_of() override { assert(false); }
 	std::ostream& print(std::ostream&) const override {
 		throw std::domain_error("can't print toat");
@@ -153,10 +135,10 @@ struct Toat : Type {
 
 using TOAT = std::shared_ptr<Toat>;
 
-struct General : Type {
-	General(std::vector<TYPE> vars, TYPE body) : vars(vars), body(body) {}
-	std::vector<TYPE> vars;
-	TYPE body;
+struct General : Datatype {
+	General(std::vector<DATATYPE> vars, DATATYPE body) : vars(vars), body(body) {}
+	std::vector<DATATYPE> vars;
+	DATATYPE body;
 
 	size_t size_of() override { assert(false); }
 	std::ostream& print(std::ostream&) const override {
@@ -166,6 +148,22 @@ struct General : Type {
 
 using GENERAL = std::shared_ptr<General>;
 
-TYPE get_datatype(TYPE);
+enum class ConcreteMode {
+	VAL,
+	VAR,
+	OUT,
+};
+
+struct Mode {
+	std::variant<ConcreteMode, Variable<Mode>> data;
+	std::optional<ConcreteMode> to_concrete();
+};
+
+struct Type {
+	std::shared_ptr<Mode> mode;
+	std::shared_ptr<Datatype> datatype;
+};
+
+std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type>);
 
 #endif

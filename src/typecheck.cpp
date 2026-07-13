@@ -26,56 +26,108 @@
 // s       A literal string
 // c       A literal character
 // t       A type
+// m       A mode
 
-TYPE Typechecker::make_nil() { return std::shared_ptr<Nil>(new Nil()); }
-TYPE Typechecker::make_bool() { return std::shared_ptr<Bool>(new Bool()); }
-TYPE Typechecker::make_void() { return std::shared_ptr<Void>(new Void()); }
-TYPE Typechecker::make_toat() { return std::shared_ptr<Toat>(new Toat()); }
+using M = std::shared_ptr<Mode>;
+using D = std::shared_ptr<Datatype>;
+using T = std::shared_ptr<Type>;
 
-TYPE Typechecker::make_integer(int bit_count, Sign sign) {
-	return std::shared_ptr<Integer>(new Integer(bit_count, sign));
+const auto VAR_ = std::make_shared<Mode>(ConcreteMode::VAR);
+const auto VAL_ = std::make_shared<Mode>(ConcreteMode::VAL);
+const auto OUT_ = std::make_shared<Mode>(ConcreteMode::OUT);
+
+const auto NIL_ = std::make_shared<Nil>();
+const auto VOID_ = std::make_shared<Void>();
+const auto TOAT_ = std::make_shared<Toat>();
+
+static M make_modevar(std::size_t index);
+static D make_datavar(std::size_t index);
+static D make_integer(int bit_count, Sign sign);
+static D make_array(D item);
+static D make_function(std::vector<T> inputs, D output);
+static D make_bool();
+static D make_general(std::vector<D> var, D body);
+static T make_type(M mode, D datatype);
+static bool cast_to(M, M);
+static bool cast_to(D, D);
+
+D make_general(std::vector<D> var, D body) {
+	return std::make_shared<General>(var, body);
 }
 
-TYPE Typechecker::make_array(TYPE item_type) {
-	return std::shared_ptr<Array>(new Array(item_type));
+D make_bool() { return make_integer(1, Sign::UNSIGNED); }
+
+M make_modevar(std::size_t index) {
+	return std::make_shared<Mode>(Mode {.data = Variable<Mode>(index)});
 }
 
-TYPE Typechecker::make_function(std::vector<TYPE> inputs, TYPE output) {
-	return std::shared_ptr<Function>(new Function(inputs, output));
+D make_datavar(std::size_t index) {
+	return std::make_shared<TypeVariable>(index);
 }
 
-TYPE Typechecker::make_typevar() {
-	return std::shared_ptr<TypeVariable>(new TypeVariable {next_var_id++});
+D make_integer(int bit_count, Sign sign) {
+	return std::make_shared<Integer>(bit_count, sign);
 }
 
-TYPE Typechecker::make_ref(TYPE ref_type) {
-	return std::shared_ptr<Ref>(new Ref {ref_type});
+D make_array(D item_type) { return std::make_shared<Array>(item_type); }
+
+D make_function(std::vector<T> inputs, D output) {
+	return std::make_shared<Function>(inputs, output);
 }
 
-TYPE Typechecker::make_general(std::vector<TYPE> var, TYPE body) {
-	return std::shared_ptr<General>(new General {var, body});
+T make_type(M mode, D datatype) {
+	return std::make_shared<Type>(mode, datatype);
 }
+
+DATATYPE Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
+
+M Typechecker::make_modevar() { return ::make_modevar(next_modevar_id++); }
 
 template<typename D>
-	requires std::derived_from<D, Type>
-bool is(std::shared_ptr<Type> typ) {
+	requires std::derived_from<D, Datatype>
+bool is(std::shared_ptr<Datatype> typ) {
 	return std::dynamic_pointer_cast<D>(typ) != nullptr;
 }
 
 template<typename D>
-	requires std::derived_from<D, Type>
-std::shared_ptr<D> to(std::shared_ptr<Type> typ) {
+	requires std::derived_from<D, Datatype>
+bool is(std::shared_ptr<Type> typ) {
+	return is<D>(typ->datatype);
+}
+
+template<typename D>
+	requires std::derived_from<D, Datatype>
+std::shared_ptr<D> to(std::shared_ptr<Datatype> typ) {
 	return dynamic_pointer_cast<D>(typ);
 }
 
-TYPE Typechecker::deref(TYPE typ) {
-	if (is<Ref>(typ))
-		return to<Ref>(typ)->ref_type;
-	else
-		return typ;
+// m t !> ERROR
+// out t -> val t
+// var t -> val t
+// val t -> val t
+//
+std::shared_ptr<Type> Typechecker::deref(std::shared_ptr<Type> typ) {
+	auto om = typ->mode->to_concrete();
+	if (om.has_value()) {
+		auto m = om.value();
+		if (m == ConcreteMode::OUT || m == ConcreteMode::VAR) {
+			return std::make_shared<Type>(Type {
+				.mode = std::make_shared<Mode>(Mode {.data = ConcreteMode::VAL}),
+				.datatype = typ->datatype,
+			});
+		} else {
+			assert(m == ConcreteMode::VAL);
+			return typ;
+		}
+	} else {
+		throw std::runtime_error(
+			"cannot dereference type because mode variable has not been instatiated "
+			"into a concrete mode"
+		);
+	}
 }
 
-TYPE Typechecker::substitute(TYPE gen, std::vector<TYPE> args) {
+DATATYPE Typechecker::substitute(DATATYPE gen, std::vector<DATATYPE> args) {
 	auto general = to<General>(gen);
 	std::vector<TYPE_VARIABLE> vars;
 	std::ranges::transform(args, vars.begin(), to<TypeVariable>);
@@ -83,12 +135,10 @@ TYPE Typechecker::substitute(TYPE gen, std::vector<TYPE> args) {
 	return substitute_aux(body, vars, args);
 }
 
-TYPE Typechecker::substitute_aux(
-	TYPE body, std::vector<TYPE_VARIABLE> vars, std::vector<TYPE> args
+DATATYPE Typechecker::substitute_aux(
+	DATATYPE body, std::vector<TYPE_VARIABLE> vars, std::vector<DATATYPE> args
 ) {
 	if (is<Nil>(body)) {
-		return body;
-	} else if (is<Bool>(body)) {
 		return body;
 	} else if (is<Void>(body)) {
 		return body;
@@ -102,9 +152,11 @@ TYPE Typechecker::substitute_aux(
 		return make_array(substitute_aux(arr_typ->item_type, vars, args));
 	} else if (is<Function>(body)) {
 		auto func_typ = to<Function>(body);
-		std::vector<TYPE> inputs;
+		std::vector<std::shared_ptr<Type>> inputs;
 		for (auto typ : func_typ->inputs)
-			inputs.push_back(substitute_aux(typ, vars, args));
+			inputs.push_back(
+				make_type(typ->mode, substitute_aux(typ->datatype, vars, args))
+			);
 		return make_function(inputs, substitute_aux(func_typ->output, vars, args));
 	} else if (is<TypeVariable>(body)) {
 		auto var = to<TypeVariable>(body);
@@ -115,14 +167,10 @@ TYPE Typechecker::substitute_aux(
 				if (var->unbound_name == v->unbound_name) return a;
 			return var;
 		}
-
-	} else if (is<Ref>(body)) {
-		auto ref_typ = to<Ref>(body);
-		return make_ref(substitute_aux(ref_typ->ref_type, vars, args));
 	} else if (is<General>(body)) {
 		auto gen = to<General>(body);
 		std::vector<TYPE_VARIABLE> not_overriden;
-		std::vector<TYPE> new_args;
+		std::vector<DATATYPE> new_args;
 		for (const auto& [a, v] : std::ranges::views::zip(args, vars)) {
 			auto overriden = std::ranges::any_of(gen->vars, [&](const auto& gen_var) {
 				auto var = to<TypeVariable>(gen_var);
@@ -141,8 +189,73 @@ TYPE Typechecker::substitute_aux(
 	}
 }
 
+bool cast_to(M from_, M to_) {
+	return std::visit(
+		overloaded {
+			[&from_](ConcreteMode& from, Variable<Mode>& to) {
+				to.bind_to(from_);
+				return true;
+			},
+			[&to_](Variable<Mode>& from, ConcreteMode& to) {
+				from.bind_to(to_);
+				return true;
+			},
+
+			[&to_](Variable<Mode>& from, Variable<Mode>& to) {
+				from.bind_to(to_);
+				return true;
+			},
+			[](ConcreteMode& from, ConcreteMode& to) {
+				if (from == ConcreteMode::VAL and to == ConcreteMode::OUT)
+					return false;
+				else
+					return true;
+			},
+		},
+		from_->data,
+		to_->data
+	);
+}
+
+bool cast_to(D from, D to) {
+	// a is bound to 'a. unify a' and b
+	if (auto va = ::to<TypeVariable>(from); va and va->is_bound)
+		return cast_to(va->bound_type, to);
+
+	// b is bound to 'b. unify a and b'
+	if (auto vb = ::to<TypeVariable>(to); vb and vb->is_bound)
+		return cast_to(from, vb->bound_type);
+
+	// a is unbound. bind a to b
+	if (auto va = ::to<TypeVariable>(from))
+		if (not va->is_bound) return va->bind_to(to), true;
+
+	// b is unbound typevar. bind b to a
+	if (auto vb = ::to<TypeVariable>(to))
+		if (not vb->is_bound) return vb->bind_to(from), true;
+
+	// a and b are arrays. unify element types
+	if (auto aa = ::to<Array>(from), ab = ::to<Array>(to); aa and ab)
+		return cast_to(aa->item_type, ab->item_type);
+
+	if (auto ifrom = ::to<Integer>(from), ito = ::to<Integer>(to);
+	    ifrom and ito) {
+		return ito->bit_count >= ifrom->bit_count;
+	}
+
+	if (is<Nil>(from) and is<Nil>(to)) return true;
+	if (is<Void>(from) and is<Void>(to)) return true;
+
+	return false;
+}
+
+bool Typechecker::cast_to(T from, T to) {
+	return ::cast_to(from->mode, to->mode)
+	   and ::cast_to(from->datatype, to->datatype);
+}
+
 void Typechecker::mismatch_error(
-	Location loc, const char* msg, TYPE got, TYPE expected
+	Location loc, const char* msg, T got, T expected
 ) {
 	std::cerr << ANSI_STYLE_BOLD << "<FIXME.fala>:" << loc.begin.line + 1 << ":"
 						<< loc.begin.column + 1 << ": " << ANSI_COLOR_RED
@@ -159,35 +272,66 @@ bool Typechecker::typecheck() {
 
 	auto uint8_typ = make_integer(8, UNSIGNED);
 	auto int64_typ = make_integer(64, SIGNED);
-	auto nil_typ = make_nil();
+	auto nil_typ = NIL_;
 	auto uint8_arr_typ = make_array(uint8_typ);
 	auto int64_arr_typ = make_array(int64_typ);
 
-	auto nil_to_uint8_typ = make_function({nil_typ}, uint8_typ);
-	auto nil_to_int64_typ = make_function({nil_typ}, int64_typ);
-	auto uint8_to_nil_typ = make_function({uint8_typ}, nil_typ);
-	auto int64_to_nil_typ = make_function({int64_typ}, nil_typ);
-	auto uint8_arr_to_nil_typ = make_function({uint8_arr_typ}, nil_typ);
-	auto int64_to_int64_arr_typ = make_function({int64_typ}, int64_arr_typ);
+	auto nil_to_uint8_typ = make_function({make_type(VAL_, nil_typ)}, uint8_typ);
+	auto nil_to_int64_typ = make_function({make_type(VAL_, nil_typ)}, int64_typ);
+	auto uint8_to_nil_typ = make_function({make_type(VAL_, uint8_typ)}, nil_typ);
+	auto int64_to_nil_typ = make_function({make_type(VAL_, int64_typ)}, nil_typ);
+	auto uint8_arr_to_nil_typ =
+		make_function({make_type(VAL_, uint8_arr_typ)}, nil_typ);
+	auto int64_to_int64_arr_typ =
+		make_function({make_type(VAL_, int64_typ)}, int64_arr_typ);
 
-	BIND_FUNC("read", nil_to_uint8_typ);
-	BIND_FUNC("read_int", nil_to_int64_typ);
-	BIND_FUNC("write", uint8_to_nil_typ);
-	BIND_FUNC("write_int", int64_to_nil_typ);
-	BIND_FUNC("write_str", uint8_arr_to_nil_typ);
-	BIND_FUNC("make_array", int64_to_int64_arr_typ);
+	BIND_FUNC("read", make_type(VAL_, nil_to_uint8_typ));
+	BIND_FUNC("read_int", make_type(VAL_, nil_to_int64_typ));
+	BIND_FUNC("write", make_type(VAL_, uint8_to_nil_typ));
+	BIND_FUNC("write_int", make_type(VAL_, int64_to_nil_typ));
+	BIND_FUNC("write_str", make_type(VAL_, uint8_arr_to_nil_typ));
+	BIND_FUNC("make_array", make_type(VAL_, int64_to_int64_arr_typ));
 
 	typecheck(ast.root_index, scope_id);
 	return true;
 }
 
-bool Typechecker::unify(TYPE a, TYPE b) {
-	// if a is a ref. unify ref a' and b
-	if (auto ra = to<Ref>(a)) return unify(ra->ref_type, b);
+bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
+	auto a_is_concrete = std::holds_alternative<ConcreteMode>(a->data);
+	auto b_is_concrete = std::holds_alternative<ConcreteMode>(b->data);
+	if (a_is_concrete and not b_is_concrete) {
+		auto& t1 = std::get<ConcreteMode>(a->data);
+		auto& t2 = std::get<Variable<Mode>>(b->data);
+		if (t2.is_bound()) {
+			return unify(a, t2.get_bound());
+		} else {
+			t2.bind_to(a);
+			return true;
+		}
+	} else if (b_is_concrete and not a_is_concrete) {
+		auto& t1 = std::get<ConcreteMode>(b->data);
+		auto& t2 = std::get<Variable<Mode>>(a->data);
+		if (t2.is_bound()) {
+			return unify(b, t2.get_bound());
+		} else {
+			t2.bind_to(b);
+			return true;
+		}
+	} else if (a_is_concrete and b_is_concrete) {
+		auto& t1 = std::get<ConcreteMode>(b->data);
+		auto& t2 = std::get<ConcreteMode>(a->data);
+		// FIXME: how to deal with submoding when creating new variables?
+		return true;
+	} else if (not a_is_concrete and not b_is_concrete) {
+		auto& t1 = std::get<Variable<Mode>>(b->data);
+		auto& t2 = std::get<Variable<Mode>>(a->data);
+		t1.bind_to(a);
+		return true;
+	}
+	assert(false);
+}
 
-	// if b is a ref. unify a and ref b'
-	if (auto rb = to<Ref>(b)) return unify(a, rb->ref_type);
-
+bool Typechecker::unify(D a, D b) {
 	// a is bound to 'a. unify a' and b
 	if (auto va = to<TypeVariable>(a); va and va->is_bound)
 		return unify(va->bound_type, b);
@@ -225,15 +369,18 @@ bool Typechecker::unify(TYPE a, TYPE b) {
 		return ia->bit_count == ib->bit_count and ia->sign == ib->sign;
 
 	if (is<Nil>(a) and is<Nil>(b)) return true;
-	if (is<Bool>(a) and is<Bool>(b)) return true;
 	if (is<Void>(a) and is<Void>(b)) return true;
 
 	return false;
 }
 
+bool Typechecker::unify(T a, T b) {
+	return unify(a->mode, b->mode) and unify(a->datatype, b->datatype);
+}
+
 #define ASSOC_TYPE(NODE, TYP) \
 	[&]() {                     \
-		TYPE typ = TYP;           \
+		T typ = TYP;              \
 		node_to_type[NODE] = typ; \
 		return typ;               \
 	}()
@@ -244,7 +391,7 @@ bool Typechecker::unify(TYPE a, TYPE b) {
 // +------------
 // | |- e1 : t1
 
-TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
+T Typechecker::typecheck(NodeIndex node_idx, Env<T>::ScopeID scope_id) {
 	node_to_scope_id[node_idx] = scope_id;
 
 	auto int64_typ = make_integer(64, SIGNED);
@@ -257,7 +404,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// | |- Void
 
 		case NodeType::EMPTY: {
-			return ASSOC_TYPE(node_idx, make_void());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, VOID_));
 		}
 
 			// | f : (t1 t2 ... tn) -> t0
@@ -274,13 +421,16 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			const auto& args_node = ast.at(args_idx);
 
-			vector<TYPE> inputs {};
+			vector<T> inputs {};
 			for (auto arg_idx : args_node) {
 				auto arg_typ = typecheck(arg_idx, scope_id);
 				inputs.push_back(arg_typ);
 			}
 
-			auto expected_func_type = make_function(inputs, make_typevar());
+			auto outdata = make_datavar();
+
+			auto expected_func_type =
+				make_type(make_modevar(), make_function(inputs, outdata));
 			auto func_type = typecheck(func_idx, scope_id);
 
 			if (not unify(func_type, expected_func_type)) {
@@ -292,14 +442,14 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 				);
 			}
 
-			return ASSOC_TYPE(node_idx, to<Function>(deref(func_type))->output);
+			return ASSOC_TYPE(node_idx, make_type(VAL_, outdata));
 		}
 			// |
 			// +------
 			// | |- n : Int<64>
 
 		case NodeType::NUM: {
-			return ASSOC_TYPE(node_idx, make_integer(64, SIGNED));
+			return ASSOC_TYPE(node_idx, make_type(VAL_, make_integer(64, SIGNED)));
 		}
 			// FIXME: add typing rules
 		case NodeType::BLK: {
@@ -321,12 +471,14 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			auto cond_typ = typecheck(cond_idx, scope_id);
 
-			if (not unify(cond_typ, make_bool())) {
+			auto t1 = make_type(make_modevar(), make_bool());
+
+			if (not unify(cond_typ, t1)) {
 				mismatch_error(
 					node.loc,
 					"Condition expression of if expression is not of type boolean",
 					cond_typ,
-					make_bool()
+					t1
 				);
 			}
 
@@ -355,14 +507,14 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto then_idx = node[1];
 
 			auto cond_typ = typecheck(cond_idx, scope_id);
-			if (not unify(cond_typ, make_bool()))
+			if (not unify(cond_typ, make_type(make_modevar(), make_bool())))
 				logger.err(
 					node.loc,
 					"Condition expression of when expression is not of type boolean"
 				);
 
 			auto then_typ = typecheck(then_idx, scope_id);
-			return ASSOC_TYPE(node_idx, make_nil());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, NIL_));
 		}
 
 			// Rules for for loop with and without step increment
@@ -392,7 +544,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto to_typ = typecheck(to_idx, new_scope_id);
 
 			auto step_typ = (ast.at(step_idx).type == NodeType::EMPTY)
-			                ? int64_typ
+			                ? make_type(VAL_, int64_typ)
 			                : typecheck(step_idx, new_scope_id);
 
 			if (not unify(var_typ, to_typ)) {
@@ -427,7 +579,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			auto then_idx = node[1];
 
 			auto cond_typ = typecheck(cond_idx, scope_id);
-			auto bool_typ = make_bool();
+			auto bool_typ = make_type(VAL_, make_bool());
 
 			if (not unify(cond_typ, bool_typ)) {
 				mismatch_error(
@@ -461,10 +613,11 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 		case NodeType::ASS: {
 			auto path = typecheck(node[0], scope_id);
 			auto val = typecheck(node[1], scope_id);
+			auto t1 = make_type(VAR_, make_datavar());
+			if (not unify(path, t1))
+				logger.err(node.loc, "Left side of assignment must be an lvalue");
 			if (not unify(path, val))
 				logger.err(node.loc, "Assignment with value of wrong type");
-			if (not is<Ref>(path))
-				logger.err(node.loc, "Left side of assignment must be a reference");
 			return ASSOC_TYPE(node_idx, val);
 		}
 			// FIXME: add typing rules
@@ -479,7 +632,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 					left,
 					right
 				);
-			return ASSOC_TYPE(node_idx, make_bool());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
 		}
 
 			// | e1 : Bool
@@ -496,7 +649,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 		case NodeType::AND: {
 			const auto left_typ = typecheck(node[0], scope_id);
 			const auto right_typ = typecheck(node[1], scope_id);
-			auto bool_typ = make_bool();
+			auto bool_typ = make_type(VAL_, make_bool());
 
 			if (not unify(left_typ, bool_typ)) {
 				mismatch_error(
@@ -525,11 +678,12 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 		case NodeType::LTE: {
 			const auto left = typecheck(node[0], scope_id);
 			const auto right = typecheck(node[1], scope_id);
-			if (!(unify(left, int64_typ) && unify(right, int64_typ)))
+			if (!(unify(left, make_type(VAL_, int64_typ))
+			      && unify(right, make_type(VAL_, int64_typ))))
 				logger.err(
 					node.loc, "Comparison operator arguments must be of numeric type"
 				);
-			return ASSOC_TYPE(node_idx, make_bool());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
 		}
 			// FIXME: add typing rules
 		case NodeType::ADD:
@@ -539,7 +693,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 		case NodeType::MOD: {
 			const auto left = typecheck(node[0], scope_id);
 			const auto right = typecheck(node[1], scope_id);
-			const auto num = int64_typ;
+			const auto num = make_type(VAL_, int64_typ);
 			const auto& left_node = ast.at(node[0]);
 			const auto& right_node = ast.at(node[1]);
 			if (!unify(left, num))
@@ -549,49 +703,40 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 					right_node.loc,
 					"Arithmetic operator arguments must be of numeric type"
 				);
-			return ASSOC_TYPE(node_idx, int64_typ);
+			return ASSOC_TYPE(node_idx, num);
 		}
 
 			// If e1 is an array of t and e2 is an integer, then e1[e2] has type t
-
-			// FIXME: Since there is no way to construct a literal array right
-			// now, the first rule is useless.
-
-			// | E |- e1 : Array<t>
-			// | E |- e2 : Int<64>
+			//
+			// | E |- e1 : m1 Array<t>
+			// | E |- e2 : _ Int<64>
 			// +------------
-			// | E |- e1[e2] : t
-
-			// | E |- e1 : Ref<Array<t>>
-			// | E |- e2 : Int<64>
-			// +------------
-			// | E |- e1[e2] : Ref<t>
-
+			// | E |- e1[e2] : m1 t
+			//
 		case NodeType::AT: {
 			auto arr_idx = node[0];
 			auto off_idx = node[1];
 
-			auto any_arr_typ = make_ref(make_array(make_typevar()));
+			auto m1 = make_modevar();
+			auto t2 = make_datavar();
+
+			auto any_arr_typ = make_type(m1, make_array(t2));
 			auto arr_typ = typecheck(arr_idx, scope_id);
 
 			if (not unify(any_arr_typ, arr_typ))
 				mismatch_error(node.loc, "Not an array", any_arr_typ, arr_typ);
 
-			if (not is<Ref>(arr_typ))
-				logger.err(node.loc, "Array expression is not a reference");
-
 			auto off_typ = typecheck(off_idx, scope_id);
 
-			if (not unify(off_typ, int64_typ))
+			if (not unify(off_typ, make_type(VAL_, int64_typ)))
 				mismatch_error(
 					node.loc,
 					"Index expression must be of integer type",
 					off_typ,
-					int64_typ
+					make_type(VAL_, int64_typ)
 				);
 
-			auto actual_arr_typ = to<Array>(deref(arr_typ));
-			return ASSOC_TYPE(node_idx, make_ref(actual_arr_typ->item_type));
+			return ASSOC_TYPE(node_idx, make_type(m1, t2));
 		}
 
 			// | E |- e : Bool
@@ -600,7 +745,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 		case NodeType::NOT: {
 			auto exp_typ = typecheck(node[0], scope_id);
-			auto bool_typ = make_bool();
+			auto bool_typ = make_type(VAL_, make_bool());
 
 			if (not unify(exp_typ, bool_typ))
 				mismatch_error(
@@ -613,9 +758,9 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// If a variable of name x of type t was previously declared, then x
 			// is a reference to a t
 
-			// | x : t in E
+			// | m x : t in E
 			// +-------
-			// | E |- x : Ref<t>
+			// | E |- m x : t
 
 		case NodeType::ID: {
 			auto found_typ = env.find(scope_id, node.str_id);
@@ -625,8 +770,7 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 					"Variable \"%s\" not previously declared",
 					pool.find(node.str_id)
 				);
-			auto ref_typ = make_ref(*found_typ);
-			return ASSOC_TYPE(node_idx, ref_typ);
+			return ASSOC_TYPE(node_idx, *found_typ);
 		}
 
 			// |
@@ -634,18 +778,10 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// | |- s : Array<Uint<8>>
 
 		case NodeType::STR: {
-			return ASSOC_TYPE(node_idx, make_array(uint8_typ));
+			return ASSOC_TYPE(node_idx, make_type(VAL_, make_array(uint8_typ)));
 		}
 
-		// If e1 is an lvalue
-		//
-		// | G |- e1 : Ref<t1>
-		// +---------------
-		// | G |- m x = e1 -> G, (x : t1)
-		//
-		// If e1 is an rvalue
-		//
-		// | G |- e1 : t1
+		// | G |- e1 : m1 t1
 		// +---------------
 		// | G |- m x = e1 -> G, (x : t1)
 		//
@@ -659,12 +795,8 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 
 			auto exp = typecheck(exp_idx, scope_id);
 
-			if (is<Ref>(exp)) {
-				exp = to<Ref>(exp)->ref_type;
-			}
-
 			if (opt_type_node.type != NodeType::EMPTY) {
-				auto annot = eval(opt_type_idx, scope_id);
+				auto annot = make_type(make_modevar(), eval(opt_type_idx, scope_id));
 				if (!unify(annot, exp))
 					mismatch_error(
 						node.loc,
@@ -674,7 +806,10 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 					);
 			}
 
-			env.insert(scope_id, id_node.str_id, exp);
+			// FIXME: should union with the mode the expression to check if they are
+			// compatible. can't assign val to an out!
+			auto t1 = make_type(VAR_, exp->datatype);
+			env.insert(scope_id, id_node.str_id, t1);
 			return exp;
 		}
 			// FIXME: add typing rules
@@ -690,17 +825,20 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// type, if provided)
 			//   [t1, ..., tn] -> t
 			auto typ = [&]() {
-				vector<TYPE> inputs {};
-				for (auto param_idx : params_node) inputs.push_back(make_typevar());
+				vector<T> inputs {};
+				for (auto param_idx : params_node)
+					inputs.push_back(make_type(make_modevar(), make_datavar()));
 
 				// if no return type is provided, must be infered
-				TYPE output = nullptr;
+				DATATYPE output = nullptr;
 				if (opt_type_node.type == NodeType::EMPTY)
-					output = make_typevar();
+					output = make_datavar();
 				else
 					output = eval(opt_type_idx, scope_id);
 
-				return ASSOC_TYPE(node_idx, make_function(inputs, output));
+				return ASSOC_TYPE(
+					node_idx, make_type(VAL_, make_function(inputs, output))
+				);
 			}();
 
 			auto var = env.insert(scope_id, id_node.str_id, typ);
@@ -708,11 +846,11 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			{
 				auto new_scope_id = env.create_child_scope(scope_id);
 
-				vector<TYPE> param_types {};
+				vector<T> param_types {};
 
 				for (auto param_idx : params_node) {
 					const auto& param = ast.at(param_idx);
-					auto var = make_typevar();
+					auto var = make_type(make_modevar(), make_datavar());
 					param_types.push_back(var);
 					env.insert(new_scope_id, param.str_id, var);
 				}
@@ -721,20 +859,21 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 					auto body_type = typecheck(body_idx, new_scope_id);
 					if (opt_type_node.type != NodeType::EMPTY) {
 						auto opt_type = eval(opt_type_idx, new_scope_id);
-						if (!unify(body_type, opt_type))
+						auto t1 = make_type(VAL_, opt_type);
+						if (!unify(body_type, t1))
 							mismatch_error(
 								node.loc,
 								"Function annotation output type and infered type don't "
 								"match",
 								body_type,
-								opt_type
+								t1
 							);
 						return opt_type;
 					}
-					return body_type;
+					return body_type->datatype;
 				}();
 
-				typ = make_function(param_types, output);
+				typ = make_type(VAL_, make_function(param_types, output));
 			}
 
 			*var = typ;
@@ -747,21 +886,21 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// | |- nil : Nil
 
 		case NodeType::NIL:
-			return ASSOC_TYPE(node_idx, make_nil());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, NIL_));
 
 			// |
 			// +---------
 			// | |- true : Bool
 
 		case NodeType::TRUE:
-			return ASSOC_TYPE(node_idx, make_bool());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
 
 			// |
 			// +---------
 			// | |- false : Bool
 
 		case NodeType::FALSE:
-			return ASSOC_TYPE(node_idx, make_bool());
+			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
 
 			// FIXME: add typing rules
 		case NodeType::LET: {
@@ -781,26 +920,21 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			// +---------
 			// | |- c : Uint<8>
 
-		case NodeType::CHAR: return ASSOC_TYPE(node_idx, uint8_typ);
+		case NodeType::CHAR:
+			return ASSOC_TYPE(node_idx, make_type(VAL_, uint8_typ));
 
 		case NodeType::PATH:
 			return ASSOC_TYPE(node_idx, typecheck(node[0], scope_id));
 			// FIXME: add typing rules
 		case NodeType::AS: {
 			auto exp = typecheck(node[0], scope_id);
-			auto typ_ = eval(node[1], scope_id);
-
-			if (is<Integer>(exp) and is<Integer>(typ_)) {
-				return ASSOC_TYPE(node_idx, typ_);
-			} else if (is<Bool>(exp) and is<Integer>(typ_)) {
-				return ASSOC_TYPE(node_idx, typ_);
-			} else if (unify(exp, typ_)) {
+			auto typ_ = make_type(make_modevar(), eval(node[1], scope_id));
+			if (cast_to(exp, typ_)) {
 				return ASSOC_TYPE(node_idx, typ_);
 			} else {
 				mismatch_error(node.loc, "Can't cast value to type", typ_, exp);
+				break;
 			}
-
-			break;
 		}
 
 		case NodeType::INSTANCE: assert(false);
@@ -809,16 +943,18 @@ TYPE Typechecker::typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 	assert(false && "unreachable");
 }
 
-TYPE Typechecker::eval(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
+std::shared_ptr<Datatype> Typechecker::eval(
+	NodeIndex node_idx, Env<std::shared_ptr<Type>>::ScopeID scope_id
+) {
 	const auto& node = ast.at(node_idx);
-	node_to_type[node_idx] = make_toat();
+	node_to_type[node_idx] = make_type(VAL_, TOAT_);
 	switch (node.type) {
 		case NodeType::ID: {
 			if (node.str_id == pool.intern(strdup("Bool"))) {
 				return make_bool();
 			}
 			if (node.str_id == pool.intern(strdup("Nil"))) {
-				return make_nil();
+				return NIL_;
 			}
 			assert(false);
 		}
@@ -856,12 +992,12 @@ TYPE Typechecker::eval(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id) {
 			}
 
 			auto general_typ = typecheck(name_idx, scope_id);
-			std::vector<TYPE> arguments;
+			std::vector<DATATYPE> arguments;
 			for (auto idx : ast.at(args_idx)) {
 				arguments.push_back(eval(idx, scope_id));
 			}
 
-			return substitute(general_typ, arguments);
+			return substitute(general_typ->datatype, arguments);
 		}
 		default: assert(false);
 	}

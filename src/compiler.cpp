@@ -661,8 +661,8 @@ Result Compiler::compile_at(
 	Operand off = off_res.opnd;
 
 	auto is_array = false;
-	TYPE t1 = tpc.node_to_type.at(node[0]);
-	TYPE t3 = get_datatype(t1);
+	const auto t1 = tpc.node_to_type.at(node[0]);
+	const auto t3 = get_datatype(t1);
 	if (auto t2 = std::dynamic_pointer_cast<Array>(t3)) {
 		is_array = true;
 	}

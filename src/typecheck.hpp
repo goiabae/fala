@@ -12,46 +12,46 @@
 #include "str_pool.h"
 #include "type.hpp"
 
+#define T std::shared_ptr<Type>
+#define D std::shared_ptr<Datatype>
+#define M std::shared_ptr<Mode>
+
 struct Typechecker {
 	Typechecker(AST& ast, StringPool& pool)
 	: ast(ast), pool(pool), logger("TYPECHECKER", ast.file_name, ast.lines) {}
 
 	bool typecheck();
-	TYPE typecheck(NodeIndex node_idx, Env<TYPE>::ScopeID scope_id);
+	T typecheck(NodeIndex node_idx, Env<T>::ScopeID scope_id);
 
-	TYPE substitute(TYPE gen, std::vector<TYPE> args);
-	TYPE substitute_aux(
-		TYPE body, std::vector<TYPE_VARIABLE> vars, std::vector<TYPE> args
+	D substitute(D gen, std::vector<D> args);
+	D substitute_aux(
+		D body, std::vector<TYPE_VARIABLE> vars, std::vector<D> args
 	);
 
-	TYPE eval(NodeIndex, Env<TYPE>::ScopeID scope_id);
+	D eval(NodeIndex, Env<T>::ScopeID scope_id);
 
-	bool unify(TYPE, TYPE);
-	void mismatch_error(Location, const char*, TYPE, TYPE);
-
-	TYPE make_nil();
-	TYPE make_bool();
-	TYPE make_void();
-	TYPE make_integer(int bit_count, Sign sign);
-	TYPE make_array(TYPE item_type);
-	TYPE make_function(std::vector<TYPE> inputs, TYPE output);
-	TYPE make_typevar();
-	TYPE make_ref(TYPE);
-	TYPE make_general(std::vector<TYPE> var, TYPE body);
-
-	// the type of types
-	TYPE make_toat();
-
-	TYPE deref(TYPE);
+	bool unify(M, M);
+	bool unify(D, D);
+	bool unify(T, T);
+	void mismatch_error(Location, const char*, T, T);
+	bool cast_to(T, T);
+	D make_datavar();
+	M make_modevar();
+	T deref(T);
 
 	AST& ast;
 	StringPool& pool;
 
 	size_t next_var_id {0};
-	Env<TYPE> env {};
-	std::map<NodeIndex, Env<TYPE>::ScopeID> node_to_scope_id {};
-	std::map<NodeIndex, TYPE> node_to_type {};
+	size_t next_modevar_id {0};
+	Env<T> env {};
+	std::map<NodeIndex, Env<T>::ScopeID> node_to_scope_id {};
+	std::map<NodeIndex, T> node_to_type {};
 	Logger logger;
 };
+
+#undef T
+#undef D
+#undef M
 
 #endif
