@@ -71,8 +71,8 @@ if (WITH_READLINE)
 endif()
 
 if(HIR_COMPILER)
-	target_compile_options(fala PRIVATE -D EXPERIMENTAL_HIR_COMPILER)
-	set_property(TARGET fala APPEND PROPERTY SOURCES src/hir_compiler.cpp src/hir.cpp)
+	target_compile_options(falalib PUBLIC -D EXPERIMENTAL_HIR_COMPILER)
+	set_property(TARGET falalib APPEND PROPERTY SOURCES src/hir_compiler.cpp src/hir.cpp)
 endif()
 
 if(is_ipo_supported)

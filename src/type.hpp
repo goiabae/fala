@@ -166,4 +166,8 @@ struct Type {
 
 std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type>);
 
+inline bool mode_is_assignable(ConcreteMode m) {
+	return m == ConcreteMode::VAL or m == ConcreteMode::OUT;
+}
+
 #endif

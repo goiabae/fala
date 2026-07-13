@@ -26,8 +26,21 @@ void Code::call(
 	instructions.push_back(Instruction {hir::Opcode::CALL, operands});
 }
 
+void Code::store(hir::Register a, hir::Register b) {
+	instructions.push_back(Instruction {hir::Opcode::STORE, {a, b}});
+}
+
+void Code::alloc(hir::Register a, hir::Register b) {
+	instructions.push_back(Instruction {hir::Opcode::ALLOC, {a, b}});
+}
+
+void Code::clone(hir::Register a, hir::Register b) {
+	instructions.push_back(Instruction {hir::Opcode::CLONE, {a, b}});
+}
+
 void Code::copy(hir::Register destination, hir::Operand source) {
-	instructions.push_back(Instruction {hir::Opcode::COPY, {destination, source}}
+	instructions.push_back(
+		Instruction {hir::Opcode::COPY, {destination, source}}
 	);
 }
 
@@ -39,21 +52,23 @@ void Code::builtin(hir::Register result, hir::String function_name) {
 }
 
 void Code::if_false(hir::Register condition, hir::Block block) {
-	instructions.push_back(Instruction {hir::Opcode::IF_FALSE, {condition, block}}
+	instructions.push_back(
+		Instruction {hir::Opcode::IF_FALSE, {condition, block}}
 	);
 }
 
 void Code::if_true(hir::Register condition, hir::Block block) {
-	instructions.push_back(Instruction {hir::Opcode::IF_TRUE, {condition, block}}
+	instructions.push_back(
+		Instruction {hir::Opcode::IF_TRUE, {condition, block}}
 	);
 }
 
-void Code::loop(hir::Block block) {
-	instructions.push_back(Instruction {hir::Opcode::LOOP, {block}});
+void Code::loop(hir::Label next, hir::Label stop, hir::Block block) {
+	instructions.push_back(Instruction {hir::Opcode::LOOP, {next, stop, block}});
 }
 
-void Code::brake() {
-	instructions.push_back(Instruction {hir::Opcode::BREAK, {}});
+void Code::brake(hir::Label where_to) {
+	instructions.push_back(Instruction {hir::Opcode::BREAK, {where_to}});
 }
 
 void Code::equals(hir::Register result, hir::Operand a, hir::Operand b) {
@@ -65,6 +80,10 @@ void Code::inc(hir::Register registuhr) {
 	instructions.push_back(
 		Instruction {hir::Opcode::ADD, {registuhr, registuhr, hir::Integer(1)}}
 	);
+}
+
+void Code::add(hir::Register a, hir::Operand b, hir::Operand c) {
+	instructions.push_back(Instruction {hir::Opcode::ADD, {a, b, c}});
 }
 
 void Code::set_element(
@@ -87,8 +106,13 @@ void Code::get_element(
 	instructions.push_back(Instruction {hir::Opcode::GET_ELEMENT, operands});
 }
 
-bool Register::contains_value() { return m_contains_value; }
-bool Register::contains_pointer() { return not m_contains_value; }
+void Code::load(hir::Register r, hir::Register v) {
+	instructions.push_back(Instruction {hir::Opcode::LOAD, {r, v}});
+}
+
+void Code::get_element(hir::Register a, hir::Register b, hir::Operand c) {
+	instructions.push_back(Instruction {hir::Opcode::GET_ELEMENT, {a, b, c}});
+}
 
 void print_char(FILE* fd, char c) {
 	if (c == '\n')
@@ -127,7 +151,11 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 			return;
 		}
 		case Operand::Kind::REGISTER: {
-			fprintf(fd, "%%%zu", opnd.registuhr.id);
+			if (opnd.registuhr.is_mutable) {
+				fprintf(fd, "$%zu", opnd.registuhr.id);
+			} else {
+				fprintf(fd, "%%%zu", opnd.registuhr.id);
+			}
 			return;
 		}
 		case Operand::Kind::BLOCK: {
@@ -170,6 +198,10 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 				fprintf(fd, ") ");
 				print_operand(fd, opnd.function.body_block, pool, spaces);
 			}
+			return;
+		}
+		case Operand::Kind::LABEL: {
+			fprintf(fd, "@%s", opnd.label.name.c_str());
 			return;
 		}
 	}
@@ -278,9 +310,13 @@ void print_instruction(
 			return;
 		}
 		case Opcode::LOOP: {
-			assert(inst.operands.size() == 1);
+			assert(inst.operands.size() == 3);
 			fprintf(fd, "loop ");
 			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[2], pool, spaces);
 			fprintf(fd, "\n");
 			return;
 		}
@@ -303,17 +339,57 @@ void print_instruction(
 			return;
 		}
 		case Opcode::BREAK: {
-			fprintf(fd, "break\n");
+			fprintf(fd, "break ");
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::CONTINUE: {
 			fprintf(fd, "continue\n");
 			return;
 		}
-		case Opcode::REFTO: assert(false);
-		case Opcode::GET_ELEMENT_PTR: assert(false);
-		case Opcode::LOAD: assert(false);
-		case Opcode::STORE: assert(false);
+		case Opcode::LOAD: {
+			assert(inst.operands.size() == 2);
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " = ");
+			fprintf(fd, "load ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::STORE: {
+			assert(inst.operands.size() == 2);
+			fprintf(fd, "store ");
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::ALLOC: {
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " = ");
+			fprintf(fd, "alloc ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::CLONE: {
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " = ");
+			fprintf(fd, "clone ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::ALIAS: {
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " = ");
+			fprintf(fd, "alias ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
 	}
 }
 
@@ -325,5 +401,4 @@ void print_code(
 		print_instruction(fd, code.instructions[i], pool, spaces);
 	}
 }
-
 } // namespace hir

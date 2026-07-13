@@ -22,18 +22,10 @@ class String {
 	StrID str_id;
 };
 
-class Register {
-	bool m_contains_value;
-
- public:
+struct Register {
 	size_t id;
-	bool contains_value();
-	bool contains_pointer();
-
-	Register() : m_contains_value(false), id(0) {}
-	Register(size_t id) : m_contains_value(false), id(id) {}
-	Register(size_t id, bool contains_value)
-	: m_contains_value(contains_value), id(id) {}
+	std::string name;
+	bool is_mutable;
 };
 
 class Block {
@@ -61,6 +53,11 @@ class Character {
 
 class Nil {};
 
+class Label {
+ public:
+	std::string name;
+};
+
 class Operand {
  public:
 	enum class Kind {
@@ -74,6 +71,7 @@ class Operand {
 		CHARACTER,
 		BLOCK,
 		NIL,
+		LABEL,
 	};
 
 	Integer integer;
@@ -84,6 +82,7 @@ class Operand {
 	Character character;
 	Block block;
 	Nil nil;
+	Label label;
 
 	Kind kind;
 
@@ -95,15 +94,14 @@ class Operand {
 	Operand(Character c) : character(c), kind(Kind::CHARACTER) {}
 	Operand(Block b) : block(b), kind(Kind::BLOCK) {}
 	Operand(Nil n) : nil(n), kind(Kind::NIL) {}
+	Operand(Label l) : label(l), kind(Kind::LABEL) {}
 
 	Operand() : kind(Kind::INVALID) {}
 };
 
 enum class Opcode {
-	// Copy the value of a register into another one or create a reference to the
-	// value in a register.
+
 	COPY,
-	REFTO,
 
 	// I/O
 	PRINT,
@@ -143,10 +141,6 @@ enum class Opcode {
 	SET_ELEMENT,
 	GET_ELEMENT,
 
-	// Given a reference to an aggregate and a sequence of indexes, returns a
-	// reference to the element at the position indicated by the indexes
-	GET_ELEMENT_PTR,
-
 	// Given a reference, copy the value contained in the register pointed to by
 	// the refence into another register
 	LOAD,
@@ -154,6 +148,10 @@ enum class Opcode {
 	// Given a reference and a value, store the value into the register pointed to
 	// by the reference
 	STORE,
+
+	ALLOC,
+	CLONE,
+	ALIAS,
 };
 
 class Instruction {
@@ -171,17 +169,25 @@ class Code {
 	void builtin(hir::Register, hir::String);
 	void if_false(hir::Register, hir::Block);
 	void if_true(hir::Register, hir::Block);
-	void loop(hir::Block);
-	void brake();
+	void loop(hir::Label next, hir::Label stop, hir::Block);
+	void brake(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
 	void inc(hir::Register);
 	void set_element(hir::Register, std::vector<hir::Operand>, hir::Operand);
 	void get_element(hir::Register, hir::Register, std::vector<hir::Operand>);
+	void get_element(hir::Register, hir::Register, hir::Operand);
+	void alloc(hir::Register, hir::Register);
+	void clone(hir::Register, hir::Register);
+	void alias(hir::Register, hir::Register);
+	void load(hir::Register, hir::Register);
+	void store(hir::Register, hir::Register);
+	void add(hir::Register, hir::Operand, hir::Operand);
 };
 
 Code operator+(Code pre, Code post);
 
 void print_code(FILE* fd, const Code& code, const StringPool& pool, int spaces);
+
 } // namespace hir
 
 #endif

@@ -9,7 +9,7 @@
 
 namespace hir_compiler {
 struct Handler {
-	hir::Operand result_register;
+	hir::Label label;
 };
 
 struct SignalHandlers {
@@ -38,6 +38,11 @@ class Compiler {
 		Env<hir::Operand>::ScopeID scope_id
 	);
 
+	Result compile_lvalue(
+		NodeIndex node_idx, SignalHandlers handlers,
+		Env<hir::Operand>::ScopeID scope_id
+	);
+
 	bool is_simple_path(NodeIndex node_idx);
 
 	hir::Code find_aggregate_indexes(
@@ -58,6 +63,8 @@ class Compiler {
 #undef DECLARE_NODE_HANDLER
 
 	hir::Register make_register();
+	hir::Label make_label();
+	hir::Register make_variable(std::string name);
 
  private:
 	const AST& ast;
