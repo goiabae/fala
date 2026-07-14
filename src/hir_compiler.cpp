@@ -459,8 +459,17 @@ Result Compiler::compile(
 				hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
 			);
 
-			hir::Block block {std::make_shared<hir::Code>(body_result.code)};
-			hir::Function function {parameter_registers, block, false, {0}};
+			hir::Block block {
+				.body_code = std::make_shared<hir::Code>(body_result.code),
+				.child_blocks = {},
+			};
+			hir::Function function {
+				.blocks = {{"0", block}},
+				.entry_block = "0",
+				.parameter_registers = parameter_registers,
+				.is_builtin = false,
+				.builtin_name = {0},
+			};
 
 			auto t1 = make_register();
 			code.copy(t1, function);

@@ -179,6 +179,7 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 			return;
 		}
 		case Operand::Kind::FUNCTION: {
+			auto& fn = opnd.function;
 			fprintf(fd, "function ");
 			if (opnd.function.is_builtin) {
 				fprintf(fd, "\"%s\"", pool.find(opnd.function.builtin_name));
@@ -196,7 +197,11 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 					spaces
 				);
 				fprintf(fd, ") ");
-				print_operand(fd, opnd.function.body_block, pool, spaces);
+				fprintf(fd, "@%s ", fn.entry_block.c_str());
+				for (const auto& [name, block] : fn.blocks) {
+					fprintf(fd, "@%s ", name.c_str());
+					print_operand(fd, block, pool, spaces);
+				}
 			}
 			return;
 		}

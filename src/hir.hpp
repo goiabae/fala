@@ -28,15 +28,22 @@ struct Register {
 	bool is_mutable;
 };
 
+class Label {
+ public:
+	std::string name;
+};
+
 class Block {
  public:
 	std::shared_ptr<Code> body_code;
+	std::vector<Label> child_blocks;
 };
 
 class Function {
  public:
+	std::map<std::string, Block> blocks;
+	std::string entry_block;
 	std::vector<Register> parameter_registers;
-	Block body_block;
 	bool is_builtin;
 	StrID builtin_name;
 };
@@ -52,11 +59,6 @@ class Character {
 };
 
 class Nil {};
-
-class Label {
- public:
-	std::string name;
-};
 
 class Operand {
  public:
