@@ -24,6 +24,7 @@ enum LogLevel {
 	WARN,
 	ERROR,
 	INFO,
+	LOGIC,
 };
 
 struct Logger {
@@ -71,17 +72,39 @@ struct Logger {
 	}
 
  public:
+	static constexpr const char* color_of(LogLevel level) {
+		switch (level) {
+			case WARN: return ANSI_COLOR_YELLOW;
+			case ERROR: return ANSI_COLOR_RED;
+			case INFO: return ANSI_COLOR_BLUE;
+			case LOGIC: return ANSI_COLOR_MAGENTA;
+		}
+		std::terminate();
+	}
+
+	static constexpr const char* name_of(LogLevel level) {
+		switch (level) {
+			case WARN: return "WARN";
+			case ERROR: return "ERROR";
+			case INFO: return "INFO";
+			case LOGIC: return "LOGIC";
+		}
+		std::terminate();
+	}
+
 	template<typename... Args>
 	void log(
 		LogLevel level, Location loc, std::format_string<Args...> format,
 		Args&&... args
 	) {
-		constexpr auto header = ANSI_STYLE_BOLD "{}:{}:{}: " ANSI_COLOR_RED
-																						"{} ERROR" ANSI_COLOR_RESET ": ";
+		constexpr auto header =
+			ANSI_STYLE_BOLD "{}:{}:{}: {}{} {}" ANSI_COLOR_RESET ": ";
 		const auto line = loc.begin.line + 1;
 		const auto column = loc.begin.column + 1;
-		std::cerr << std::format(header, file_name, line, column, domain)
-							<< std::format(format, std::forward<Args>(args)...) << '\n';
+		std::cerr << std::format(
+			header, file_name, line, column, color_of(level), domain, name_of(level)
+		) << std::format(format, std::forward<Args>(args)...)
+							<< '\n';
 		print_lines(loc);
 		if (level == ERROR) std::exit(1);
 	}
@@ -89,6 +112,14 @@ struct Logger {
 	template<typename... Args>
 	void err(Location loc, std::format_string<Args...> format, Args&&... args) {
 		log(ERROR, loc, format, std::forward<Args>(args)...);
+	}
+
+	template<typename... Args>
+	void ensure(
+		bool statement, Location loc, std::format_string<Args...> format,
+		Args&&... args
+	) {
+		if (not statement) log(LOGIC, loc, format, std::forward<Args>(args)...);
 	}
 
  private:
