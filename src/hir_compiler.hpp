@@ -4,6 +4,7 @@
 #include "ast.hpp"
 #include "env.hpp"
 #include "hir.hpp"
+#include "logger.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
 
@@ -29,7 +30,10 @@ struct Result {
 class Compiler {
  public:
 	Compiler(const AST& ast, const StringPool& pool, Typechecker& checker)
-	: ast(ast), pool(pool), checker(checker) {}
+	: ast(ast),
+		pool(pool),
+		checker(checker),
+		logger("HIR_COMPILER", ast.file_name, ast.lines) {}
 
 	hir::Code compile();
 
@@ -44,11 +48,6 @@ class Compiler {
 	);
 
 	bool is_simple_path(NodeIndex node_idx);
-
-	hir::Code find_aggregate_indexes(
-		NodeIndex node_idx, hir::Register&, std::vector<hir::Operand>&,
-		SignalHandlers handlers, Env<hir::Operand>::ScopeID scope_id
-	);
 
 #define DECLARE_NODE_HANDLER(NODE_TYPE) \
 	Result compile_##NODE_TYPE(           \
@@ -70,6 +69,7 @@ class Compiler {
 	const AST& ast;
 	const StringPool& pool;
 	Typechecker& checker;
+	Logger logger;
 	Env<hir::Operand> env;
 	size_t register_count;
 	size_t label_count;
