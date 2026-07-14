@@ -35,6 +35,8 @@ BISON_TARGET(
 add_library(falaparser STATIC
 	${BISON_PARSER_OUTPUTS})
 
+set_property(TARGET falaparser PROPERTY CXX_STANDARD 23)
+
 target_compile_options(falaparser PRIVATE -Wno-error)
 
 target_include_directories(falaparser PUBLIC src/)

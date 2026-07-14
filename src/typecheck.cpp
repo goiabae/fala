@@ -762,7 +762,7 @@ T Typechecker::typecheck(NodeIndex node_idx, Env<T>::ScopeID scope_id) {
 			if (found_typ == nullptr)
 				logger.err(
 					node.loc,
-					"Variable \"%s\" not previously declared",
+					"Variable \"{}\" not previously declared",
 					pool.find(node.str_id)
 				);
 			return ASSOC_TYPE(node_idx, *found_typ);

@@ -2,11 +2,14 @@
 #define LOGGER_HPP
 
 #include <cassert>
+#include <cstdlib>
 #include <format>
+#include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "ast.hpp"
+#include "location.hpp"
 
 #define ANSI_STYLE_BOLD "\x1b[1m"
 #define ANSI_COLOR_RED "\x1b[31m"
@@ -69,49 +72,23 @@ struct Logger {
 
  public:
 	template<typename... Args>
-	void log(LogLevel level, Location loc, std::string format, Args... args) {
-		if (level == ERROR) {
-			fprintf(
-				stderr,
-				ANSI_STYLE_BOLD "%s:%d:%d: " ANSI_COLOR_RED "%s ERROR" ANSI_COLOR_RESET
-												": ",
-				file_name.c_str(),
-				loc.begin.line + 1,
-				loc.begin.column + 1,
-				domain.c_str()
-			);
-			fprintf(stderr, format.c_str(), args...);
-			fprintf(stderr, "\n");
-			print_lines(loc);
-			exit(1);
-		} else {
-			throw "TODO: uninplemented";
-		}
-	}
-
-	void log(LogLevel level, Location loc, std::string format) {
-		if (level == ERROR) {
-			fprintf(
-				stderr,
-				ANSI_STYLE_BOLD "%s:%d:%d: " ANSI_COLOR_RED "%s ERROR" ANSI_COLOR_RESET
-												": ",
-				file_name.c_str(),
-				loc.begin.line + 1,
-				loc.begin.column + 1,
-				domain.c_str()
-			);
-			fprintf(stderr, "%s", format.c_str());
-			fprintf(stderr, "\n");
-			print_lines(loc);
-			exit(1);
-		} else {
-			throw "TODO: uninplemented";
-		}
+	void log(
+		LogLevel level, Location loc, std::format_string<Args...> format,
+		Args&&... args
+	) {
+		constexpr auto header = ANSI_STYLE_BOLD "{}:{}:{}: " ANSI_COLOR_RED
+																						"{} ERROR" ANSI_COLOR_RESET ": ";
+		const auto line = loc.begin.line + 1;
+		const auto column = loc.begin.column + 1;
+		std::cerr << std::format(header, file_name, line, column, domain)
+							<< std::format(format, std::forward<Args>(args)...) << '\n';
+		print_lines(loc);
+		if (level == ERROR) std::exit(1);
 	}
 
 	template<typename... Args>
-	void err(Location loc, std::string format, Args... args) {
-		log(ERROR, loc, format, args...);
+	void err(Location loc, std::format_string<Args...> format, Args&&... args) {
+		log(ERROR, loc, format, std::forward<Args>(args)...);
 	}
 
  private:
