@@ -2,6 +2,7 @@
 #define LOGGER_HPP
 
 #include <cassert>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -99,7 +100,7 @@ struct Logger {
 				loc.begin.column + 1,
 				domain.c_str()
 			);
-			fprintf(stderr, format.c_str());
+			fprintf(stderr, "%s", format.c_str());
 			fprintf(stderr, "\n");
 			print_lines(loc);
 			exit(1);

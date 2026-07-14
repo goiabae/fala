@@ -2,6 +2,8 @@
 
 #include <variant>
 
+static std::ostream& operator<<(std::ostream& st, const Mode& m);
+
 std::ostream& operator<<(std::ostream& st, const Datatype& t) {
 	t.print(st);
 	return st;

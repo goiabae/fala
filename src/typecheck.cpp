@@ -192,16 +192,16 @@ DATATYPE Typechecker::substitute_aux(
 bool cast_to(M from_, M to_) {
 	return std::visit(
 		overloaded {
-			[&from_](ConcreteMode& from, Variable<Mode>& to) {
+			[&from_]([[maybe_unused]] ConcreteMode& from, Variable<Mode>& to) {
 				to.bind_to(from_);
 				return true;
 			},
-			[&to_](Variable<Mode>& from, ConcreteMode& to) {
+			[&to_](Variable<Mode>& from, [[maybe_unused]] ConcreteMode& to) {
 				from.bind_to(to_);
 				return true;
 			},
 
-			[&to_](Variable<Mode>& from, Variable<Mode>& to) {
+			[&to_](Variable<Mode>& from, [[maybe_unused]] Variable<Mode>& to) {
 				from.bind_to(to_);
 				return true;
 			},
@@ -300,7 +300,6 @@ bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
 	auto a_is_concrete = std::holds_alternative<ConcreteMode>(a->data);
 	auto b_is_concrete = std::holds_alternative<ConcreteMode>(b->data);
 	if (a_is_concrete and not b_is_concrete) {
-		auto& t1 = std::get<ConcreteMode>(a->data);
 		auto& t2 = std::get<Variable<Mode>>(b->data);
 		if (t2.is_bound()) {
 			return unify(a, t2.get_bound());
@@ -309,7 +308,6 @@ bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
 			return true;
 		}
 	} else if (b_is_concrete and not a_is_concrete) {
-		auto& t1 = std::get<ConcreteMode>(b->data);
 		auto& t2 = std::get<Variable<Mode>>(a->data);
 		if (t2.is_bound()) {
 			return unify(b, t2.get_bound());
@@ -318,13 +316,10 @@ bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
 			return true;
 		}
 	} else if (a_is_concrete and b_is_concrete) {
-		auto& t1 = std::get<ConcreteMode>(b->data);
-		auto& t2 = std::get<ConcreteMode>(a->data);
 		// FIXME: how to deal with submoding when creating new variables?
 		return true;
 	} else if (not a_is_concrete and not b_is_concrete) {
 		auto& t1 = std::get<Variable<Mode>>(b->data);
-		auto& t2 = std::get<Variable<Mode>>(a->data);
 		t1.bind_to(a);
 		return true;
 	}
@@ -826,7 +821,7 @@ T Typechecker::typecheck(NodeIndex node_idx, Env<T>::ScopeID scope_id) {
 			//   [t1, ..., tn] -> t
 			auto typ = [&]() {
 				vector<T> inputs {};
-				for (auto param_idx : params_node)
+				for ([[maybe_unused]] auto param_idx : params_node)
 					inputs.push_back(make_type(make_modevar(), make_datavar()));
 
 				// if no return type is provided, must be infered

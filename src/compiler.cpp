@@ -22,18 +22,20 @@ using lir::Opcode;
 using lir::Register;
 using std::vector;
 
+static void err(const char* msg);
+
 void err(const char* msg) {
 	std::cout << "COMPILER_ERR: " << msg << std::endl;
 	exit(1);
 }
 
 namespace builtin {
-Result read_int(Compiler& comp, vector<Operand> args);
-Result read_char(Compiler& comp, vector<Operand> args);
-Result write_int(Compiler& comp, vector<Operand> args);
-Result write_char(Compiler& comp, vector<Operand> args);
-Result write_str(Compiler& comp, vector<Operand> args);
-Result make_array(Compiler& comp, vector<Operand> args);
+static Result read_int(Compiler& comp, vector<Operand> args);
+static Result read_char(Compiler& comp, vector<Operand> args);
+static Result write_int(Compiler& comp, vector<Operand> args);
+static Result write_char(Compiler& comp, vector<Operand> args);
+static Result write_str(Compiler& comp, vector<Operand> args);
+static Result make_array(Compiler& comp, vector<Operand> args);
 
 struct Builtin {
 	Result (*ptr)(Compiler& comp, vector<Operand> args);
@@ -194,7 +196,6 @@ Result Compiler::compile_app(
 
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
-		const auto& arg_node = ast.at(arg_idx);
 		auto res = compile_or_allocate_lvalue(arg_idx, handlers, scope_id);
 		chunk = chunk + res.code;
 		args.push_back(res.opnd);

@@ -4,6 +4,15 @@
 
 namespace hir {
 
+static void print_char(FILE* fd, char c);
+static int print_str(FILE* fd, const char* str);
+static void print_operand(
+	FILE* fd, Operand opnd, const StringPool& pool, int spaces
+);
+static void print_instruction(
+	FILE* fd, const Instruction& inst, const StringPool& pool, int spaces
+);
+
 Code operator+(Code pre, Code post) {
 	Code res {};
 

@@ -75,7 +75,6 @@ Result Compiler::compile_app(
 
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
-		const auto& arg_node = ast.at(arg_idx);
 		auto arg_result = compile(arg_idx, handlers, scope_id);
 		code = code + arg_result.code;
 		args.push_back(arg_result.result_register);
@@ -112,8 +111,20 @@ Result Compiler::compile_if(
 	auto if_true_code = std::make_shared<hir::Code>(then_res.code);
 	auto if_false_code = std::make_shared<hir::Code>(else_res.code);
 
-	code.if_true(cond_opnd, hir::Block {if_true_code});
-	code.if_false(cond_opnd, hir::Block {if_false_code});
+	code.if_true(
+		cond_opnd,
+		hir::Block {
+			.body_code = if_true_code,
+			.child_blocks = {},
+		}
+	);
+	code.if_false(
+		cond_opnd,
+		hir::Block {
+			.body_code = if_false_code,
+			.child_blocks = {},
+		}
+	);
 
 	return Result {code, result_register};
 }
@@ -201,7 +212,13 @@ Result Compiler::compile(
 
 			auto if_true_code = std::make_shared<hir::Code>(then_res.code);
 
-			code.if_true(cond_opnd, hir::Block {if_true_code});
+			code.if_true(
+				cond_opnd,
+				hir::Block {
+					.body_code = if_true_code,
+					.child_blocks = {},
+				}
+			);
 
 			return Result {code, result_register};
 		}
@@ -256,7 +273,11 @@ Result Compiler::compile(
 			auto cond = make_register();
 			loop_body.equals(cond, var_opnd, to_opnd);
 			loop_body.if_true(
-				cond, hir::Block {std::make_shared<hir::Code>(if_break)}
+				cond,
+				hir::Block {
+					.body_code = std::make_shared<hir::Code>(if_break),
+					.child_blocks = {},
+				}
 			);
 			loop_body = loop_body + then_result.code;
 			auto t1 = make_register();
@@ -266,7 +287,10 @@ Result Compiler::compile(
 			code.loop(
 				next_label,
 				stop_label,
-				hir::Block {std::make_shared<hir::Code>(loop_body)}
+				hir::Block {
+					.body_code = std::make_shared<hir::Code>(loop_body),
+					.child_blocks = {},
+				}
 			);
 
 			return {code, then_opnd};
@@ -302,14 +326,21 @@ Result Compiler::compile(
 			hir::Code loop_body {};
 			loop_body = loop_body + cond_result.code;
 			loop_body.if_false(
-				cond_opnd, hir::Block {std::make_shared<hir::Code>(if_break)}
+				cond_opnd,
+				hir::Block {
+					.body_code = std::make_shared<hir::Code>(if_break),
+					.child_blocks = {},
+				}
 			);
 			loop_body = loop_body + then_result.code;
 
 			code.loop(
 				next_label,
 				stop_label,
-				hir::Block {std::make_shared<hir::Code>(loop_body)}
+				hir::Block {
+					.body_code = std::make_shared<hir::Code>(loop_body),
+					.child_blocks = {},
+				}
 			);
 
 			return {code, then_opnd};
@@ -387,7 +418,10 @@ Result Compiler::compile(
 			return {code, result_register};
 		}
 		case NodeType::ID: {
-			assert(false);
+			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			auto t1 = make_register();
+			res.code.load(t1, res.result_register);
+			return res;
 		}
 		case NodeType::STR: {
 			hir::Code code {};
@@ -628,5 +662,6 @@ Result Compiler::compile_lvalue(
 		case NodeType::AS: assert(false);
 		case NodeType::INSTANCE: assert(false);
 	}
+	assert(false);
 }
 } // namespace hir_compiler

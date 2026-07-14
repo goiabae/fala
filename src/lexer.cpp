@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <new>
+#include <stdexcept>
 #include <string>
 
 #include "parser.hpp"
@@ -18,6 +20,9 @@
 using std::string;
 
 using tk = yy::parser::token_type;
+
+static const char* keyword_repr(size_t i);
+static int keyword_to_bison(size_t i);
 
 // these are sequential indexes, which I can't guarantee Bison token enums are
 enum {
@@ -172,7 +177,7 @@ static bool is_valid_id_char(char c) { return isalnum(c) || c == '_'; }
 
 static char* string_dup(const char* str) {
 	const size_t len = strlen(str);
-	char* copy = (char*)malloc(sizeof(char) * (len + 1));
+	char* copy = new char[len + 1];
 	for (size_t i = 0; i < len; i++) copy[i] = str[i];
 	copy[len] = '\0';
 	return copy;

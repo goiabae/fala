@@ -42,12 +42,13 @@ struct std::formatter<Operand::Type> {
 				return std::format_to(ctx.out(), "IMMEDIATE");
 			case lir::Operand::Type::FUN: return std::format_to(ctx.out(), "FUN");
 		}
+		assert(false);
 	}
 };
 
 namespace lir {
 static Value clone(Value);
-Value::Pointer clone_pointer(Value::Pointer);
+static void err(const char* msg);
 
 void err(const char* msg) {
 	fprintf(stderr, "VM ERROR: %s\n", msg);
@@ -78,23 +79,6 @@ void VM::run(const lir::Chunk& code) {
 			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
 			exit(1);
 		}
-	};
-
-	auto indirect_load = [&](Operand base, Operand off) -> Value& {
-		const auto a = fetch(base);
-		if (not a.is_integer())
-			throw std::runtime_error(
-				"base operand of indirect load was not an integer"
-			);
-		const auto b = a.as_integer();
-		const auto t2 = fetch(off);
-		if (not t2.is_integer())
-			throw std::runtime_error(
-				"offset operand of indirect load was not an integer"
-			);
-		const auto o = t2.as_integer();
-		const auto p = b + o;
-		return cells[(size_t)p];
 	};
 
 	size_t pc = 0;

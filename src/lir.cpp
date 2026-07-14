@@ -9,6 +9,13 @@ namespace lir {
 static std::ostream& operator<<(std::ostream& st, const Instruction& inst);
 static std::ostream& operator<<(std::ostream& st, const Operand& opnd);
 static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd);
+static int print_operand(FILE* fd, Operand opnd);
+static const char* opcode_repr(Opcode op);
+static int print_operand_indirect(FILE* fd, Operand opnd);
+static int print_inst_indirect(FILE* fd, const Instruction& inst);
+static std::ostream& print_inst_indirect(
+	std::ostream& st, const Instruction& inst
+);
 
 std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
 	switch (opnd.type) {
@@ -120,24 +127,6 @@ std::ostream& operator<<(std::ostream& st, const Chunk& chunk) {
 	for (auto l : chunk.label_indexes)
 		if (l.second == i) st << std::format("L%03zu:\n", l.first);
 	return st;
-}
-
-int print_str(FILE* fd, const char* str) {
-	int printed = 2; // because open and closing double quotes
-	fputc('"', fd);
-	char c;
-	while ((c = *(str++))) {
-		if (c == '\n')
-			printed += fprintf(fd, "\\n");
-		else if (c == '\t')
-			printed += fprintf(fd, "\\t");
-		else {
-			fputc(c, fd);
-			printed++;
-		}
-	}
-	fputc('"', fd);
-	return printed;
 }
 
 auto Operand::make_immediate_integer(int integer) -> Operand {

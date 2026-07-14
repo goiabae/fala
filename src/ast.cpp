@@ -13,6 +13,19 @@
 
 using std::vector;
 
+struct NodeRef {
+	NodeIndex index;
+	const AST& ast;
+	const Node& operator()() const { return ast.at(index); }
+};
+
+static bool is_branch_node(NodeType type);
+static const char* node_type_repr(enum NodeType type);
+static bool node_has_fixed_repr(enum NodeType type);
+static const char* node_repr(enum NodeType type);
+static bool operator==(const NodeRef& a, const NodeRef& b);
+static void node_deinit(AST* ast, NodeIndex node_idx);
+
 bool AST::is_empty() { return root_index.index == -1; }
 
 bool is_branch_node(NodeType type) {
@@ -468,12 +481,6 @@ size_t Node::size() const {
 	// FIXME: assert this is not a terminal node
 	return branch.children_count;
 }
-
-struct NodeRef {
-	NodeIndex index;
-	const AST& ast;
-	const Node& operator()() const { return ast.at(index); }
-};
 
 // NOTE: This assumes both ASTs use the same StringPool
 

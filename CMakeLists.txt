@@ -15,7 +15,7 @@ check_ipo_supported(RESULT is_ipo_supported OUTPUT error)
 if(MSVC)
 	add_compile_options(/W4 "$<$<CONFIG:DEBUG>:/Zi;/Od>")
 else()
-	add_compile_options(-Wall -Wextra -Wpedantic -Wconversion -Wno-error=format-security "$<$<CONFIG:DEBUG>:-Og;-ggdb;-pg;-fno-omit-frame-pointer;-fno-inline>")
+	add_compile_options(-Werror -Wall -Wextra -Wpedantic -Wconversion -Wmissing-declarations -Wno-error=format-security "$<$<CONFIG:DEBUG>:-Og;-ggdb;-pg;-fno-omit-frame-pointer;-fno-inline>")
 endif()
 
 option(WITH_READLINE "Enable readline line editting" OFF)
@@ -32,6 +32,14 @@ BISON_TARGET(
 	DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/parser.hpp
 	COMPILE_FLAGS "-v -Werror")
 
+add_library(falaparser STATIC
+	${BISON_PARSER_OUTPUTS})
+
+target_compile_options(falaparser PRIVATE -Wno-error)
+
+target_include_directories(falaparser PUBLIC src/)
+target_include_directories(falaparser PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
 add_library(falalib SHARED
 	src/str_pool.cpp
 	src/lexer.cpp
@@ -44,8 +52,9 @@ add_library(falalib SHARED
 	src/file_reader.cpp
 	src/line_reader.cpp
 	src/type.cpp
-	src/string_reader.cpp
-	${BISON_PARSER_OUTPUTS})
+	src/string_reader.cpp)
+
+target_link_libraries(falalib falaparser)
 
 set_property(TARGET falalib PROPERTY C_STANDARD 11)
 set_property(TARGET falalib PROPERTY CXX_STANDARD 23)

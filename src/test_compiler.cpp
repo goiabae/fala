@@ -13,6 +13,17 @@
 #include "str_pool.h"
 #include "typecheck.hpp"
 
+static bool compare_maps(
+	const std::map<size_t, size_t>& a, const std::map<size_t, size_t>& b
+);
+static bool operator==(const lir::Type& a, const lir::Type& b);
+static bool operator==(const lir::Register& a, const lir::Register& b);
+static bool operator==(const lir::Label& a, const lir::Label& b);
+static bool operator==(const lir::Immediate& a, const lir::Immediate& b);
+static bool operator==(const lir::Function&, const lir::Function&);
+static bool operator==(const lir::Operand& a, const lir::Operand& b);
+static bool operator==(const lir::Chunk& a, const lir::Chunk& b);
+
 bool compare_maps(
 	const std::map<size_t, size_t>& a, const std::map<size_t, size_t>& b
 ) {
@@ -62,7 +73,7 @@ bool operator==(const lir::Immediate& a, const lir::Immediate& b) {
 	return a.number == b.number;
 }
 
-bool operator==(const lir::Function& a, const lir::Function& b) {
+bool operator==(const lir::Function&, const lir::Function&) {
 	// TODO
 	return true;
 }

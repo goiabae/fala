@@ -16,6 +16,8 @@
 
 namespace walk {
 
+static ValueCell copy_value(ValueCell value);
+
 void Interpreter::enter_new_scope() {
 	ctx.scope_id = ctx.env.create_child_scope(ctx.scope_id);
 }
@@ -208,7 +210,8 @@ auto Interpreter::eval_assignment(NodeIndex var_idx, NodeIndex exp_idx)
 }
 
 auto Interpreter::eval_variable_declaration(
-	NodeIndex id_idx, std::optional<NodeIndex> type_idx, NodeIndex exp_idx
+	NodeIndex id_idx, [[maybe_unused]] std::optional<NodeIndex> type_idx,
+	NodeIndex exp_idx
 ) -> ValueCell {
 	const auto& id_node = ast.at(id_idx);
 	const auto value = eval_node(exp_idx);
@@ -221,7 +224,7 @@ auto Interpreter::eval_variable_declaration(
 
 auto Interpreter::eval_function_declaration(
 	NodeIndex id_idx, std::span<NodeIndex> param_idxs,
-	std::optional<NodeIndex> type_idx, NodeIndex exp_idx
+	[[maybe_unused]] std::optional<NodeIndex> type_idx, NodeIndex exp_idx
 ) -> ValueCell {
 	const auto& id_node = ast.at(id_idx);
 	std::vector<NodeIndex> param_idxs_vec {};
