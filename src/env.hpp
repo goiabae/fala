@@ -65,9 +65,9 @@ struct Env {
 		auto scope_not_empty = scope_last_entry.contains(scope_id);
 
 		if (scope_not_empty) {
-			return scope_last_entry[scope_id];
+			return scope_last_entry.at(scope_id);
 		} else if (has_parent) {
-			auto parent_id = parent_scope_vec[scope_id.idx - 1];
+			auto parent_id = parent_scope_vec.at(scope_id.idx - 1);
 			return find_last_entry(parent_id);
 		} else {
 			return {-1};
@@ -98,13 +98,14 @@ T* Env<T>::find(ScopeID scope_id, StrID str_id) {
 	Id cur = find_last_entry(scope_id);
 	if (cur.idx < 0) return nullptr;
 
-	while (name[cur.idx] != str_id) {
+	while (name.at(cur.idx) != str_id) {
 		if (cur.idx < 0) return nullptr;
-		if (cur.idx > (int)(previous_entries.size() - 1)) assert(false);
-		cur = previous_entries[cur.idx];
+		if (cur.idx > ((int)previous_entries.size() - 1)) assert(false);
+		cur = previous_entries.at(cur.idx);
+		if (cur.idx < 0) return nullptr;
 	}
 
-	return &entries[cur.idx];
+	return &entries.at(cur.idx);
 }
 
 #endif
