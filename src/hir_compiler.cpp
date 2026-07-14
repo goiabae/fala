@@ -437,7 +437,8 @@ Result Compiler::compile(
 			// FIXME: do something with this
 			(void)opt_type_idx;
 
-			auto variable_register = make_register();
+			auto variable_register =
+				make_variable(std::string(pool.find(id_node.str_id)));
 			env.insert(scope_id, id_node.str_id, variable_register);
 
 			auto inner_scope_id = env.create_child_scope(scope_id);
@@ -447,7 +448,7 @@ Result Compiler::compile(
 			for (auto param_id : params_node) {
 				const auto& param_node = ast.at(param_id);
 				const auto name = std::string(pool.find(param_node.str_id));
-				auto param_register = make_register();
+				auto param_register = make_variable(name);
 				parameter_registers.push_back(param_register);
 				env.insert(inner_scope_id, param_node.str_id, param_register);
 			}
@@ -461,7 +462,9 @@ Result Compiler::compile(
 			hir::Block block {std::make_shared<hir::Code>(body_result.code)};
 			hir::Function function {parameter_registers, block, false, {0}};
 
-			code.copy(variable_register, function);
+			auto t1 = make_register();
+			code.copy(t1, function);
+			code.alloc(variable_register, t1);
 
 			return {code, variable_register};
 		}
