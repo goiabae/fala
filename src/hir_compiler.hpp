@@ -27,6 +27,11 @@ struct Result {
 	hir::Register result_register;
 };
 
+struct Context {
+	SignalHandlers handlers;
+	Env<hir::Operand>::ScopeID scope_id;
+};
+
 class Compiler {
  public:
 	Compiler(const AST& ast, const StringPool& pool, Typechecker& checker)
@@ -37,24 +42,11 @@ class Compiler {
 
 	hir::Code compile();
 
-	Result compile(
-		NodeIndex node_idx, SignalHandlers handlers,
-		Env<hir::Operand>::ScopeID scope_id
-	);
-
-	Result compile_lvalue(
-		NodeIndex node_idx, SignalHandlers handlers,
-		Env<hir::Operand>::ScopeID scope_id
-	);
-
-	bool is_simple_path(NodeIndex node_idx);
+	Result compile(NodeIndex node_idx, Context ctx);
+	Result compile_lvalue(NodeIndex node_idx, Context ctx);
 
 #define DECLARE_NODE_HANDLER(NODE_TYPE) \
-	Result compile_##NODE_TYPE(           \
-		NodeIndex node_idx,                 \
-		SignalHandlers handlers,            \
-		Env<hir::Operand>::ScopeID scope_id \
-	)
+	Result compile_##NODE_TYPE(NodeIndex node_idx, Context ctx)
 
 	DECLARE_NODE_HANDLER(app);
 	DECLARE_NODE_HANDLER(if);

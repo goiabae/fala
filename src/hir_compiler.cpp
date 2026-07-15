@@ -16,14 +16,15 @@ hir::Code Compiler::compile() {
 	auto node_idx = ast.root_index;
 	SignalHandlers handlers {};
 	auto scope_id = env.root_scope_id;
-	auto result = compile(node_idx, handlers, scope_id);
+	Context ctx {
+		.handlers = handlers,
+		.scope_id = scope_id,
+	};
+	auto result = compile(node_idx, ctx);
 	return result.code;
 }
 
-Result Compiler::compile_app(
-	NodeIndex node_idx, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
 
@@ -53,7 +54,7 @@ Result Compiler::compile_app(
 	}
 
 	if (!builtin_function_found) {
-		auto func_result = compile(node[0], handlers, scope_id);
+		auto func_result = compile(node[0], ctx);
 		code = code + func_result.code;
 		function = func_result.result_register;
 	}
@@ -69,7 +70,7 @@ Result Compiler::compile_app(
 
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
-		auto arg_result = compile(arg_idx, handlers, scope_id);
+		auto arg_result = compile(arg_idx, ctx);
 		code = code + arg_result.code;
 		args.push_back(arg_result.result_register);
 	}
@@ -79,10 +80,7 @@ Result Compiler::compile_app(
 	return Result {code, result_register};
 }
 
-Result Compiler::compile_if(
-	NodeIndex node_idx, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
 
@@ -92,14 +90,14 @@ Result Compiler::compile_if(
 
 	auto result_register = make_register();
 
-	auto cond_res = compile(cond_idx, handlers, scope_id);
+	auto cond_res = compile(cond_idx, ctx);
 	code = code + cond_res.code;
 	auto cond_opnd = cond_res.result_register;
 
-	auto then_res = compile(then_idx, handlers, scope_id);
+	auto then_res = compile(then_idx, ctx);
 	then_res.code.copy(result_register, then_res.result_register);
 
-	auto else_res = compile(else_idx, handlers, scope_id);
+	auto else_res = compile(else_idx, ctx);
 	else_res.code.copy(result_register, else_res.result_register);
 
 	auto if_true_code = std::make_shared<hir::Code>(then_res.code);
@@ -123,18 +121,11 @@ Result Compiler::compile_if(
 	return Result {code, result_register};
 }
 
-bool Compiler::is_simple_path(NodeIndex node_idx) {
-	return ast.at(node_idx).type == NodeType::ID;
-}
-
-Result Compiler::compile(
-	NodeIndex node_idx, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
-) {
+Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::EMPTY: assert(false && "empty node shouldn't be evaluated");
-		case NodeType::APP: return compile_app(node_idx, handlers, scope_id);
+		case NodeType::APP: return compile_app(node_idx, ctx);
 		case NodeType::NUM: {
 			hir::Code code {};
 			auto result_register = make_register();
@@ -144,16 +135,20 @@ Result Compiler::compile(
 		}
 		case NodeType::BLK: {
 			hir::Code code {};
-			auto inner_scope_id = env.create_child_scope(scope_id);
+			auto inner_scope_id = env.create_child_scope(ctx.scope_id);
 			hir::Register result_register {};
+			Context inner_ctx {
+				.handlers = ctx.handlers,
+				.scope_id = inner_scope_id,
+			};
 			for (auto idx : node) {
-				auto opnd_res = compile(idx, handlers, inner_scope_id);
+				auto opnd_res = compile(idx, inner_ctx);
 				code = code + opnd_res.code;
 				result_register = opnd_res.result_register;
 			}
 			return Result {code, result_register};
 		}
-		case NodeType::IF: return compile_if(node_idx, handlers, scope_id);
+		case NodeType::IF: return compile_if(node_idx, ctx);
 		case NodeType::WHEN: {
 			hir::Code code {};
 			const auto& node = ast.at(node_idx);
@@ -163,11 +158,11 @@ Result Compiler::compile(
 
 			auto result_register = make_register();
 
-			auto cond_res = compile(cond_idx, handlers, scope_id);
+			auto cond_res = compile(cond_idx, ctx);
 			code = code + cond_res.code;
 			auto cond_opnd = cond_res.result_register;
 
-			auto then_res = compile(then_idx, handlers, scope_id);
+			auto then_res = compile(then_idx, ctx);
 			then_res.code.copy(result_register, then_res.result_register);
 
 			auto if_true_code = std::make_shared<hir::Code>(then_res.code);
@@ -200,30 +195,40 @@ Result Compiler::compile(
 				{},
 				true,
 				true,
-				handlers.has_return_handler
+				ctx.handlers.has_return_handler
 			};
 
 			hir::Operand step_value {};
 
 			if (step_node.type != NodeType::EMPTY) {
-				auto step_result = compile(step_idx, handlers, scope_id);
+				auto step_result = compile(step_idx, ctx);
 				code = code + step_result.code;
 				step_value = step_result.result_register;
 			} else {
 				step_value = hir::Integer(1);
 			}
 
-			auto inner_scope_id = env.create_child_scope(scope_id);
+			auto inner_scope_id = env.create_child_scope(ctx.scope_id);
 
-			auto var_result = compile(decl_idx, handlers, inner_scope_id);
+			Context header_ctx {
+				.handlers = ctx.handlers,
+				.scope_id = inner_scope_id,
+			};
+
+			Context body_ctx {
+				.handlers = new_handlers,
+				.scope_id = inner_scope_id,
+			};
+
+			auto var_result = compile(decl_idx, header_ctx);
 			code = code + var_result.code;
 			auto var_opnd = var_result.result_register;
 
-			auto to_result = compile(to_idx, handlers, inner_scope_id);
+			auto to_result = compile(to_idx, header_ctx);
 			code = code + to_result.code;
 			auto to_opnd = to_result.result_register;
 
-			auto then_result = compile(then_idx, new_handlers, inner_scope_id);
+			auto then_result = compile(then_idx, body_ctx);
 			auto then_opnd = then_result.result_register;
 
 			hir::Code if_break {};
@@ -269,15 +274,20 @@ Result Compiler::compile(
 				{},
 				true,
 				true,
-				handlers.has_return_handler
+				ctx.handlers.has_return_handler
 			};
 
 			hir::Operand step_value {};
 
-			auto cond_result = compile(cond_idx, handlers, scope_id);
+			Context body_ctx {
+				.handlers = new_handlers,
+				.scope_id = ctx.scope_id,
+			};
+
+			auto cond_result = compile(cond_idx, ctx);
 			auto cond_opnd = cond_result.result_register;
 
-			auto then_result = compile(then_idx, new_handlers, scope_id);
+			auto then_result = compile(then_idx, body_ctx);
 			auto then_opnd = then_result.result_register;
 
 			hir::Code if_break {};
@@ -311,11 +321,11 @@ Result Compiler::compile(
 			hir::Code code {};
 
 			auto place_idx = node[0];
-			auto place_result = compile_lvalue(place_idx, handlers, scope_id);
+			auto place_result = compile_lvalue(place_idx, ctx);
 			code = code + place_result.code;
 			auto place = place_result.result_register;
 			auto value_idx = node[1];
-			auto value_result = compile(value_idx, handlers, scope_id);
+			auto value_result = compile(value_idx, ctx);
 			code = code + value_result.code;
 			auto value = value_result.result_register;
 			code.store(place, value);
@@ -323,25 +333,25 @@ Result Compiler::compile(
 			return {code, value};
 		}
 
-#define BINARY_ARITH(OPCODE)                                    \
-	{                                                             \
-		hir::Code code {};                                          \
-		auto left_idx = node[0];                                    \
-		auto right_idx = node[1];                                   \
-                                                                \
-		auto left_result = compile(left_idx, handlers, scope_id);   \
-		auto right_result = compile(right_idx, handlers, scope_id); \
-		code = code + left_result.code + right_result.code;         \
-		auto result_register = make_register();                     \
-		code.instructions.push_back(                                \
-			hir::Instruction {                                        \
-				hir::Opcode::OPCODE,                                    \
-				{result_register,                                       \
-		     left_result.result_register,                           \
-		     right_result.result_register}                          \
-			}                                                         \
-		);                                                          \
-		return {code, result_register};                             \
+#define BINARY_ARITH(OPCODE)                            \
+	{                                                     \
+		hir::Code code {};                                  \
+		auto left_idx = node[0];                            \
+		auto right_idx = node[1];                           \
+                                                        \
+		auto left_result = compile(left_idx, ctx);          \
+		auto right_result = compile(right_idx, ctx);        \
+		code = code + left_result.code + right_result.code; \
+		auto result_register = make_register();             \
+		code.instructions.push_back(                        \
+			hir::Instruction {                                \
+				hir::Opcode::OPCODE,                            \
+				{result_register,                               \
+		     left_result.result_register,                   \
+		     right_result.result_register}                  \
+			}                                                 \
+		);                                                  \
+		return {code, result_register};                     \
 	}
 
 		case NodeType::OR: BINARY_ARITH(OR);
@@ -368,7 +378,7 @@ Result Compiler::compile(
 		case NodeType::NOT: {
 			hir::Code code {};
 			auto result_register = make_register();
-			auto exp_result = compile(node[0], handlers, scope_id);
+			auto exp_result = compile(node[0], ctx);
 			code = code + exp_result.code;
 			code.instructions.push_back(
 				hir::Instruction {
@@ -378,7 +388,7 @@ Result Compiler::compile(
 			return {code, result_register};
 		}
 		case NodeType::ID: {
-			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			auto res = compile_lvalue(node_idx, ctx);
 			auto t1 = make_register();
 			res.code.load(t1, res.result_register);
 			return res;
@@ -402,7 +412,7 @@ Result Compiler::compile(
 			const auto& id_node = ast.at(id_idx);
 			const auto name = std::string(pool.find(id_node.str_id));
 
-			auto initial_result = compile(exp_idx, handlers, scope_id);
+			auto initial_result = compile(exp_idx, ctx);
 			code = code + initial_result.code;
 			auto initial = initial_result.result_register;
 
@@ -413,7 +423,7 @@ Result Compiler::compile(
 				code.alloc(l, initial);
 			}
 
-			env.insert(scope_id, id_node.str_id, l);
+			env.insert(ctx.scope_id, id_node.str_id, l);
 
 			return Result {code, l};
 		}
@@ -433,9 +443,9 @@ Result Compiler::compile(
 
 			auto variable_register =
 				make_variable(std::string(pool.find(id_node.str_id)));
-			env.insert(scope_id, id_node.str_id, variable_register);
+			env.insert(ctx.scope_id, id_node.str_id, variable_register);
 
-			auto inner_scope_id = env.create_child_scope(scope_id);
+			auto inner_scope_id = env.create_child_scope(ctx.scope_id);
 
 			std::vector<hir::Register> parameter_registers {};
 
@@ -447,7 +457,20 @@ Result Compiler::compile(
 				env.insert(inner_scope_id, param_node.str_id, param_register);
 			}
 
-			auto body_result = compile(body_idx, handlers, inner_scope_id);
+			Context body_ctx {
+				.handlers =
+					{
+						.continue_handler = {},
+						.break_handler = {},
+						.return_handler = {},
+						.has_continue_handler = false,
+						.has_break_handler = false,
+						.has_return_handler = false,
+					},
+				.scope_id = inner_scope_id,
+			};
+
+			auto body_result = compile(body_idx, body_ctx);
 
 			body_result.code.instructions.push_back(
 				hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
@@ -500,12 +523,16 @@ Result Compiler::compile(
 
 			const auto& decls_node = ast.at(decls_idx);
 
-			auto inner_scope_id = env.create_child_scope(scope_id);
+			auto inner_scope_id = env.create_child_scope(ctx.scope_id);
+			Context inner_ctx {
+				.handlers = ctx.handlers,
+				.scope_id = inner_scope_id,
+			};
 			for (auto idx : decls_node) {
-				auto initial_result = compile(idx, handlers, inner_scope_id);
+				auto initial_result = compile(idx, inner_ctx);
 				code = code + initial_result.code;
 			}
-			auto expression_result = compile(exp_idx, handlers, inner_scope_id);
+			auto expression_result = compile(exp_idx, inner_ctx);
 			code = code + expression_result.code;
 			return {code, expression_result.result_register};
 		}
@@ -518,7 +545,7 @@ Result Compiler::compile(
 		}
 		case NodeType::PATH: {
 			hir::Code code {};
-			auto v_res = compile_lvalue(node[0], handlers, scope_id);
+			auto v_res = compile_lvalue(node[0], ctx);
 			code = code + v_res.code;
 			auto v = v_res.result_register;
 			auto a = make_register();
@@ -528,7 +555,7 @@ Result Compiler::compile(
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");
 		case NodeType::AS: {
-			return compile(node[0], handlers, scope_id);
+			return compile(node[0], ctx);
 		}
 	}
 	assert(false);
@@ -554,10 +581,7 @@ hir::Register Compiler::make_variable(std::string name) {
 	};
 }
 
-Result Compiler::compile_lvalue(
-	NodeIndex node_idx, SignalHandlers handlers,
-	Env<hir::Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::EMPTY: assert(false);
@@ -598,10 +622,10 @@ Result Compiler::compile_lvalue(
 			auto place_idx = node[0];
 			auto offset_idx = node[1];
 			hir::Code code {};
-			auto place_res = compile_lvalue(place_idx, handlers, scope_id);
+			auto place_res = compile_lvalue(place_idx, ctx);
 			code = code + place_res.code;
 			auto place = place_res.result_register;
-			auto offset_res = compile(offset_idx, handlers, scope_id);
+			auto offset_res = compile(offset_idx, ctx);
 			code = code + offset_res.code;
 			auto offset = offset_res.result_register;
 			auto a = make_variable("fixme");
@@ -610,7 +634,7 @@ Result Compiler::compile_lvalue(
 		}
 		case NodeType::ID: {
 			hir::Code code {};
-			auto variable_ptr = env.find(scope_id, node.str_id);
+			auto variable_ptr = env.find(ctx.scope_id, node.str_id);
 			logger.ensure(
 				variable_ptr != nullptr,
 				node.loc,
@@ -622,7 +646,7 @@ Result Compiler::compile_lvalue(
 			return Result {code, v};
 		}
 		case NodeType::PATH: {
-			return compile_lvalue(node[0], handlers, scope_id);
+			return compile_lvalue(node[0], ctx);
 		}
 	}
 	assert(false);
