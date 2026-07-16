@@ -457,7 +457,10 @@ static void myprint(
 void print_module(
 	FILE* fd, const Module& mod, const StringPool& pool, int spaces
 ) {
+	fprintf(fd, "module {\n");
+	spaces += 2;
 	for (const auto& [symbol, v] : mod.static_symbols) {
+		for (auto i = 0; i < spaces; i++) fprintf(fd, " ");
 		const auto& vis = std::get<0>(v);
 		if (vis == Visibility::EXPORTED) {
 			fprintf(fd, "export ");
@@ -467,6 +470,7 @@ void print_module(
 		std::visit([&](const auto& x) { myprint(fd, x, pool, spaces); }, init);
 		fprintf(fd, "\n");
 	}
+	fprintf(fd, "}\n");
 }
 
 } // namespace hir
