@@ -157,8 +157,8 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::DIV: return "/";
 		case NodeType::MOD: return "%";
 		case NodeType::NOT: return "not";
-		case NodeType::VAR_DECL: return "fun_decl";
-		case NodeType::FUN_DECL: return "var_decl";
+		case NodeType::VAR_DECL: return "var_decl";
+		case NodeType::FUN_DECL: return "fun_decl";
 		case NodeType::LET: return "let";
 		case NodeType::AT: return "at";
 		case NodeType::AS: return "as";
