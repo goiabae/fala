@@ -12,7 +12,7 @@
 #include <utility>
 #include <variant>
 
-#include "lir.hpp"
+#include "lir/lir.hpp"
 
 namespace lir {
 

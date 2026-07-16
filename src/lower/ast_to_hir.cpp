@@ -1,13 +1,13 @@
-#include "hir_compiler.hpp"
+#include "lower/ast_to_hir.hpp"
 
 #include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 
-#include "hir.hpp"
+#include "hir/hir.hpp"
 
-namespace hir_compiler {
+namespace lower::ast_to_hir {
 
 constexpr auto builtins = {
 	"read_int", "read_char", "write_int", "write_char", "write_str", "make_array"
@@ -720,4 +720,4 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	}
 	assert(false);
 }
-} // namespace hir_compiler
+} // namespace lower::ast_to_hir

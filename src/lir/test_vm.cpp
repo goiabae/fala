@@ -3,7 +3,7 @@
 #include <sstream>
 #include <string>
 
-#include "lir.hpp"
+#include "lir/lir.hpp"
 #include "vm.hpp"
 
 static lir::Operand make_integer_register(std::size_t index) {

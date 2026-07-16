@@ -8,8 +8,8 @@
 #include <variant>
 
 #include "ast.hpp"
-#include "compiler.hpp"
-#include "lir.hpp"
+#include "lir/lir.hpp"
+#include "lower/ast_to_lir.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
 

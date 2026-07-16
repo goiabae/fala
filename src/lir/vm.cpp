@@ -8,7 +8,7 @@
 #include <memory>
 #include <stdexcept>
 
-#include "lir.hpp"
+#include "lir/lir.hpp"
 
 using lir::Operand;
 

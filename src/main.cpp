@@ -2,22 +2,21 @@
 #include <utility>
 
 #include "ast.hpp"
-#include "compiler.hpp"
 #include "file.hpp"
 #include "file_reader.hpp"
-#include "lexer.hpp"
 #include "line_reader.hpp"
-#include "lir.hpp"
+#include "lir/lir.hpp"
+#include "lir/vm.hpp"
 #include "logger.hpp"
+#include "lower/ast_to_lir.hpp"
 #include "options.hpp"
 #include "parser.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
-#include "vm.hpp"
 #include "walk.hpp"
 
 #ifdef EXPERIMENTAL_HIR_COMPILER
-#	include "hir_compiler.hpp"
+#	include "lower/ast_to_hir.hpp"
 #endif
 
 namespace {
@@ -142,7 +141,7 @@ int compile(Options opts) {
 		return 0;
 #ifdef EXPERIMENTAL_HIR_COMPILER
 	} else if (opts.backend == Backend::HIR) {
-		hir_compiler::Compiler hir_comp {ast, pool, checker};
+		lower::ast_to_hir::Compiler hir_comp {ast, pool, checker};
 		print_phase(opts, "compiling(lir)");
 		auto code = hir_comp.compile();
 

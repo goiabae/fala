@@ -10,7 +10,7 @@
 
 #include "ast.hpp"
 #include "env.hpp"
-#include "lir.hpp"
+#include "lir/lir.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
 

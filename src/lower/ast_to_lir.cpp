@@ -1,4 +1,4 @@
-#include "compiler.hpp"
+#include "lower/ast_to_lir.hpp"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -11,10 +11,9 @@
 #include <vector>
 
 #include "ast.hpp"
-#include "lir.hpp"
+#include "lir/lir.hpp"
 #include "str_pool.h"
 #include "type.hpp"
-#include "utils.hpp"
 
 namespace compiler {
 

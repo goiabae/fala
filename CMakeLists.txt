@@ -48,9 +48,9 @@ add_library(falalib SHARED
 	src/ast.cpp
 	src/typecheck.cpp
 	src/walk.cpp
-	src/compiler.cpp
-	src/lir.cpp
-	src/vm.cpp
+	src/lower/ast_to_lir.cpp
+	src/lir/lir.cpp
+	src/lir/vm.cpp
 	src/file_reader.cpp
 	src/line_reader.cpp
 	src/type.cpp
@@ -83,7 +83,7 @@ endif()
 
 if(HIR_COMPILER)
 	target_compile_options(falalib PUBLIC -D EXPERIMENTAL_HIR_COMPILER)
-	set_property(TARGET falalib APPEND PROPERTY SOURCES src/hir_compiler.cpp src/hir.cpp)
+	set_property(TARGET falalib APPEND PROPERTY SOURCES src/lower/ast_to_hir.cpp src/hir/hir.cpp)
 endif()
 
 if(is_ipo_supported)
@@ -127,16 +127,16 @@ test_example(function_call)
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
-function(test_component component)
-	add_executable("test_${component}" "src/test_${component}.cpp")
+function(test_component component file)
+	add_executable("test_${component}" "src/${file}")
 	set_property(TARGET "test_${component}" PROPERTY CXX_STANDARD 23)
 	target_link_libraries("test_${component}" PRIVATE falalib)
 	target_link_libraries("test_${component}" PRIVATE GTest::gtest_main GTest::gtest)
 	gtest_discover_tests("test_${component}")
 endfunction()
 
-test_component(vm)
-test_component(string_reader)
-test_component(lexer)
-test_component(fixed_vector)
-test_component(compiler)
+test_component(vm lir/test_vm.cpp)
+test_component(string_reader test_string_reader.cpp)
+test_component(lexer test_lexer.cpp)
+test_component(fixed_vector test_fixed_vector.cpp)
+test_component(ast_to_lir lower/test_ast_to_lir.cpp)

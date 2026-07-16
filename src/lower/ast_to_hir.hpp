@@ -1,14 +1,14 @@
-#ifndef HIR_COMPILER_HPP
-#define HIR_COMPILER_HPP
+#ifndef AST_TO_HIR_HPP
+#define AST_TO_HIR_HPP
 
 #include "ast.hpp"
 #include "env.hpp"
-#include "hir.hpp"
+#include "hir/hir.hpp"
 #include "logger.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
 
-namespace hir_compiler {
+namespace lower::ast_to_hir {
 struct Handler {
 	hir::Label label;
 };
@@ -67,6 +67,6 @@ class Compiler {
 	size_t register_count;
 	size_t label_count;
 };
-} // namespace hir_compiler
+} // namespace lower::ast_to_hir
 
 #endif
