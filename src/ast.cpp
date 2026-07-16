@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <format>
+#include <iostream>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
@@ -167,59 +169,71 @@ const char* node_repr(enum NodeType type) {
 	}
 }
 
-static void ast_node_print(
+static std::string ast_node_format(
 	AST* ast, const StringPool& pool, NodeIndex node_idx, unsigned int space
 ) {
 	const auto& node = ast->at(node_idx);
 	if (node.type == NodeType::NUM) {
-		printf("%d", node.num);
-		return;
+		return std::format("{}", node.num);
 	} else if (node.type == NodeType::ID) {
-		printf("%s", pool.find(node.str_id));
-		return;
+		return std::format("{}", pool.find(node.str_id));
 	} else if (node.type == NodeType::STR) {
-		printf("\"");
+		std::string s {};
+		s += "\"";
 		for (char* it = (char*)pool.find(node.str_id); *it != '\0'; it++) {
 			if (*it == '\n')
-				printf("\\n");
+				s += "\\n";
 			else
-				printf("%c", *it);
+				s += std::format("{}", *it);
 		}
-		printf("\"");
-		return;
+		s += "\"";
+		return s;
 	} else if (node.type == NodeType::CHAR) {
-		printf("'%c'", node.character);
-		return;
+		return std::format("'{}'", node.character);
 	} else if (node.type == NodeType::PATH) {
-		ast_node_print(ast, pool, node[0], space);
-		return;
+		return ast_node_format(ast, pool, node[0], space);
 	} else if (node.type == NodeType::INSTANCE) {
-		ast_node_print(ast, pool, node[0], space);
-		printf("<");
+		std::string s {};
+		s += ast_node_format(ast, pool, node[0], space);
+		s += "<";
 		auto arguments_idx = node[1];
 		const auto& arguments_node = ast->at(arguments_idx);
 		for (auto arg_idx : arguments_node) {
-			ast_node_print(ast, pool, arg_idx, space);
-			printf(", ");
+			s += ast_node_format(ast, pool, arg_idx, space);
+			s += ", ";
 		}
-		printf(">");
+		s += ">";
+		return s;
 	} else if (node.type == NodeType::EMPTY) {
-		return;
+		return "()";
 	}
 
-	printf("(");
+	std::size_t total_len = node.branch.children_count - 1;
+	std::vector<std::string> ss {};
+	for (auto i = 0ul; i < node.branch.children_count; i++) {
+		const auto s = ast_node_format(ast, pool, node[i], space + 2);
+		ss.push_back(s);
+		total_len += s.size();
+	}
 
-	printf("%s", node_repr(node.type));
-
+	std::string s {};
+	s += "(";
+	s += node_repr(node.type);
 	space += 2;
 
-	for (size_t i = 0; i < node.branch.children_count; i++) {
-		printf("\n");
-		for (size_t j = 0; j < space; j++) printf(" ");
-		ast_node_print(ast, pool, node[i], space);
+	for (const auto& a : ss) {
+		if (total_len > 80) {
+			s += "\n";
+			for (auto j = 0ul; j < space; j++) s += " ";
+			s += a;
+		} else {
+			s += " ";
+			s += a;
+		}
 	}
 
-	printf(")");
+	s += ")";
+	return s;
 }
 
 static void print_spaces(FILE* fd, unsigned int count) {
@@ -278,7 +292,7 @@ static void ast_node_print_detailed(
 }
 
 void ast_print(AST* ast, const StringPool& pool) {
-	ast_node_print(ast, pool, ast->root_index, 0);
+	std::cout << ast_node_format(ast, pool, ast->root_index, 0);
 }
 
 void ast_print_detailed(AST* ast, const StringPool& pool) {
