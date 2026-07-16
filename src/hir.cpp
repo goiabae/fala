@@ -3,6 +3,7 @@
 #include <cassert>
 #include <ranges>
 #include <stdexcept>
+#include <utility>
 #include <variant>
 
 #include "str_pool.h"
@@ -338,14 +339,16 @@ void print_code(
 
 void Module::load_builtin(hir::Label name) {
 	if (not static_symbols.contains(name.name)) {
-		static_symbols[name.name] = BuiltinLoad {name.name};
+		static_symbols[name.name] =
+			std::make_pair(Visibility::HIDDEN, BuiltinLoad {name.name});
 	}
 }
 
 hir::Label Module::register_constant(
-	hir::Label name, const Constant& constant
+	hir::Label name, Visibility visibility, const Constant& constant
 ) {
-	for (const auto& [symbol, init] : static_symbols) {
+	for (const auto& [symbol, v] : static_symbols) {
+		const auto& init = std::get<1>(v);
 		if (std::holds_alternative<Constant>(init)) {
 			const auto& c = std::get<Constant>(init);
 			const auto are_equal = std::visit(
@@ -383,7 +386,7 @@ hir::Label Module::register_constant(
 			}
 		}
 	}
-	static_symbols[name.name] = constant;
+	static_symbols[name.name] = std::make_pair(visibility, constant);
 	return name;
 }
 
@@ -454,8 +457,13 @@ static void myprint(
 void print_module(
 	FILE* fd, const Module& mod, const StringPool& pool, int spaces
 ) {
-	for (const auto& [symbol, init] : mod.static_symbols) {
+	for (const auto& [symbol, v] : mod.static_symbols) {
+		const auto& vis = std::get<0>(v);
+		if (vis == Visibility::EXPORTED) {
+			fprintf(fd, "export ");
+		}
 		fprintf(fd, "@%s: ", symbol.c_str());
+		const auto& init = std::get<1>(v);
 		std::visit([&](const auto& x) { myprint(fd, x, pool, spaces); }, init);
 		fprintf(fd, "\n");
 	}

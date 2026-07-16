@@ -178,12 +178,20 @@ struct BuiltinLoad {
 using StaticInitialization =
 	std::variant<Constant, StaticAllocation, BuiltinLoad>;
 
+enum class Visibility {
+	EXPORTED,
+	HIDDEN,
+};
+
 struct Module {
-	std::map<std::string, StaticInitialization> static_symbols;
+	std::map<std::string, std::pair<Visibility, StaticInitialization>>
+		static_symbols;
 
  public:
 	void load_builtin(hir::Label name);
-	hir::Label register_constant(hir::Label name, const Constant& constant);
+	hir::Label register_constant(
+		hir::Label name, Visibility visibility, const Constant& constant
+	);
 };
 
 Code operator+(Code pre, Code post);

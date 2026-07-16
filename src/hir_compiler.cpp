@@ -38,7 +38,9 @@ hir::Module Compiler::compile() {
 		.is_builtin = false,
 		.builtin_name = {},
 	};
-	current_module.register_constant(hir::Label {"main"}, main);
+	current_module.register_constant(
+		hir::Label {"main"}, hir::Visibility::EXPORTED, main
+	);
 	return current_module;
 }
 
@@ -152,7 +154,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto result_register = make_variable("");
 			auto literal_num = hir::Integer {node.num};
 			auto l = make_label();
-			auto l2 = ctx.current_module.register_constant(l, {literal_num});
+			auto l2 = ctx.current_module.register_constant(
+				l, hir::Visibility::HIDDEN, {literal_num}
+			);
 			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
@@ -230,7 +234,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				step_value = step_result.result_register;
 			} else {
 				auto l = make_label();
-				auto l2 = ctx.current_module.register_constant(l, hir::Integer(1));
+				auto l2 = ctx.current_module.register_constant(
+					l, hir::Visibility::HIDDEN, hir::Integer(1)
+				);
 				auto r = make_variable("");
 				code.get_global(r, l2);
 				step_value = r;
@@ -277,7 +283,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			loop_body = loop_body + then_result.code;
 			auto t1 = make_register();
 			auto l = make_label();
-			auto l2 = ctx.current_module.register_constant(l, hir::Integer(1));
+			auto l2 = ctx.current_module.register_constant(
+				l, hir::Visibility::HIDDEN, hir::Integer(1)
+			);
 			auto t2 = make_variable("");
 			loop_body.get_global(t2, l2);
 			loop_body.add(t1, var_opnd, t2);
@@ -432,8 +440,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_string = hir::String {node.str_id};
-			auto l =
-				ctx.current_module.register_constant(make_label(), literal_string);
+			auto l = ctx.current_module.register_constant(
+				make_label(), hir::Visibility::HIDDEN, literal_string
+			);
 			code.get_global(result_register, l);
 			return Result {code, result_register};
 		}
@@ -529,7 +538,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			auto t1 = make_register();
 			auto l = make_label();
-			auto l2 = ctx.current_module.register_constant(l, function);
+			auto l2 = ctx.current_module.register_constant(
+				l, hir::Visibility::HIDDEN, function
+			);
 			code.get_global(variable_register, l2);
 
 			return {code, variable_register};
@@ -539,7 +550,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto result_register = make_register();
 			auto literal_nil = hir::Nil {};
 			auto l = make_label();
-			auto l2 = ctx.current_module.register_constant(l, literal_nil);
+			auto l2 = ctx.current_module.register_constant(
+				l, hir::Visibility::HIDDEN, literal_nil
+			);
 			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
@@ -548,7 +561,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto result_register = make_register();
 			auto literal_true = hir::Boolean {true};
 			auto l = make_label();
-			auto l2 = ctx.current_module.register_constant(l, literal_true);
+			auto l2 = ctx.current_module.register_constant(
+				l, hir::Visibility::HIDDEN, literal_true
+			);
 			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
@@ -557,7 +572,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto result_register = make_register();
 			auto literal_false = hir::Boolean {false};
 			auto l = make_label();
-			auto l2 = ctx.current_module.register_constant(l, literal_false);
+			auto l2 = ctx.current_module.register_constant(
+				l, hir::Visibility::HIDDEN, literal_false
+			);
 			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
@@ -587,8 +604,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_character = hir::Character {node.character};
-			auto l =
-				ctx.current_module.register_constant(make_label(), literal_character);
+			auto l = ctx.current_module.register_constant(
+				make_label(), hir::Visibility::HIDDEN, literal_character
+			);
 			code.get_global(result_register, l);
 			return Result {code, result_register};
 		}
