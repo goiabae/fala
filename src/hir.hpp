@@ -1,6 +1,7 @@
 #ifndef HIR_HPP
 #define HIR_HPP
 
+#include <cstddef>
 #include <cstdio>
 #include <map>
 #include <memory>
@@ -60,44 +61,22 @@ class Character {
 
 class Nil {};
 
-class Operand {
- public:
+struct Operand {
 	enum class Kind {
 		INVALID, // Represents uninitialized/invalid operands
-
-		INTEGER,
-		STRING,
 		REGISTER,
-		FUNCTION,
-		BOOLEAN,
-		CHARACTER,
 		BLOCK,
-		NIL,
 		LABEL,
 	};
 
-	Integer integer;
-	String string;
 	Register registuhr;
-	Function function;
-	Boolean boolean;
-	Character character;
 	Block block;
-	Nil nil;
 	Label label;
-
 	Kind kind;
 
-	Operand(Integer i) : integer(i), kind(Kind::INTEGER) {}
-	Operand(String s) : string(s), kind(Kind::STRING) {}
 	Operand(Register r) : registuhr(r), kind(Kind::REGISTER) {}
-	Operand(Function f) : function(f), kind(Kind::FUNCTION) {}
-	Operand(Boolean b) : boolean(b), kind(Kind::BOOLEAN) {}
-	Operand(Character c) : character(c), kind(Kind::CHARACTER) {}
 	Operand(Block b) : block(b), kind(Kind::BLOCK) {}
-	Operand(Nil n) : nil(n), kind(Kind::NIL) {}
 	Operand(Label l) : label(l), kind(Kind::LABEL) {}
-
 	Operand() : kind(Kind::INVALID) {}
 };
 
@@ -125,8 +104,7 @@ enum class Opcode {
 	GREATER,
 	GREATER_EQ,
 
-	// Escape hatch into the compiler
-	BUILTIN,
+	GET_GLOBAL,
 
 	// Control flow
 	LOOP,
@@ -168,13 +146,11 @@ class Code {
 
 	void copy(hir::Register, hir::Operand);
 	void call(hir::Register, hir::Register, std::vector<hir::Operand>);
-	void builtin(hir::Register, hir::String);
 	void if_false(hir::Register, hir::Block);
 	void if_true(hir::Register, hir::Block);
 	void loop(hir::Label next, hir::Label stop, hir::Block);
 	void brake(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
-	void inc(hir::Register);
 	void set_element(hir::Register, std::vector<hir::Operand>, hir::Operand);
 	void get_element(hir::Register, hir::Register, std::vector<hir::Operand>);
 	void get_element(hir::Register, hir::Register, hir::Operand);
@@ -184,11 +160,38 @@ class Code {
 	void load(hir::Register, hir::Register);
 	void store(hir::Register, hir::Register);
 	void add(hir::Register, hir::Operand, hir::Operand);
+	void get_global(hir::Register, hir::Label);
+};
+
+using Constant = std::variant<
+	hir::Integer, hir::String, hir::Character, hir::Nil, hir::Boolean,
+	hir::Function>;
+
+struct StaticAllocation {
+	std::size_t size;
+};
+
+struct BuiltinLoad {
+	std::string name;
+};
+
+using StaticInitialization =
+	std::variant<Constant, StaticAllocation, BuiltinLoad>;
+
+struct Module {
+	std::map<std::string, StaticInitialization> static_symbols;
+
+ public:
+	void load_builtin(hir::Label name);
+	hir::Label register_constant(hir::Label name, const Constant& constant);
 };
 
 Code operator+(Code pre, Code post);
 
 void print_code(FILE* fd, const Code& code, const StringPool& pool, int spaces);
+void print_module(
+	FILE* fd, const Module& mod, const StringPool& pool, int spaces
+);
 
 } // namespace hir
 

@@ -12,16 +12,33 @@ constexpr auto builtins = {
 	"read_int", "read_char", "write_int", "write_char", "write_str", "make_array"
 };
 
-hir::Code Compiler::compile() {
+hir::Module Compiler::compile() {
 	auto node_idx = ast.root_index;
 	SignalHandlers handlers {};
 	auto scope_id = env.root_scope_id;
+	hir::Module current_module {
+		.static_symbols = {},
+	};
 	Context ctx {
 		.handlers = handlers,
 		.scope_id = scope_id,
+		.current_module = current_module,
 	};
 	auto result = compile(node_idx, ctx);
-	return result.code;
+	hir::Block entry_block {
+		.body_code = std::make_shared<hir::Code>(result.code),
+		.child_blocks = {},
+	};
+	auto entry = make_label();
+	hir::Function main {
+		.blocks = {{entry.name, entry_block}},
+		.entry_block = entry.name,
+		.parameter_registers = {},
+		.is_builtin = false,
+		.builtin_name = {},
+	};
+	current_module.register_constant(hir::Label {"main"}, main);
+	return current_module;
 }
 
 Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
@@ -46,7 +63,10 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	for (const auto& builtin : builtins) {
 		if (strcmp(func_name, builtin) == 0) {
 			auto func_register = make_register();
-			code.builtin(func_register, hir::String {func_node.str_id});
+			const auto name = std::string(pool.find(func_node.str_id));
+			const auto l = hir::Label {.name = name};
+			ctx.current_module.load_builtin(l);
+			code.get_global(func_register, l);
 			function = func_register;
 			builtin_function_found = true;
 			break;
@@ -128,9 +148,11 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::APP: return compile_app(node_idx, ctx);
 		case NodeType::NUM: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto result_register = make_variable("");
 			auto literal_num = hir::Integer {node.num};
-			code.copy(result_register, literal_num);
+			auto l = make_label();
+			auto l2 = ctx.current_module.register_constant(l, {literal_num});
+			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
 		case NodeType::BLK: {
@@ -140,6 +162,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			Context inner_ctx {
 				.handlers = ctx.handlers,
 				.scope_id = inner_scope_id,
+				.current_module = ctx.current_module,
 			};
 			for (auto idx : node) {
 				auto opnd_res = compile(idx, inner_ctx);
@@ -205,7 +228,11 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				code = code + step_result.code;
 				step_value = step_result.result_register;
 			} else {
-				step_value = hir::Integer(1);
+				auto l = make_label();
+				auto l2 = ctx.current_module.register_constant(l, hir::Integer(1));
+				auto r = make_variable("");
+				code.get_global(r, l2);
+				step_value = r;
 			}
 
 			auto inner_scope_id = env.create_child_scope(ctx.scope_id);
@@ -213,11 +240,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			Context header_ctx {
 				.handlers = ctx.handlers,
 				.scope_id = inner_scope_id,
+				.current_module = ctx.current_module,
 			};
 
 			Context body_ctx {
 				.handlers = new_handlers,
 				.scope_id = inner_scope_id,
+				.current_module = ctx.current_module,
 			};
 
 			auto var_result = compile(decl_idx, header_ctx);
@@ -246,7 +275,11 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			);
 			loop_body = loop_body + then_result.code;
 			auto t1 = make_register();
-			loop_body.add(t1, var_opnd, hir::Integer(1));
+			auto l = make_label();
+			auto l2 = ctx.current_module.register_constant(l, hir::Integer(1));
+			auto t2 = make_variable("");
+			loop_body.get_global(t2, l2);
+			loop_body.add(t1, var_opnd, t2);
 			loop_body.store(var_opnd, t1);
 
 			code.loop(
@@ -282,6 +315,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			Context body_ctx {
 				.handlers = new_handlers,
 				.scope_id = ctx.scope_id,
+				.current_module = ctx.current_module,
 			};
 
 			auto cond_result = compile(cond_idx, ctx);
@@ -397,7 +431,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_string = hir::String {node.str_id};
-			code.copy(result_register, literal_string);
+			auto l =
+				ctx.current_module.register_constant(make_label(), literal_string);
+			code.get_global(result_register, l);
 			return Result {code, result_register};
 		}
 		case NodeType::VAR_DECL: {
@@ -468,6 +504,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 						.has_return_handler = false,
 					},
 				.scope_id = inner_scope_id,
+				.current_module = ctx.current_module,
 			};
 
 			auto body_result = compile(body_idx, body_ctx);
@@ -480,17 +517,19 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				.body_code = std::make_shared<hir::Code>(body_result.code),
 				.child_blocks = {},
 			};
+			auto entry = make_label();
 			hir::Function function {
-				.blocks = {{"0", block}},
-				.entry_block = "0",
+				.blocks = {{entry.name, block}},
+				.entry_block = entry.name,
 				.parameter_registers = parameter_registers,
 				.is_builtin = false,
 				.builtin_name = {0},
 			};
 
 			auto t1 = make_register();
-			code.copy(t1, function);
-			code.alloc(variable_register, t1);
+			auto l = make_label();
+			auto l2 = ctx.current_module.register_constant(l, function);
+			code.get_global(variable_register, l2);
 
 			return {code, variable_register};
 		}
@@ -498,21 +537,27 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_nil = hir::Nil {};
-			code.copy(result_register, literal_nil);
+			auto l = make_label();
+			auto l2 = ctx.current_module.register_constant(l, literal_nil);
+			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
 		case NodeType::TRUE: {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_true = hir::Boolean {true};
-			code.copy(result_register, literal_true);
+			auto l = make_label();
+			auto l2 = ctx.current_module.register_constant(l, literal_true);
+			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
 		case NodeType::FALSE: {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_false = hir::Boolean {false};
-			code.copy(result_register, literal_false);
+			auto l = make_label();
+			auto l2 = ctx.current_module.register_constant(l, literal_false);
+			code.get_global(result_register, l2);
 			return Result {code, result_register};
 		}
 		case NodeType::LET: {
@@ -527,6 +572,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			Context inner_ctx {
 				.handlers = ctx.handlers,
 				.scope_id = inner_scope_id,
+				.current_module = ctx.current_module,
 			};
 			for (auto idx : decls_node) {
 				auto initial_result = compile(idx, inner_ctx);
@@ -540,7 +586,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code code {};
 			auto result_register = make_register();
 			auto literal_character = hir::Character {node.character};
-			code.copy(result_register, literal_character);
+			auto l =
+				ctx.current_module.register_constant(make_label(), literal_character);
+			code.get_global(result_register, l);
 			return Result {code, result_register};
 		}
 		case NodeType::PATH: {

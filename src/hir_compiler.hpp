@@ -30,6 +30,7 @@ struct Result {
 struct Context {
 	SignalHandlers handlers;
 	Env<hir::Operand>::ScopeID scope_id;
+	hir::Module& current_module;
 };
 
 class Compiler {
@@ -40,7 +41,7 @@ class Compiler {
 		checker(checker),
 		logger("HIR_COMPILER", ast.file_name, ast.lines) {}
 
-	hir::Code compile();
+	hir::Module compile();
 
 	Result compile(NodeIndex node_idx, Context ctx);
 	Result compile_lvalue(NodeIndex node_idx, Context ctx);

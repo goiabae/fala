@@ -149,7 +149,7 @@ int compile(Options opts) {
 		File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;
 
 		print_phase(opts, "saving output");
-		hir::print_code(output.get_descriptor(), code, pool, 0);
+		hir::print_module(output.get_descriptor(), code, pool, 0);
 
 		return 0;
 #endif

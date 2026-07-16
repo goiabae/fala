@@ -1,11 +1,15 @@
 #include "hir.hpp"
 
 #include <cassert>
+#include <ranges>
+#include <stdexcept>
+#include <variant>
+
+#include "str_pool.h"
+#include "utils.hpp"
 
 namespace hir {
 
-static void print_char(FILE* fd, char c);
-static int print_str(FILE* fd, const char* str);
 static void print_operand(
 	FILE* fd, Operand opnd, const StringPool& pool, int spaces
 );
@@ -53,11 +57,8 @@ void Code::copy(hir::Register destination, hir::Operand source) {
 	);
 }
 
-void Code::builtin(hir::Register result, hir::String function_name) {
-	// name may be a literal string or a register containing a string
-	instructions.push_back(
-		Instruction {hir::Opcode::BUILTIN, {result, function_name}}
-	);
+void Code::get_global(hir::Register result, hir::Label name) {
+	instructions.push_back(Instruction {hir::Opcode::GET_GLOBAL, {result, name}});
 }
 
 void Code::if_false(hir::Register condition, hir::Block block) {
@@ -82,13 +83,6 @@ void Code::brake(hir::Label where_to) {
 
 void Code::equals(hir::Register result, hir::Operand a, hir::Operand b) {
 	instructions.push_back(Instruction {hir::Opcode::EQ, {result, a, b}});
-}
-
-// pseudo-instruction
-void Code::inc(hir::Register registuhr) {
-	instructions.push_back(
-		Instruction {hir::Opcode::ADD, {registuhr, registuhr, hir::Integer(1)}}
-	);
 }
 
 void Code::add(hir::Register a, hir::Operand b, hir::Operand c) {
@@ -123,42 +117,9 @@ void Code::get_element(hir::Register a, hir::Register b, hir::Operand c) {
 	instructions.push_back(Instruction {hir::Opcode::GET_ELEMENT, {a, b, c}});
 }
 
-void print_char(FILE* fd, char c) {
-	if (c == '\n')
-		fprintf(fd, "\\n");
-	else
-		fprintf(fd, "%c", c);
-}
-
-int print_str(FILE* fd, const char* str) {
-	int printed = 2; // because open and closing double quotes
-	fputc('"', fd);
-	char c;
-	while ((c = *(str++))) {
-		if (c == '\n')
-			printed += fprintf(fd, "\\n");
-		else if (c == '\t')
-			printed += fprintf(fd, "\\t");
-		else {
-			fputc(c, fd);
-			printed++;
-		}
-	}
-	fputc('"', fd);
-	return printed;
-}
-
 void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 	switch (opnd.kind) {
 		case Operand::Kind::INVALID: assert(false);
-		case Operand::Kind::INTEGER: {
-			fprintf(fd, "%d", opnd.integer.integer);
-			return;
-		}
-		case Operand::Kind::STRING: {
-			print_str(fd, pool.find(opnd.string.str_id));
-			return;
-		}
 		case Operand::Kind::REGISTER: {
 			if (opnd.registuhr.is_mutable) {
 				fprintf(fd, "$%zu", opnd.registuhr.id);
@@ -173,45 +134,6 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 			print_code(fd, code, pool, spaces + 2);
 			for (int i = 0; i < spaces; i++) fprintf(fd, " ");
 			fprintf(fd, "}");
-			return;
-		}
-		case Operand::Kind::BOOLEAN: {
-			fprintf(fd, "%s", opnd.boolean.boolean ? "true" : "false");
-			return;
-		}
-		case Operand::Kind::CHARACTER: {
-			print_char(fd, opnd.character.character);
-			return;
-		}
-		case Operand::Kind::NIL: {
-			fprintf(fd, "nil");
-			return;
-		}
-		case Operand::Kind::FUNCTION: {
-			auto& fn = opnd.function;
-			fprintf(fd, "function ");
-			if (opnd.function.is_builtin) {
-				fprintf(fd, "\"%s\"", pool.find(opnd.function.builtin_name));
-			} else {
-				fprintf(fd, "(");
-				size_t parameter_count = opnd.function.parameter_registers.size();
-				for (size_t i = 0; i < (parameter_count - 1); i++) {
-					print_operand(fd, opnd.function.parameter_registers[i], pool, spaces);
-					fprintf(fd, ", ");
-				}
-				print_operand(
-					fd,
-					opnd.function.parameter_registers[parameter_count - 1],
-					pool,
-					spaces
-				);
-				fprintf(fd, ") ");
-				fprintf(fd, "@%s ", fn.entry_block.c_str());
-				for (const auto& [name, block] : fn.blocks) {
-					fprintf(fd, "@%s ", name.c_str());
-					print_operand(fd, block, pool, spaces);
-				}
-			}
 			return;
 		}
 		case Operand::Kind::LABEL: {
@@ -301,16 +223,6 @@ void print_instruction(
 				fprintf(fd, " ");
 				print_operand(fd, inst.operands[i], pool, spaces);
 			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::BUILTIN: {
-			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces);
-			fprintf(fd, " = ");
-			fprintf(fd, "builtin");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
 			fprintf(fd, "\n");
 			return;
 		}
@@ -404,6 +316,14 @@ void print_instruction(
 			fprintf(fd, "\n");
 			return;
 		}
+		case Opcode::GET_GLOBAL: {
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " = ");
+			fprintf(fd, "get_global ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
 	}
 }
 
@@ -415,4 +335,130 @@ void print_code(
 		print_instruction(fd, code.instructions[i], pool, spaces);
 	}
 }
+
+void Module::load_builtin(hir::Label name) {
+	if (not static_symbols.contains(name.name)) {
+		static_symbols[name.name] = BuiltinLoad {name.name};
+	}
+}
+
+hir::Label Module::register_constant(
+	hir::Label name, const Constant& constant
+) {
+	for (const auto& [symbol, init] : static_symbols) {
+		if (std::holds_alternative<Constant>(init)) {
+			const auto& c = std::get<Constant>(init);
+			const auto are_equal = std::visit(
+				overloaded {
+					[](const hir::Integer& a, const hir::Integer& b) {
+						return a.integer == b.integer;
+					},
+					[](const hir::String& a, const hir::String& b) {
+						return a.str_id == b.str_id;
+					},
+					[](const hir::Character& a, const hir::Character& b) {
+						return a.character == b.character;
+					},
+					[](const hir::Nil&, const hir::Nil&) { return true; },
+					[](const hir::Boolean& a, const hir::Boolean& b) {
+						return a.boolean == b.boolean;
+					},
+					[](const hir::Function&, const hir::Function&) {
+						// FIXME: how to compare functions?
+						return false;
+					},
+					[](const auto&, const auto&) { return false; }
+				},
+				c,
+				constant
+			);
+			if (are_equal) return hir::Label {symbol};
+		} else {
+			if (symbol == name.name) {
+				throw std::runtime_error(
+					std::format(
+						"static symbol {} already declared as another kind", symbol
+					)
+				);
+			}
+		}
+	}
+	static_symbols[name.name] = constant;
+	return name;
+}
+
+static void myprint(FILE* fd, const hir::Integer& i, const StringPool&, int) {
+	fprintf(fd, "%d", i.integer);
+}
+
+static void myprint(FILE* fd, const hir::Character& c, const StringPool&, int) {
+	fprintf(fd, "'%c'", c.character);
+}
+
+static void myprint(FILE* fd, const hir::Boolean& b, const StringPool&, int) {
+	fprintf(fd, "%s", b.boolean ? "true" : "false");
+}
+
+static void myprint(
+	FILE* fd, const hir::String& s, const StringPool& pool, int
+) {
+	fprintf(fd, "\"%s\"", pool.find(s.str_id));
+}
+
+static void myprint(
+	FILE* fd, const hir::Function& fn, const StringPool& pool, int spaces
+) {
+	fprintf(fd, "function ");
+	if (fn.is_builtin) {
+		fprintf(fd, "\"%s\"", pool.find(fn.builtin_name));
+	} else {
+		fprintf(fd, "(");
+		for (const auto& [i, reg] :
+		     std::ranges::views::enumerate(fn.parameter_registers)) {
+			print_operand(fd, reg, pool, spaces);
+			if (i != (long)(fn.parameter_registers.size() - 1)) {
+				fprintf(fd, ", ");
+			}
+		}
+		fprintf(fd, ") ");
+		fprintf(fd, "@%s ", fn.entry_block.c_str());
+		for (const auto& [name, block] : fn.blocks) {
+			fprintf(fd, "@%s ", name.c_str());
+			print_operand(fd, block, pool, spaces);
+		}
+	}
+}
+
+static void myprint(FILE* fd, const hir::Nil&, const StringPool&, int) {
+	fprintf(fd, "nil");
+}
+
+static void myprint(
+	FILE* fd, const hir::Constant& c, const StringPool& pool, int spaces
+) {
+	std::visit([&](const auto& x) { myprint(fd, x, pool, spaces); }, c);
+}
+
+static void myprint(
+	FILE* fd, const hir::StaticAllocation& c, const StringPool&, int
+) {
+	fprintf(fd, "static_alloc %zu", c.size);
+}
+
+static void myprint(
+	FILE* fd, const hir::BuiltinLoad& c, const StringPool&, int
+) {
+	fprintf(fd, "builtin_load %s", c.name.c_str());
+}
+
+void print_module(
+	FILE* fd, const Module& mod, const StringPool& pool, int spaces
+) {
+	for (const auto& [symbol, init] : mod.static_symbols) {
+		fprintf(fd, "@%s: ", symbol.c_str());
+		std::visit([&](const auto& x) { myprint(fd, x, pool, spaces); }, init);
+		fprintf(fd, "\n");
+	}
+}
+
 } // namespace hir
