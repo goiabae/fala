@@ -933,6 +933,7 @@ T Typechecker::typecheck(NodeIndex node_idx, Env<T>::ScopeID scope_id) {
 		}
 
 		case NodeType::INSTANCE: assert(false);
+		case NodeType::METALIST: assert(false);
 	}
 
 	assert(false && "unreachable");

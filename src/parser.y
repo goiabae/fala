@@ -108,7 +108,7 @@ block : stmts exp opt_seps { $$ = list_append_node(ast, $1, $2); } ;
 
 opt_seps : %empty | stmt_seps ;
 
-stmts : %empty { $$ = new_list_node(ast); }
+stmts : %empty { $$ = new_list_node(ast, NodeType::BLK); }
       | stmts exp stmt_seps { $$ = list_append_node(ast, $$, $2); }
       | stmts decl stmt_seps { $$ = list_append_node(ast, $$, $2); }
       ;
@@ -141,7 +141,7 @@ let : LET nls decls nls IN nls exp { $$ = NODE(NodeType::LET, $decls, $exp); }
     | LET nls decls nls "," nls IN nls exp { $$ = NODE(NodeType::LET, $decls, $exp); }
     ;
 
-decls : decl           { $$ = new_list_node(ast); $$ = list_append_node(ast, $$, $1); }
+decls : decl           { $$ = new_list_node(ast, NodeType::METALIST); $$ = list_append_node(ast, $$, $1); }
       | decls nls "," nls decl { $$ = list_append_node(ast, $$, $decl); }
       ;
 
@@ -154,7 +154,7 @@ opt_type : %empty { $$ = new_empty_node(ast); }
          | ":" type_expression { $$ = $2; }
          ;
 
-params : %empty    { $$ = new_list_node(ast); }
+params : %empty    { $$ = new_list_node(ast, NodeType::METALIST); }
        | params id { $$ = list_append_node(ast, $$, $2);}
        ;
 
@@ -164,7 +164,7 @@ app : func arg args { $$ = NODE(NodeType::APP, $1, list_prepend_node(ast, $3, $2
 /* TODO: allow application of function expressions to arguments */
 func : id ;
 
-args : %empty   { $$ = new_list_node(ast); }
+args : %empty   { $$ = new_list_node(ast, NodeType::METALIST); }
      | args arg { $$ = list_append_node(ast, $$, $2); }
      ;
 
@@ -222,7 +222,7 @@ type_expression
 
 type_argument_list
   : type_argument {
-    $$ = new_list_node(ast);
+    $$ = new_list_node(ast, NodeType::METALIST);
     $$ = list_append_node(ast, $$, $1);
   }
   | type_argument_list[prefix] "," type_argument[postfix]

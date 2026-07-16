@@ -1,5 +1,6 @@
 #include "hir_compiler.hpp"
 
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -84,7 +85,7 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	// Resolve arguments
 	const auto& args_node = ast.at(node[1]);
 
-	assert(args_node.type == NodeType::BLK);
+	assert(args_node.type == NodeType::METALIST);
 
 	std::vector<hir::Operand> args {};
 
@@ -605,6 +606,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::AS: {
 			return compile(node[0], ctx);
 		}
+		case NodeType::METALIST: assert(false);
 	}
 	assert(false);
 }
@@ -696,6 +698,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::PATH: {
 			return compile_lvalue(node[0], ctx);
 		}
+		case NodeType::METALIST: assert(false);
 	}
 	assert(false);
 }

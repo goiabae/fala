@@ -241,7 +241,7 @@ TEST(CompilerTest, let_expression) {
 		const auto _2 = new_string_node(&ast, NodeType::ID, {}, pool, "x");
 		const auto _3 = new_empty_node(&ast);
 		const auto _4 = new_node(&ast, NodeType::VAR_DECL, {_2, _3, _1});
-		const auto _5 = new_list_node(&ast);
+		const auto _5 = new_list_node(&ast, NodeType::METALIST);
 		const auto _6 = list_append_node(&ast, _5, _4);
 		const auto _7 = new_string_node(&ast, NodeType::ID, {}, pool, "x");
 		const auto _8 = new_node(&ast, NodeType::LET, {_6, _7});

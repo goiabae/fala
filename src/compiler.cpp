@@ -475,6 +475,7 @@ Result Compiler::compile_lvalue(
 		}
 		case NodeType::AS: assert(false);
 		case NodeType::INSTANCE: assert(false);
+		case NodeType::METALIST: assert(false);
 	}
 	assert(false);
 }
@@ -830,6 +831,7 @@ Result Compiler::compile(
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");
 		case NodeType::AS: return compile(node[0], handlers, scope_id);
+		case NodeType::METALIST: assert(false);
 	}
 	assert(false);
 }

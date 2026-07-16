@@ -496,6 +496,7 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");
 		case NodeType::AS: return eval_node(node[0]);
+		case NodeType::METALIST: assert(false);
 	}
 	assert(false);
 }

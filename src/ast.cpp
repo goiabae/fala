@@ -69,6 +69,7 @@ bool is_branch_node(NodeType type) {
 		case NodeType::PATH: return true;
 		case NodeType::AS: return true;
 		case NodeType::INSTANCE: return true;
+		case NodeType::METALIST: return false;
 	}
 	assert(false);
 }
@@ -112,6 +113,7 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::PATH: return "NodeType::PATH";
 		case NodeType::INSTANCE: return "NodeType::INSTANCE";
 		case NodeType::AS: return "NodeType::AS";
+		case NodeType::METALIST: return "NodeType::METALIST";
 	}
 	assert(false);
 }
@@ -206,6 +208,41 @@ static std::string ast_node_format(
 		return s;
 	} else if (node.type == NodeType::EMPTY) {
 		return "()";
+	} else if (node.type == NodeType::METALIST) {
+		std::size_t total_len = node.branch.children_count - 1;
+		std::vector<std::string> ss {};
+		for (auto i = 0ul; i < node.branch.children_count; i++) {
+			const auto s = ast_node_format(ast, pool, node[i], space + 2);
+			ss.push_back(s);
+			total_len += s.size();
+		}
+
+		std::string s {};
+		s += "(";
+		space += 2;
+
+		auto first = true;
+		for (const auto& a : ss) {
+			if (total_len > 80) {
+				if (first) {
+					first = false;
+				} else {
+					s += "\n";
+				}
+				for (auto j = 0ul; j < space; j++) s += " ";
+				s += a;
+			} else {
+				if (first) {
+					first = false;
+				} else {
+					s += " ";
+				}
+				s += a;
+			}
+		}
+
+		s += ")";
+		return s;
 	}
 
 	std::size_t total_len = node.branch.children_count - 1;
@@ -331,12 +368,12 @@ NodeIndex new_node(AST* ast, NodeType type, vector<NodeIndex> children) {
 	return idx;
 }
 
-NodeIndex new_list_node(AST* ast) {
+NodeIndex new_list_node(AST* ast, NodeType type) {
 	constexpr auto max_list_children_count = 100; // FIXME: unhardcode this
 	auto idx = ast->alloc_node();
 	auto& node = ast->at(idx);
 
-	node.type = NodeType::BLK;
+	node.type = type;
 	node.branch.children_count = 0;
 	node.branch.children = new NodeIndex[max_list_children_count];
 

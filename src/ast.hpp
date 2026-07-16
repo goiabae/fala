@@ -53,6 +53,7 @@ enum class NodeType {
 	PATH,
 	AS,
 	INSTANCE,
+	METALIST, // meta node for containing a list of other nodes
 };
 
 enum class BinaryOperator {
@@ -77,7 +78,7 @@ void ast_set_root(AST* ast, NodeIndex node_idx);
 
 // nodes
 NodeIndex new_node(AST* ast, NodeType type, std::vector<NodeIndex> children);
-NodeIndex new_list_node(AST* ast);
+NodeIndex new_list_node(AST* ast, NodeType type);
 NodeIndex new_string_node(
 	AST* ast, NodeType type, Location loc, StringPool& pool, const char* str
 );
