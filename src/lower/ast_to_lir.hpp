@@ -59,7 +59,7 @@ struct Compiler {
 	Chunk compile();
 
 	Result compile(
-		NodeIndex node_idxz, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
+		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
 	);
 	Result compile_lvalue(
 		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
