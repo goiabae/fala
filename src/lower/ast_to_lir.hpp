@@ -78,9 +78,6 @@ struct Compiler {
 	Operand make_register();
 	Operand make_label();
 
-	// used to backpatch the location of the dynamic allocation region start
-	Number dyn_alloc_start {2047};
-
 	Env<Operand> env;
 
 	vector<Chunk> functions;

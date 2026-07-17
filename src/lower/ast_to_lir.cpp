@@ -117,11 +117,6 @@ Chunk Compiler::compile() {
 
 	auto main = make_label();
 
-	auto dyn = make_register();
-	preamble
-		.emit(Opcode::MOV, dyn, {}) // snd will be patched after compilation
-		.with_comment("contains address to start of the last allocated region");
-
 	chunk.add_label(main);
 
 	SignalHandlers handlers {};
@@ -134,10 +129,6 @@ Chunk Compiler::compile() {
 
 	auto res_ = compile(ast.root_index, ctx);
 	chunk = chunk + res_.code;
-
-	auto start = Operand::make_immediate_integer(dyn_alloc_start);
-	preamble.m_vec[0].operands[1] =
-		start; // backpatching snd after static allocations
 
 	preamble.emit(Opcode::JMP, main);
 
@@ -635,7 +626,6 @@ Result Compiler::compile_str(NodeIndex node_idx, Context) {
 
 	const char* str = pool.find(node.str_id);
 	auto str_len = strlen(str);
-	dyn_alloc_start -= (Number)str_len + 1;
 
 	auto t1 = make_register();
 	chunk.emit_alloca(t1, Operand::make_immediate_integer((int)str_len));

@@ -211,18 +211,15 @@ TEST(CompilerTest, add_integers) {
 	const auto chunk = comp.compile();
 	lir::Chunk expected {};
 	{
-		const auto hp = lir::Operand::make_immediate_integer(2047);
 		const auto r0 = make_int_reg(0);
-		const auto r1 = make_int_reg(1);
 		const auto l0 = lir::Operand(lir::Label(0));
 		const auto c_one = lir::Operand::make_immediate_integer(1);
 		const auto c_two = lir::Operand::make_immediate_integer(2);
-		expected
-			.emit_mov(r0, hp) //
+		expected //
 			.emit_jmp(l0)
 			.add_label(l0)
-			.emit_binop(BinaryOperator::PLUS, r1, c_one, c_two);
-		expected.result_opnd = r1;
+			.emit_binop(BinaryOperator::PLUS, r0, c_one, c_two);
+		expected.result_opnd = r0;
 	}
 	try {
 		auto are_equal = chunk == expected;
@@ -269,13 +266,11 @@ TEST(CompilerTest, let_expression) {
 	}
 	try {
 		const char* b =
-			"    mov %0, 2047  ; contains address to start of the last "
-			"allocated region\n"
 			"    jump L000\n"
 			"L000:\n"
-			"    alloca %1, 1  ; creating variable \"x\"\n"
-			"    storea 3, 0(%1)\n"
-			"    loada %2, 0(%1)\n";
+			"    alloca %0, 1  ; creating variable \"x\"\n"
+			"    storea 3, 0(%0)\n"
+			"    loada %1, 0(%0)\n";
 		std::string a = std::string(b);
 		std::stringstream expected2;
 		expected2 << chunk;
