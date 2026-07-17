@@ -36,11 +36,6 @@ Chunk& Chunk::emit(Opcode opcode, Operand fst, Operand snd, Operand trd) {
 	return *this;
 }
 
-Chunk& Chunk::with_comment(std::string comment) {
-	m_vec.back().comment = comment;
-	return *this;
-}
-
 Chunk& Chunk::add_label(Operand label) {
 	label_indexes[label.as_label().id] = m_vec.size();
 	return *this;

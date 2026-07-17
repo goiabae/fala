@@ -108,7 +108,7 @@ Result make_array(Compiler& comp, vector<lir::Operand> args) {
 
 	auto t1 = comp.make_register();
 	chunk.emit_loada(t1, lir::Immediate(0), args[0]);
-	chunk.emit_alloca(addr, t1).with_comment("allocating array");
+	chunk.emit_alloca(addr, t1);
 	return {chunk, addr};
 }
 
@@ -236,7 +236,7 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	const auto r0 = compile(cond_idx, ctx);
 	chunk = chunk + r0.code;
 
-	chunk.emit(Opcode::JMP_FALSE, r0.opnd, l1).with_comment("if branch");
+	chunk.emit(Opcode::JMP_FALSE, r0.opnd, l1);
 
 	const auto r1 = compile(then_idx, ctx);
 	chunk = chunk + r1.code;
@@ -348,7 +348,7 @@ Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
 	chunk = chunk + cond_res.code;
 	lir::Operand cond_opnd = cond_res.opnd;
 
-	chunk.emit(Opcode::MOV, res, {}).with_comment("when conditional");
+	chunk.emit(Opcode::MOV, res, {});
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1);
 
 	auto yes_res = compile(then_idx, ctx);
@@ -437,8 +437,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 
 			auto tmp = make_register();
 			auto t1 = make_register();
-			chunk.emit_shifta(tmp, off, base)
-				.with_comment("accessing allocated array");
+			chunk.emit_shifta(tmp, off, base);
 			return {chunk, tmp};
 		}
 		case NodeType::ADD: assert(false);
@@ -504,7 +503,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		auto initial = initial_res.opnd;
 		// FIXME: properly set register type
 		auto* var = env.insert(ctx.scope_id, id_node.str_id, make_register());
-		chunk.emit_clonea(*var, initial).with_comment(comment);
+		chunk.emit_clonea(*var, initial);
 		return {chunk, *var};
 	} else {
 		auto initial_res = compile(exp_idx, ctx);
@@ -515,7 +514,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		if (is_array) {
 			chunk.emit_mov(*var, initial);
 		} else {
-			chunk.emit_alloca(*var, lir::Immediate(1)).with_comment(comment);
+			chunk.emit_alloca(*var, lir::Immediate(1));
 			chunk.emit_storea(initial, lir::Immediate(0), *var);
 		}
 		return {chunk, *var};
@@ -584,8 +583,7 @@ Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
 	chunk = chunk + exp_res.code;
 	lir::Operand exp = exp_res.opnd;
 
-	chunk.emit_storea(exp, lir::Immediate(0), cell)
-		.with_comment("assigning to array variable");
+	chunk.emit_storea(exp, lir::Immediate(0), cell);
 
 	return {chunk, exp};
 }
@@ -659,8 +657,7 @@ Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 
 	lir::Operand tmp = make_register();
 	tmp.as_register().is_lvalue_pointer = true;
-	chunk.emit(Opcode::ADD, tmp, base, off)
-		.with_comment("accessing allocated array");
+	chunk.emit(Opcode::ADD, tmp, base, off);
 
 	return {chunk, lir::Operand(tmp)};
 }

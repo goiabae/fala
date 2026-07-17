@@ -265,7 +265,7 @@ TEST(CompilerTest, let_expression) {
 		const char* b =
 			"    jump L000\n"
 			"L000:\n"
-			"    alloca %0, 1  ; creating variable \"x\"\n"
+			"    alloca %0, 1\n"
 			"    storea 3, 0(%0)\n"
 			"    loada %1, 0(%0)\n";
 		std::string a = std::string(b);
