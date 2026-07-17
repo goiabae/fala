@@ -52,21 +52,20 @@ struct SignalHandlers {
 	bool has_return_handler {false};
 };
 
+struct Context {
+	SignalHandlers handlers;
+	Env<Operand>::ScopeID scope_id;
+};
+
 struct Compiler {
 	Compiler(const AST& ast, const StringPool& pool, const Typechecker& tpc)
 	: ast(ast), pool(pool), tpc(tpc) {}
 
 	Chunk compile();
 
-	Result compile(
-		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-	);
-	Result compile_lvalue(
-		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-	);
-	Result compile_or_allocate_lvalue(
-		NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-	);
+	Result compile(NodeIndex node_idx, Context ctx);
+	Result compile_lvalue(NodeIndex node_idx, Context ctx);
+	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
 
 	const AST& ast;
 	const StringPool& pool;
@@ -87,11 +86,7 @@ struct Compiler {
 	vector<Chunk> functions;
 
 #define DECLARE_NODE_HANDLER(NAME) \
-	Result compile_##NAME(           \
-		NodeIndex node_idx,            \
-		SignalHandlers handlers,       \
-		Env<Operand>::ScopeID scope_id \
-	)
+	Result compile_##NAME(NodeIndex node_idx, Context ctx)
 
 	DECLARE_NODE_HANDLER(app);
 	DECLARE_NODE_HANDLER(if);

@@ -127,7 +127,12 @@ Chunk Compiler::compile() {
 	SignalHandlers handlers {};
 	auto scope_id = env.root_scope_id;
 
-	auto res_ = compile(ast.root_index, handlers, scope_id);
+	Context ctx {
+		.handlers = handlers,
+		.scope_id = scope_id,
+	};
+
+	auto res_ = compile(ast.root_index, ctx);
 	chunk = chunk + res_.code;
 
 	auto start = Operand::make_immediate_integer(dyn_alloc_start);
@@ -154,12 +159,10 @@ Operand Compiler::make_label() {
 	return lir::Operand(lir::Label(label_count++));
 }
 
-Result Compiler::compile_or_allocate_lvalue(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	if (node.type == NodeType::PATH) {
-		return compile_lvalue(node_idx, handlers, scope_id);
+		return compile_lvalue(node_idx, ctx);
 	} else {
 		bool is_array = false;
 		{
@@ -168,10 +171,10 @@ Result Compiler::compile_or_allocate_lvalue(
 			if (nullptr != std::dynamic_pointer_cast<Array>(t2)) is_array = true;
 		}
 		if (is_array) {
-			return compile(node_idx, handlers, scope_id);
+			return compile(node_idx, ctx);
 		} else {
 			Chunk chunk {};
-			auto res = compile(node_idx, handlers, scope_id);
+			auto res = compile(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto t1 = make_register();
@@ -182,9 +185,7 @@ Result Compiler::compile_or_allocate_lvalue(
 	}
 }
 
-Result Compiler::compile_app(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 
 	const auto& node = ast.at(node_idx);
@@ -195,7 +196,7 @@ Result Compiler::compile_app(
 
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
 		auto arg_idx = args_node[i];
-		auto res = compile_or_allocate_lvalue(arg_idx, handlers, scope_id);
+		auto res = compile_or_allocate_lvalue(arg_idx, ctx);
 		chunk = chunk + res.code;
 		args.push_back(res.opnd);
 	}
@@ -210,7 +211,7 @@ Result Compiler::compile_app(
 			return {chunk + result.code, result.opnd};
 		};
 
-	Operand* func_opnd = env.find(scope_id, func_node.str_id);
+	Operand* func_opnd = env.find(ctx.scope_id, func_node.str_id);
 	if (!func_opnd) err("Function not found");
 	if (func_opnd->type != Operand::Type::LABEL)
 		err("Type of <name> is not function.");
@@ -227,9 +228,7 @@ Result Compiler::compile_app(
 	return {chunk, res};
 }
 
-Result Compiler::compile_if(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -241,13 +240,13 @@ Result Compiler::compile_if(
 	Operand l2 = make_label();
 	Operand res = make_register();
 
-	auto cond_res = compile(cond_idx, handlers, scope_id);
+	auto cond_res = compile(cond_idx, ctx);
 	chunk = chunk + cond_res.code;
 	Operand cond_opnd = cond_res.opnd;
 
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1).with_comment("if branch");
 
-	auto yes_res = compile(then_idx, handlers, scope_id);
+	auto yes_res = compile(then_idx, ctx);
 	chunk = chunk + yes_res.code;
 	Operand yes_opnd = yes_res.opnd;
 
@@ -255,7 +254,7 @@ Result Compiler::compile_if(
 	chunk.emit(Opcode::JMP, l2);
 	chunk.add_label(l1);
 
-	auto no_res = compile(else_idx, handlers, scope_id);
+	auto no_res = compile(else_idx, ctx);
 	chunk = chunk + no_res.code;
 	Operand no_opnd = no_res.opnd;
 
@@ -265,9 +264,7 @@ Result Compiler::compile_if(
 	return {chunk, res};
 }
 
-Result Compiler::compile_for(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -288,15 +285,15 @@ Result Compiler::compile_for(
 	SignalHandlers new_handlers {
 		{inc.as_label(), result_register},
 		{end.as_label(), result_register},
-		handlers.return_handler,
+		ctx.handlers.return_handler,
 		true,
 		true,
-		handlers.has_return_handler
+		ctx.handlers.has_return_handler
 	};
 
 	Operand step = [&]() {
 		if (step_node.type != NodeType::EMPTY) {
-			auto step_res = compile(step_idx, handlers, scope_id);
+			auto step_res = compile(step_idx, ctx);
 			chunk = chunk + step_res.code;
 			return step_res.opnd;
 		} else {
@@ -304,13 +301,23 @@ Result Compiler::compile_for(
 		}
 	}();
 
-	auto new_scope_id = env.create_child_scope(scope_id);
+	auto new_scope_id = env.create_child_scope(ctx.scope_id);
 
-	auto var_res = compile(decl_idx, handlers, new_scope_id);
+	Context header_ctx {
+		.handlers = ctx.handlers,
+		.scope_id = new_scope_id,
+	};
+
+	Context body_ctx {
+		.handlers = new_handlers,
+		.scope_id = new_scope_id,
+	};
+
+	auto var_res = compile(decl_idx, header_ctx);
 	chunk = chunk + var_res.code;
 	Operand var = var_res.opnd;
 
-	auto to_res = compile(to_idx, handlers, new_scope_id);
+	auto to_res = compile(to_idx, header_ctx);
 	chunk = chunk + to_res.code;
 	Operand to = to_res.opnd;
 
@@ -322,7 +329,7 @@ Result Compiler::compile_for(
 	chunk.emit(Opcode::EQ, cmp, t1, to);
 	chunk.emit(Opcode::JMP_TRUE, cmp, end);
 
-	auto exp_res = compile(then_idx, new_handlers, new_scope_id);
+	auto exp_res = compile(then_idx, body_ctx);
 	chunk = chunk + exp_res.code;
 	Operand exp = exp_res.opnd;
 
@@ -337,9 +344,7 @@ Result Compiler::compile_for(
 	return {chunk, result_register};
 }
 
-Result Compiler::compile_when(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -349,14 +354,14 @@ Result Compiler::compile_when(
 	Operand l1 = make_label();
 	Operand res = make_register();
 
-	auto cond_res = compile(cond_idx, handlers, scope_id);
+	auto cond_res = compile(cond_idx, ctx);
 	chunk = chunk + cond_res.code;
 	Operand cond_opnd = cond_res.opnd;
 
 	chunk.emit(Opcode::MOV, res, {}).with_comment("when conditional");
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1);
 
-	auto yes_res = compile(then_idx, handlers, scope_id);
+	auto yes_res = compile(then_idx, ctx);
 	chunk = chunk + yes_res.code;
 	Operand yes_opnd = yes_res.opnd;
 
@@ -366,9 +371,7 @@ Result Compiler::compile_when(
 	return {chunk, res};
 }
 
-Result Compiler::compile_while(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -380,21 +383,26 @@ Result Compiler::compile_while(
 	SignalHandlers new_handlers {
 		{beg.as_label(), result_register},
 		{end.as_label(), result_register},
-		handlers.return_handler,
+		ctx.handlers.return_handler,
 		true,
 		true,
-		handlers.has_return_handler
+		ctx.handlers.has_return_handler
 	};
 
 	chunk.add_label(beg);
 
-	auto cond_res = compile(node[0], handlers, scope_id);
+	auto cond_res = compile(node[0], ctx);
 	chunk = chunk + cond_res.code;
 	Operand cond = cond_res.opnd;
 
 	chunk.emit(Opcode::JMP_FALSE, cond, end);
 
-	auto exp_res = compile(node[1], new_handlers, scope_id);
+	Context body_ctx {
+		.handlers = new_handlers,
+		.scope_id = ctx.scope_id,
+	};
+
+	auto exp_res = compile(node[1], body_ctx);
 	chunk = chunk + exp_res.code;
 	Operand exp = exp_res.opnd;
 
@@ -406,9 +414,7 @@ Result Compiler::compile_while(
 	return {chunk, result_register};
 }
 
-Result Compiler::compile_lvalue(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::EMPTY: assert(false);
@@ -432,10 +438,10 @@ Result Compiler::compile_lvalue(
 		case NodeType::AT: {
 			Chunk chunk {};
 			const auto& node = ast.at(node_idx);
-			auto base_res = compile_lvalue(node[0], handlers, scope_id);
+			auto base_res = compile_lvalue(node[0], ctx);
 			chunk = chunk + base_res.code;
 			auto base = base_res.opnd;
-			auto off_res = compile(node[1], handlers, scope_id);
+			auto off_res = compile(node[1], ctx);
 			chunk = chunk + off_res.code;
 			auto off = off_res.opnd;
 
@@ -453,7 +459,7 @@ Result Compiler::compile_lvalue(
 		case NodeType::NOT: assert(false);
 		case NodeType::ID: {
 			Chunk chunk {};
-			Operand* opnd = env.find(scope_id, node.str_id);
+			Operand* opnd = env.find(ctx.scope_id, node.str_id);
 			if (opnd == nullptr) {
 				fprintf(stderr, "%s ", pool.find(node.str_id));
 				err("Variable not found");
@@ -470,7 +476,7 @@ Result Compiler::compile_lvalue(
 		case NodeType::LET: assert(false);
 		case NodeType::CHAR: assert(false);
 		case NodeType::PATH: {
-			return compile_lvalue(node[0], handlers, scope_id);
+			return compile_lvalue(node[0], ctx);
 		}
 		case NodeType::AS: assert(false);
 		case NodeType::INSTANCE: assert(false);
@@ -479,9 +485,7 @@ Result Compiler::compile_lvalue(
 	assert(false);
 }
 
-Result Compiler::compile_var_decl(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -505,19 +509,19 @@ Result Compiler::compile_var_decl(
 	}
 
 	if (exp_node.type == NodeType::PATH) {
-		auto initial_res = compile_lvalue(exp_idx, handlers, scope_id);
+		auto initial_res = compile_lvalue(exp_idx, ctx);
 		chunk = chunk + initial_res.code;
 		auto initial = initial_res.opnd;
 		// FIXME: properly set register type
-		auto* var = env.insert(scope_id, id_node.str_id, make_register());
+		auto* var = env.insert(ctx.scope_id, id_node.str_id, make_register());
 		chunk.emit_clonea(*var, initial).with_comment(comment);
 		return {chunk, *var};
 	} else {
-		auto initial_res = compile(exp_idx, handlers, scope_id);
+		auto initial_res = compile(exp_idx, ctx);
 		chunk = chunk + initial_res.code;
 		auto initial = initial_res.opnd;
 		// FIXME: properly set register type
-		auto* var = env.insert(scope_id, id_node.str_id, make_register());
+		auto* var = env.insert(ctx.scope_id, id_node.str_id, make_register());
 		if (is_array) {
 			chunk.emit_mov(*var, initial);
 		} else {
@@ -529,9 +533,7 @@ Result Compiler::compile_var_decl(
 	}
 }
 
-Result Compiler::compile_fun_decl(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -545,11 +547,11 @@ Result Compiler::compile_fun_decl(
 
 	(void)opt_type_idx;
 
-	Operand* opnd = env.insert(scope_id, id_node.str_id, make_register());
+	Operand* opnd = env.insert(ctx.scope_id, id_node.str_id, make_register());
 
 	auto func_name = make_label();
 	*opnd = func_name;
-	auto new_scope_id = env.create_child_scope(scope_id);
+	auto new_scope_id = env.create_child_scope(ctx.scope_id);
 
 	Chunk func {};
 
@@ -563,7 +565,12 @@ Result Compiler::compile_fun_decl(
 		env.insert(new_scope_id, param_node.str_id, arg);
 	}
 
-	auto op_res = compile(body_idx, handlers, new_scope_id);
+	Context body_ctx {
+		.handlers = ctx.handlers,
+		.scope_id = new_scope_id,
+	};
+
+	auto op_res = compile(body_idx, body_ctx);
 	func = func + op_res.code;
 	auto op = op_res.opnd;
 
@@ -575,17 +582,15 @@ Result Compiler::compile_fun_decl(
 	return {chunk, func_name};
 }
 
-Result Compiler::compile_ass(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	auto cell_res = compile_lvalue(node[0], handlers, scope_id);
+	auto cell_res = compile_lvalue(node[0], ctx);
 	chunk = chunk + cell_res.code;
 	Operand cell = cell_res.opnd;
 
-	auto exp_res = compile(node[1], handlers, scope_id);
+	auto exp_res = compile(node[1], ctx);
 	chunk = chunk + exp_res.code;
 	Operand exp = exp_res.opnd;
 
@@ -595,9 +600,7 @@ Result Compiler::compile_ass(
 	return {chunk, exp};
 }
 
-Result Compiler::compile_let(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -607,21 +610,23 @@ Result Compiler::compile_let(
 	const auto& decls_node = ast.at(decls_idx);
 
 	{
-		auto new_scope_id = env.create_child_scope(scope_id);
+		auto new_scope_id = env.create_child_scope(ctx.scope_id);
+		Context exp_ctx {
+			.handlers = ctx.handlers,
+			.scope_id = new_scope_id,
+		};
 		for (size_t i = 0; i < decls_node.branch.children_count; i++) {
-			auto res = compile(decls_node[i], handlers, new_scope_id);
+			auto res = compile(decls_node[i], exp_ctx);
 			chunk = chunk + res.code;
 		}
-		auto res_res = compile(exp_idx, handlers, new_scope_id);
+		auto res_res = compile(exp_idx, exp_ctx);
 		chunk = chunk + res_res.code;
 		Operand res = res_res.opnd;
 		return {chunk, res};
 	}
 }
 
-Result Compiler::compile_str(
-	NodeIndex node_idx, SignalHandlers, Env<Operand>::ScopeID
-) {
+Result Compiler::compile_str(NodeIndex node_idx, Context) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
@@ -646,18 +651,16 @@ Result Compiler::compile_str(
 	return {chunk, t1};
 }
 
-Result Compiler::compile_at(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 	Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	// evaluates to a temporary register containing the address of the lvalue
 
-	auto base_res = compile(node[0], handlers, scope_id);
+	auto base_res = compile(node[0], ctx);
 	chunk = chunk + base_res.code;
 	Operand base = base_res.opnd;
-	auto off_res = compile(node[1], handlers, scope_id);
+	auto off_res = compile(node[1], ctx);
 	chunk = chunk + off_res.code;
 	Operand off = off_res.opnd;
 
@@ -678,11 +681,9 @@ Result Compiler::compile_at(
 }
 
 // FIXME: Temporary workaround
-#define COMPILE_WITH_HANDLER(METH) return METH(node_idx, handlers, scope_id);
+#define COMPILE_WITH_HANDLER(METH) return METH(node_idx, ctx);
 
-Result Compiler::compile(
-	NodeIndex node_idx, SignalHandlers handlers, Env<Operand>::ScopeID scope_id
-) {
+Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
@@ -694,10 +695,14 @@ Result Compiler::compile(
 		}
 		case NodeType::BLK: {
 			Chunk chunk {};
-			auto new_scope_id = env.create_child_scope(scope_id);
+			auto new_scope_id = env.create_child_scope(ctx.scope_id);
 			Operand opnd;
+			Context inner_ctx {
+				.handlers = ctx.handlers,
+				.scope_id = new_scope_id,
+			};
 			for (size_t i = 0; i < node.branch.children_count; i++) {
-				auto opnd_res = compile(node[i], handlers, new_scope_id);
+				auto opnd_res = compile(node[i], inner_ctx);
 				chunk = chunk + opnd_res.code;
 				opnd = opnd_res.opnd;
 			}
@@ -710,58 +715,62 @@ Result Compiler::compile(
 		case NodeType::WHILE: COMPILE_WITH_HANDLER(compile_while)
 		case NodeType::BREAK: {
 			Chunk chunk {};
-			if (!handlers.has_break_handler) err("Can't break outside of loops");
+			if (!ctx.handlers.has_break_handler) err("Can't break outside of loops");
 			if (!(node.branch.children_count == 1))
 				err("`break' requires a expression to evaluate the loop to");
 
-			auto res_res = compile(node[0], handlers, scope_id);
+			auto res_res = compile(node[0], ctx);
 			chunk = chunk + res_res.code;
 			Operand res = res_res.opnd;
-			chunk.emit(Opcode::MOV, handlers.break_handler.result_register, res);
+			chunk.emit(Opcode::MOV, ctx.handlers.break_handler.result_register, res);
 			chunk
 				.emit(
-					Opcode::JMP, lir::Operand(handlers.break_handler.destination_label)
+					Opcode::JMP,
+					lir::Operand(ctx.handlers.break_handler.destination_label)
 				)
 				.with_comment("break out of loop");
 			return {chunk, {}};
 		}
 		case NodeType::CONTINUE: {
 			Chunk chunk {};
-			if (!handlers.has_continue_handler)
+			if (!ctx.handlers.has_continue_handler)
 				err("can't continue outside of loops");
 			if (!(node.branch.children_count == 1))
 				err("continue requires a expression to evaluate the loop to");
 
-			auto res_res = compile(node[0], handlers, scope_id);
+			auto res_res = compile(node[0], ctx);
 			chunk = chunk + res_res.code;
 			Operand res = res_res.opnd;
-			chunk.emit(Opcode::MOV, handlers.continue_handler.result_register, res);
+			chunk.emit(
+				Opcode::MOV, ctx.handlers.continue_handler.result_register, res
+			);
 			chunk
 				.emit(
-					Opcode::JMP, lir::Operand(handlers.continue_handler.destination_label)
+					Opcode::JMP,
+					lir::Operand(ctx.handlers.continue_handler.destination_label)
 				)
 				.with_comment("continue to next iteration of loop");
 			return {chunk, {}};
 		}
 		case NodeType::ASS: COMPILE_WITH_HANDLER(compile_ass)
 
-#define BINARY_ARITH(OPCODE)                                  \
-	{                                                           \
-		Chunk chunk {};                                           \
-		auto left_node = node[0];                                 \
-		auto right_node = node[1];                                \
-                                                              \
-		auto left_res = compile(left_node, handlers, scope_id);   \
-		chunk = chunk + left_res.code;                            \
-		auto right_res = compile(right_node, handlers, scope_id); \
-		chunk = chunk + right_res.code;                           \
-		Operand left = left_res.opnd;                             \
-		Operand right = right_res.opnd;                           \
-		Operand res = make_register();                            \
-                                                              \
-		chunk.emit(OPCODE, res, left, right);                     \
-		chunk.result_opnd = res;                                  \
-		return {chunk, res};                                      \
+#define BINARY_ARITH(OPCODE)                   \
+	{                                            \
+		Chunk chunk {};                            \
+		auto left_node = node[0];                  \
+		auto right_node = node[1];                 \
+                                               \
+		auto left_res = compile(left_node, ctx);   \
+		chunk = chunk + left_res.code;             \
+		auto right_res = compile(right_node, ctx); \
+		chunk = chunk + right_res.code;            \
+		Operand left = left_res.opnd;              \
+		Operand right = right_res.opnd;            \
+		Operand res = make_register();             \
+                                               \
+		chunk.emit(OPCODE, res, left, right);      \
+		chunk.result_opnd = res;                   \
+		return {chunk, res};                       \
 	}
 
 		case NodeType::OR: BINARY_ARITH(Opcode::OR);
@@ -779,7 +788,7 @@ Result Compiler::compile(
 		case NodeType::NOT: {
 			Chunk chunk {};
 			Operand res = make_register();
-			auto inverse_res = compile(node[0], handlers, scope_id);
+			auto inverse_res = compile(node[0], ctx);
 			chunk = chunk + inverse_res.code;
 			Operand inverse = inverse_res.opnd;
 			chunk.emit(Opcode::NOT, res, inverse);
@@ -787,7 +796,7 @@ Result Compiler::compile(
 		}
 		case NodeType::AT: {
 			Chunk chunk {};
-			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			auto res = compile_lvalue(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
@@ -796,7 +805,7 @@ Result Compiler::compile(
 		}
 		case NodeType::ID: {
 			Chunk chunk {};
-			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			auto res = compile_lvalue(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
@@ -819,7 +828,7 @@ Result Compiler::compile(
 		}
 		case NodeType::PATH: {
 			Chunk chunk {};
-			auto res = compile_lvalue(node_idx, handlers, scope_id);
+			auto res = compile_lvalue(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
@@ -829,7 +838,7 @@ Result Compiler::compile(
 		}
 		case NodeType::INSTANCE:
 			assert(false && "used only in typechecking. should not be evaluated");
-		case NodeType::AS: return compile(node[0], handlers, scope_id);
+		case NodeType::AS: return compile(node[0], ctx);
 		case NodeType::METALIST: assert(false);
 	}
 	assert(false);
