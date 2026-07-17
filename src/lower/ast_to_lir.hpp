@@ -1,13 +1,6 @@
 #ifndef FALA_COMPILER_HPP
 #define FALA_COMPILER_HPP
 
-#include <stddef.h>
-#include <stdio.h>
-
-#include <stack>
-#include <string>
-#include <vector>
-
 #include "ast.hpp"
 #include "env.hpp"
 #include "lir/lir.hpp"
@@ -16,30 +9,14 @@
 
 namespace compiler {
 
-using std::stack;
-using std::string;
-using std::vector;
-
-using lir::Chunk;
-using lir::Operand;
-
 struct Result {
-	enum class Signal {
-		NOSIGNAL, // FIXME: remove this
-		BREAK,
-		CONTINUE,
-		RETURN,
-		EXCEPTION,
-	};
-	Chunk code;
-	Operand opnd;
-	Signal signal {Signal::NOSIGNAL};
-	bool has_signal {false};
+	lir::Chunk code;
+	lir::Operand opnd;
 };
 
 struct Handler {
 	lir::Label destination_label;
-	Operand result_register;
+	lir::Operand result_register;
 };
 
 // They are called handlers, but are really just labels
@@ -54,33 +31,19 @@ struct SignalHandlers {
 
 struct Context {
 	SignalHandlers handlers;
-	Env<Operand>::ScopeID scope_id;
+	Env<lir::Operand>::ScopeID scope_id;
 };
 
 struct Compiler {
 	Compiler(const AST& ast, const StringPool& pool, const Typechecker& tpc)
 	: ast(ast), pool(pool), tpc(tpc) {}
 
-	Chunk compile();
-
+	lir::Chunk compile();
 	Result compile(NodeIndex node_idx, Context ctx);
 	Result compile_lvalue(NodeIndex node_idx, Context ctx);
 	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
-
-	const AST& ast;
-	const StringPool& pool;
-	const Typechecker& tpc;
-
-	// these are monotonically increasing as the compiler goes on
-	size_t label_count {0};
-	size_t reg_count {0};
-
-	Operand make_register();
-	Operand make_label();
-
-	Env<Operand> env;
-
-	vector<Chunk> functions;
+	lir::Operand make_register();
+	lir::Operand make_label();
 
 #define DECLARE_NODE_HANDLER(NAME) \
 	Result compile_##NAME(NodeIndex node_idx, Context ctx)
@@ -96,8 +59,20 @@ struct Compiler {
 	DECLARE_NODE_HANDLER(ass);
 	DECLARE_NODE_HANDLER(str);
 	DECLARE_NODE_HANDLER(at);
+	DECLARE_NODE_HANDLER(block);
+	DECLARE_NODE_HANDLER(continue);
+	DECLARE_NODE_HANDLER(break);
 
 #undef DECLARE_NODE_HANDLER
+
+ public:
+	const AST& ast;
+	const StringPool& pool;
+	const Typechecker& tpc;
+	std::size_t label_count {0};
+	std::size_t reg_count {0};
+	Env<lir::Operand> env {};
+	vector<lir::Chunk> functions {};
 };
 
 } // namespace compiler

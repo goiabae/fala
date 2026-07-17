@@ -292,6 +292,7 @@ int Lexer::lex() {
 
 bool is_interactive(Lexer* lexer) { return lexer->file->is_interactive(); }
 
-Lexer::Lexer(Reader* file) : file {file}, ring {ring_init()} {}
+Lexer::Lexer(Reader* file)
+: file {file}, ring {ring_init()}, loc {nullptr}, value {nullptr} {}
 
 Lexer::~Lexer() { ring_deinit(&ring); }

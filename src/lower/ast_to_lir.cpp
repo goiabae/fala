@@ -6,8 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
+#include <ranges>
+#include <string_view>
 #include <vector>
 
 #include "ast.hpp"
@@ -29,16 +32,16 @@ void err(const char* msg) {
 }
 
 namespace builtin {
-static Result read_int(Compiler& comp, vector<Operand> args);
-static Result read_char(Compiler& comp, vector<Operand> args);
-static Result write_int(Compiler& comp, vector<Operand> args);
-static Result write_char(Compiler& comp, vector<Operand> args);
-static Result write_str(Compiler& comp, vector<Operand> args);
-static Result make_array(Compiler& comp, vector<Operand> args);
+static Result read_int(Compiler& comp, vector<lir::Operand> args);
+static Result read_char(Compiler& comp, vector<lir::Operand> args);
+static Result write_int(Compiler& comp, vector<lir::Operand> args);
+static Result write_char(Compiler& comp, vector<lir::Operand> args);
+static Result write_str(Compiler& comp, vector<lir::Operand> args);
+static Result make_array(Compiler& comp, vector<lir::Operand> args);
 
 struct Builtin {
-	Result (*ptr)(Compiler& comp, vector<Operand> args);
-	const char* name;
+	Result (*ptr)(Compiler& comp, vector<lir::Operand> args);
+	std::string_view name;
 };
 
 constexpr auto builtins = {
@@ -50,20 +53,20 @@ constexpr auto builtins = {
 	Builtin {make_array, "make_array"}
 };
 
-Result write_int(Compiler& comp, vector<Operand> args) {
+Result write_int(Compiler& comp, vector<lir::Operand> args) {
 	if (args.size() != 1)
 		err("write_int accepts only a single integer as argument");
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	auto t1 = comp.make_register();
 	chunk.emit_loada(t1, lir::Immediate(0), args[0]);
 	chunk.emit(Opcode::PRINTV, t1);
 	return {chunk, {}};
 }
 
-Result write_char(Compiler& comp, vector<Operand> args) {
+Result write_char(Compiler& comp, vector<lir::Operand> args) {
 	if (args.size() != 1)
 		err("write_int accepts only a single character as argument");
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	auto op = args[0];
 	auto t1 = comp.make_register();
 	chunk.emit_loada(t1, lir::Immediate(0), op);
@@ -71,36 +74,36 @@ Result write_char(Compiler& comp, vector<Operand> args) {
 	return {chunk, {}};
 }
 
-Result write_str(Compiler&, vector<Operand> args) {
+Result write_str(Compiler&, vector<lir::Operand> args) {
 	if (args.size() != 1)
 		err("write_str accepts only a single pointer to character as argument");
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	auto& op = args[0];
 	chunk.emit(Opcode::PRINTF, op);
 	return {chunk, {}};
 }
 
-Result read_int(Compiler& comp, vector<Operand>) {
-	Chunk chunk {};
-	Operand tmp = comp.make_register();
+Result read_int(Compiler& comp, vector<lir::Operand>) {
+	lir::Chunk chunk {};
+	lir::Operand tmp = comp.make_register();
 	chunk.emit(Opcode::READV, tmp);
 	return {chunk, tmp};
 }
 
-Result read_char(Compiler& comp, vector<Operand>) {
-	Chunk chunk {};
-	Operand tmp = comp.make_register();
+Result read_char(Compiler& comp, vector<lir::Operand>) {
+	lir::Chunk chunk {};
+	lir::Operand tmp = comp.make_register();
 	chunk.emit(Opcode::READC, tmp);
 	return {chunk, tmp};
 }
 
-Result make_array(Compiler& comp, vector<Operand> args) {
+Result make_array(Compiler& comp, vector<lir::Operand> args) {
 	if (args.size() != 1)
 		err("The `array' builtin expects a size as the first and only argument.");
 
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	auto addr =
-		Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
+		lir::Operand(Register(comp.reg_count++, lir::Type::make_integer_array()));
 	addr.as_register().is_lvalue_pointer = true;
 
 	auto t1 = comp.make_register();
@@ -111,9 +114,9 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 
 } // namespace builtin
 
-Chunk Compiler::compile() {
-	Chunk preamble {};
-	Chunk chunk;
+lir::Chunk Compiler::compile() {
+	lir::Chunk preamble {};
+	lir::Chunk chunk;
 
 	auto main = make_label();
 
@@ -132,21 +135,21 @@ Chunk Compiler::compile() {
 
 	preamble.emit(Opcode::JMP, main);
 
-	Chunk all_functions {};
+	lir::Chunk all_functions {};
 	for (const auto& f : functions) {
 		all_functions = all_functions + f;
 	}
 
-	Chunk res = preamble + all_functions + chunk;
+	lir::Chunk res = preamble + all_functions + chunk;
 
 	return res;
 }
 
-Operand Compiler::make_register() {
-	return Operand(Register(reg_count++, lir::Type::make_integer()));
+lir::Operand Compiler::make_register() {
+	return lir::Operand(Register(reg_count++, lir::Type::make_integer()));
 }
 
-Operand Compiler::make_label() {
+lir::Operand Compiler::make_label() {
 	return lir::Operand(lir::Label(label_count++));
 }
 
@@ -164,7 +167,7 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 		if (is_array) {
 			return compile(node_idx, ctx);
 		} else {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			auto res = compile(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
@@ -177,101 +180,97 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 
 	const auto& node = ast.at(node_idx);
 	const auto& func_node = ast.at(node[0]);
 	const auto& args_node = ast.at(node[1]);
 
-	vector<Operand> args {};
+	vector<lir::Operand> args {};
 
-	for (size_t i = 0; i < args_node.branch.children_count; i++) {
-		auto arg_idx = args_node[i];
-		auto res = compile_or_allocate_lvalue(arg_idx, ctx);
+	for (const auto arg_idx : args_node) {
+		const auto res = compile_or_allocate_lvalue(arg_idx, ctx);
 		chunk = chunk + res.code;
 		args.push_back(res.opnd);
 	}
 
-	const char* func_name = pool.find(func_node.str_id);
+	const auto func_name = std::string_view(pool.find(func_node.str_id));
+	constexpr auto get_name = [](const auto& x) { return x.name; };
 
-	// try to match function name with any builtin. otherwise, call it as a
-	// user-defined function
-	for (const auto& builtin : builtin::builtins)
-		if (strcmp(func_name, builtin.name) == 0) {
-			auto result = builtin.ptr(*this, args);
-			return {chunk + result.code, result.opnd};
-		};
+	if (const auto* builtin_ptr =
+	      std::ranges::find(builtin::builtins, func_name, get_name);
+	    builtin_ptr != std::end(builtin::builtins)) {
+		const auto& builtin = *builtin_ptr;
+		const auto result = builtin.ptr(*this, args);
+		chunk = chunk + result.code;
+		return {chunk, result.opnd};
+	} else {
+		const auto* func_opnd_ptr = env.find(ctx.scope_id, func_node.str_id);
+		const auto func_opnd = *func_opnd_ptr;
 
-	Operand* func_opnd = env.find(ctx.scope_id, func_node.str_id);
-	if (!func_opnd) err("Function not found");
-	if (func_opnd->type != Operand::Type::LABEL)
-		err("Type of <name> is not function.");
+		for (const auto& arg : std::ranges::reverse_view(args))
+			chunk.emit(Opcode::PUSH, arg);
 
-	// push arguments in the reverse order the parameters where declared
-	for (size_t i = args_node.branch.children_count; i > 0; i--)
-		chunk.emit(Opcode::PUSH, args[i - 1]);
+		chunk.emit(Opcode::CALL, func_opnd);
+		const auto res = make_register();
+		chunk.emit(Opcode::POP, res);
+		chunk.result_opnd = res;
 
-	chunk.emit(Opcode::CALL, *func_opnd);
-	Operand res = make_register();
-	chunk.emit(Opcode::POP, res);
-	chunk.result_opnd = res;
-
-	return {chunk, res};
+		return {chunk, res};
+	}
 }
 
 Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	auto cond_idx = node[0];
-	auto then_idx = node[1];
-	auto else_idx = node[2];
+	const auto cond_idx = node[0];
+	const auto then_idx = node[1];
+	const auto else_idx = node[2];
 
-	Operand l1 = make_label();
-	Operand l2 = make_label();
-	Operand res = make_register();
+	const auto res = make_register();
 
-	auto cond_res = compile(cond_idx, ctx);
-	chunk = chunk + cond_res.code;
-	Operand cond_opnd = cond_res.opnd;
+	const auto l1 = make_label();
+	const auto l2 = make_label();
 
-	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1).with_comment("if branch");
+	const auto r0 = compile(cond_idx, ctx);
+	chunk = chunk + r0.code;
 
-	auto yes_res = compile(then_idx, ctx);
-	chunk = chunk + yes_res.code;
-	Operand yes_opnd = yes_res.opnd;
+	chunk.emit(Opcode::JMP_FALSE, r0.opnd, l1).with_comment("if branch");
 
-	chunk.emit(Opcode::MOV, res, yes_opnd);
+	const auto r1 = compile(then_idx, ctx);
+	chunk = chunk + r1.code;
+
+	chunk.emit(Opcode::MOV, res, r1.opnd);
 	chunk.emit(Opcode::JMP, l2);
 	chunk.add_label(l1);
 
-	auto no_res = compile(else_idx, ctx);
-	chunk = chunk + no_res.code;
-	Operand no_opnd = no_res.opnd;
+	const auto r2 = compile(else_idx, ctx);
+	chunk = chunk + r2.code;
 
-	chunk.emit(Opcode::MOV, res, no_opnd);
+	chunk.emit(Opcode::MOV, res, r2.opnd);
 	chunk.add_label(l2);
 
 	return {chunk, res};
 }
 
 Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	auto decl_idx = node[0];
-	auto to_idx = node[1];
-	auto step_idx = node[2];
-	auto then_idx = node[3];
+	const auto decl_idx = node[0];
+	const auto to_idx = node[1];
+	const auto step_idx = node[2];
+	const auto then_idx = node[3];
 
 	const auto& step_node = ast.at(step_idx);
 
-	Operand beg = make_label();
-	Operand inc = make_label();
-	Operand end = make_label();
-	Operand cmp = make_register();
+	const auto beg = make_label();
+	const auto inc = make_label();
+	const auto end = make_label();
+	const auto cmp = make_register();
 
-	Operand result_register = make_register();
+	const auto result_register = make_register();
 
 	SignalHandlers new_handlers {
 		{inc.as_label(), result_register},
@@ -282,13 +281,13 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 		ctx.handlers.has_return_handler
 	};
 
-	Operand step = [&]() {
+	const auto step = [&]() -> lir::Operand {
 		if (step_node.type != NodeType::EMPTY) {
 			auto step_res = compile(step_idx, ctx);
 			chunk = chunk + step_res.code;
 			return step_res.opnd;
 		} else {
-			return lir::Operand(lir::Immediate(1));
+			return lir::Immediate(1);
 		}
 	}();
 
@@ -304,13 +303,13 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 		.scope_id = new_scope_id,
 	};
 
-	auto var_res = compile(decl_idx, header_ctx);
+	const auto var_res = compile(decl_idx, header_ctx);
 	chunk = chunk + var_res.code;
-	Operand var = var_res.opnd;
+	const auto var = var_res.opnd;
 
-	auto to_res = compile(to_idx, header_ctx);
+	const auto to_res = compile(to_idx, header_ctx);
 	chunk = chunk + to_res.code;
-	Operand to = to_res.opnd;
+	const auto to = to_res.opnd;
 
 	const auto t1 = make_register();
 	const auto t2 = make_register();
@@ -320,9 +319,9 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	chunk.emit(Opcode::EQ, cmp, t1, to);
 	chunk.emit(Opcode::JMP_TRUE, cmp, end);
 
-	auto exp_res = compile(then_idx, body_ctx);
+	const auto exp_res = compile(then_idx, body_ctx);
 	chunk = chunk + exp_res.code;
-	Operand exp = exp_res.opnd;
+	const auto exp = exp_res.opnd;
 
 	chunk.emit(Opcode::MOV, result_register, exp);
 
@@ -336,25 +335,25 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	auto cond_idx = node[0];
 	auto then_idx = node[1];
 
-	Operand l1 = make_label();
-	Operand res = make_register();
+	lir::Operand l1 = make_label();
+	lir::Operand res = make_register();
 
 	auto cond_res = compile(cond_idx, ctx);
 	chunk = chunk + cond_res.code;
-	Operand cond_opnd = cond_res.opnd;
+	lir::Operand cond_opnd = cond_res.opnd;
 
 	chunk.emit(Opcode::MOV, res, {}).with_comment("when conditional");
 	chunk.emit(Opcode::JMP_FALSE, cond_opnd, l1);
 
 	auto yes_res = compile(then_idx, ctx);
 	chunk = chunk + yes_res.code;
-	Operand yes_opnd = yes_res.opnd;
+	lir::Operand yes_opnd = yes_res.opnd;
 
 	chunk.emit(Opcode::MOV, res, yes_opnd);
 	chunk.add_label(l1);
@@ -363,13 +362,13 @@ Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
-	Operand beg = make_label();
-	Operand end = make_label();
+	lir::Operand beg = make_label();
+	lir::Operand end = make_label();
 
-	Operand result_register = make_register();
+	lir::Operand result_register = make_register();
 
 	SignalHandlers new_handlers {
 		{beg.as_label(), result_register},
@@ -384,7 +383,7 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 
 	auto cond_res = compile(node[0], ctx);
 	chunk = chunk + cond_res.code;
-	Operand cond = cond_res.opnd;
+	lir::Operand cond = cond_res.opnd;
 
 	chunk.emit(Opcode::JMP_FALSE, cond, end);
 
@@ -395,7 +394,7 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 
 	auto exp_res = compile(node[1], body_ctx);
 	chunk = chunk + exp_res.code;
-	Operand exp = exp_res.opnd;
+	lir::Operand exp = exp_res.opnd;
 
 	chunk.emit(Opcode::MOV, result_register, exp);
 
@@ -427,7 +426,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::LTE: assert(false);
 		case NodeType::EQ: assert(false);
 		case NodeType::AT: {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			const auto& node = ast.at(node_idx);
 			auto base_res = compile_lvalue(node[0], ctx);
 			chunk = chunk + base_res.code;
@@ -449,8 +448,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::MOD: assert(false);
 		case NodeType::NOT: assert(false);
 		case NodeType::ID: {
-			Chunk chunk {};
-			Operand* opnd = env.find(ctx.scope_id, node.str_id);
+			lir::Chunk chunk {};
+			lir::Operand* opnd = env.find(ctx.scope_id, node.str_id);
 			if (opnd == nullptr) {
 				fprintf(stderr, "%s ", pool.find(node.str_id));
 				err("Variable not found");
@@ -477,7 +476,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	auto id_idx = node[0];
@@ -524,7 +523,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	auto id_idx = node[0];
@@ -537,13 +536,14 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 
 	(void)opt_type_idx;
 
-	Operand* opnd = env.insert(ctx.scope_id, id_node.str_id, make_register());
+	lir::Operand* opnd =
+		env.insert(ctx.scope_id, id_node.str_id, make_register());
 
 	auto func_name = make_label();
 	*opnd = func_name;
 	auto new_scope_id = env.create_child_scope(ctx.scope_id);
 
-	Chunk func {};
+	lir::Chunk func {};
 
 	func.add_label(func_name);
 	func.emit(Opcode::FUNC);
@@ -573,16 +573,16 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	auto cell_res = compile_lvalue(node[0], ctx);
 	chunk = chunk + cell_res.code;
-	Operand cell = cell_res.opnd;
+	lir::Operand cell = cell_res.opnd;
 
 	auto exp_res = compile(node[1], ctx);
 	chunk = chunk + exp_res.code;
-	Operand exp = exp_res.opnd;
+	lir::Operand exp = exp_res.opnd;
 
 	chunk.emit_storea(exp, lir::Immediate(0), cell)
 		.with_comment("assigning to array variable");
@@ -591,7 +591,7 @@ Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	auto decls_idx = node[0];
@@ -611,13 +611,13 @@ Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
 		}
 		auto res_res = compile(exp_idx, exp_ctx);
 		chunk = chunk + res_res.code;
-		Operand res = res_res.opnd;
+		lir::Operand res = res_res.opnd;
 		return {chunk, res};
 	}
 }
 
 Result Compiler::compile_str(NodeIndex node_idx, Context) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	// allocates a static buffer for the string characters, ending in a
@@ -637,17 +637,17 @@ Result Compiler::compile_str(NodeIndex node_idx, Context) {
 }
 
 Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
-	Chunk chunk {};
+	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	// evaluates to a temporary register containing the address of the lvalue
 
 	auto base_res = compile(node[0], ctx);
 	chunk = chunk + base_res.code;
-	Operand base = base_res.opnd;
+	lir::Operand base = base_res.opnd;
 	auto off_res = compile(node[1], ctx);
 	chunk = chunk + off_res.code;
-	Operand off = off_res.opnd;
+	lir::Operand off = off_res.opnd;
 
 	auto is_array = false;
 	const auto t1 = tpc.node_to_type.at(node[0]);
@@ -657,91 +657,93 @@ Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 	}
 	if (not is_array) err("Base must be an lvalue");
 
-	Operand tmp = make_register();
+	lir::Operand tmp = make_register();
 	tmp.as_register().is_lvalue_pointer = true;
 	chunk.emit(Opcode::ADD, tmp, base, off)
 		.with_comment("accessing allocated array");
 
-	return {chunk, Operand(tmp)};
+	return {chunk, lir::Operand(tmp)};
 }
 
 // FIXME: Temporary workaround
 #define COMPILE_WITH_HANDLER(METH) return METH(node_idx, ctx);
+
+Result Compiler::compile_block(NodeIndex node_idx, Context ctx) {
+	const auto& node = ast.at(node_idx);
+	lir::Chunk chunk {};
+	auto new_scope_id = env.create_child_scope(ctx.scope_id);
+	lir::Operand opnd;
+	Context inner_ctx {
+		.handlers = ctx.handlers,
+		.scope_id = new_scope_id,
+	};
+	for (size_t i = 0; i < node.branch.children_count; i++) {
+		auto opnd_res = compile(node[i], inner_ctx);
+		chunk = chunk + opnd_res.code;
+		opnd = opnd_res.opnd;
+	}
+
+	return {chunk, opnd};
+}
+
+Result Compiler::compile_break(NodeIndex node_idx, Context ctx) {
+	if (not ctx.handlers.has_break_handler)
+		throw std::runtime_error("Can't break outside of loops");
+
+	const auto res = ctx.handlers.break_handler.result_register;
+	const auto dest = ctx.handlers.break_handler.destination_label;
+
+	const auto& node = ast.at(node_idx);
+	assert(node.branch.children_count == 1);
+
+	lir::Chunk chunk {};
+	const auto r0 = compile(node[0], ctx);
+	chunk = chunk + r0.code;
+	chunk.emit(Opcode::MOV, res, r0.opnd);
+	chunk.emit(Opcode::JMP, dest);
+	return {chunk, {}};
+}
+
+Result Compiler::compile_continue(NodeIndex node_idx, Context ctx) {
+	if (not ctx.handlers.has_continue_handler)
+		throw std::runtime_error("can't continue outside of loops");
+
+	const auto res = ctx.handlers.continue_handler.result_register;
+	const auto dest = ctx.handlers.continue_handler.destination_label;
+
+	const auto& node = ast.at(node_idx);
+	assert(node.branch.children_count == 1);
+
+	lir::Chunk chunk {};
+	const auto r0 = compile(node[0], ctx);
+	chunk = chunk + r0.code;
+	chunk.emit(Opcode::MOV, res, r0.opnd);
+	chunk.emit(Opcode::JMP, dest);
+	return {chunk, {}};
+}
 
 Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
 		case NodeType::NUM: {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			auto opnd = lir::Immediate(node.num);
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}
-		case NodeType::BLK: {
-			Chunk chunk {};
-			auto new_scope_id = env.create_child_scope(ctx.scope_id);
-			Operand opnd;
-			Context inner_ctx {
-				.handlers = ctx.handlers,
-				.scope_id = new_scope_id,
-			};
-			for (size_t i = 0; i < node.branch.children_count; i++) {
-				auto opnd_res = compile(node[i], inner_ctx);
-				chunk = chunk + opnd_res.code;
-				opnd = opnd_res.opnd;
-			}
-
-			return {chunk, opnd};
-		}
+		case NodeType::BLK: COMPILE_WITH_HANDLER(compile_block)
 		case NodeType::IF: COMPILE_WITH_HANDLER(compile_if)
 		case NodeType::WHEN: COMPILE_WITH_HANDLER(compile_when)
 		case NodeType::FOR: COMPILE_WITH_HANDLER(compile_for)
 		case NodeType::WHILE: COMPILE_WITH_HANDLER(compile_while)
-		case NodeType::BREAK: {
-			Chunk chunk {};
-			if (!ctx.handlers.has_break_handler) err("Can't break outside of loops");
-			if (!(node.branch.children_count == 1))
-				err("`break' requires a expression to evaluate the loop to");
-
-			auto res_res = compile(node[0], ctx);
-			chunk = chunk + res_res.code;
-			Operand res = res_res.opnd;
-			chunk.emit(Opcode::MOV, ctx.handlers.break_handler.result_register, res);
-			chunk
-				.emit(
-					Opcode::JMP,
-					lir::Operand(ctx.handlers.break_handler.destination_label)
-				)
-				.with_comment("break out of loop");
-			return {chunk, {}};
-		}
-		case NodeType::CONTINUE: {
-			Chunk chunk {};
-			if (!ctx.handlers.has_continue_handler)
-				err("can't continue outside of loops");
-			if (!(node.branch.children_count == 1))
-				err("continue requires a expression to evaluate the loop to");
-
-			auto res_res = compile(node[0], ctx);
-			chunk = chunk + res_res.code;
-			Operand res = res_res.opnd;
-			chunk.emit(
-				Opcode::MOV, ctx.handlers.continue_handler.result_register, res
-			);
-			chunk
-				.emit(
-					Opcode::JMP,
-					lir::Operand(ctx.handlers.continue_handler.destination_label)
-				)
-				.with_comment("continue to next iteration of loop");
-			return {chunk, {}};
-		}
+		case NodeType::BREAK: COMPILE_WITH_HANDLER(compile_break)
+		case NodeType::CONTINUE: COMPILE_WITH_HANDLER(compile_continue)
 		case NodeType::ASS: COMPILE_WITH_HANDLER(compile_ass)
 
 #define BINARY_ARITH(OPCODE)                   \
 	{                                            \
-		Chunk chunk {};                            \
+		lir::Chunk chunk {};                       \
 		auto left_node = node[0];                  \
 		auto right_node = node[1];                 \
                                                \
@@ -749,9 +751,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		chunk = chunk + left_res.code;             \
 		auto right_res = compile(right_node, ctx); \
 		chunk = chunk + right_res.code;            \
-		Operand left = left_res.opnd;              \
-		Operand right = right_res.opnd;            \
-		Operand res = make_register();             \
+		lir::Operand left = left_res.opnd;         \
+		lir::Operand right = right_res.opnd;       \
+		lir::Operand res = make_register();        \
                                                \
 		chunk.emit(OPCODE, res, left, right);      \
 		chunk.result_opnd = res;                   \
@@ -771,16 +773,16 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::DIV: BINARY_ARITH(Opcode::DIV);
 		case NodeType::MOD: BINARY_ARITH(Opcode::MOD);
 		case NodeType::NOT: {
-			Chunk chunk {};
-			Operand res = make_register();
+			lir::Chunk chunk {};
+			lir::Operand res = make_register();
 			auto inverse_res = compile(node[0], ctx);
 			chunk = chunk + inverse_res.code;
-			Operand inverse = inverse_res.opnd;
+			lir::Operand inverse = inverse_res.opnd;
 			chunk.emit(Opcode::NOT, res, inverse);
 			return {chunk, res};
 		}
 		case NodeType::AT: {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			auto res = compile_lvalue(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
@@ -789,7 +791,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			return {chunk, tmp};
 		}
 		case NodeType::ID: {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			auto res = compile_lvalue(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
@@ -806,13 +808,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			auto opnd = lir::Immediate(node.character);
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}
 		case NodeType::PATH: {
-			Chunk chunk {};
+			lir::Chunk chunk {};
 			auto res = compile_lvalue(node_idx, ctx);
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
@@ -821,8 +823,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.result_opnd = tmp;
 			return {chunk, tmp};
 		}
-		case NodeType::INSTANCE:
-			assert(false && "used only in typechecking. should not be evaluated");
+		case NodeType::INSTANCE: assert(false);
 		case NodeType::AS: return compile(node[0], ctx);
 		case NodeType::METALIST: assert(false);
 	}
