@@ -55,7 +55,7 @@ Result write_int(Compiler& comp, vector<Operand> args) {
 		err("write_int accepts only a single integer as argument");
 	Chunk chunk {};
 	auto t1 = comp.make_register();
-	chunk.emit_loada(t1, Operand::make_immediate_integer(0), args[0]);
+	chunk.emit_loada(t1, lir::Immediate(0), args[0]);
 	chunk.emit(Opcode::PRINTV, t1);
 	return {chunk, {}};
 }
@@ -66,7 +66,7 @@ Result write_char(Compiler& comp, vector<Operand> args) {
 	Chunk chunk {};
 	auto op = args[0];
 	auto t1 = comp.make_register();
-	chunk.emit_loada(t1, Operand::make_immediate_integer(0), op);
+	chunk.emit_loada(t1, lir::Immediate(0), op);
 	chunk.emit(Opcode::PRINTC, t1);
 	return {chunk, {}};
 }
@@ -104,7 +104,7 @@ Result make_array(Compiler& comp, vector<Operand> args) {
 	addr.as_register().is_lvalue_pointer = true;
 
 	auto t1 = comp.make_register();
-	chunk.emit_loada(t1, Operand::make_immediate_integer(0), args[0]);
+	chunk.emit_loada(t1, lir::Immediate(0), args[0]);
 	chunk.emit_alloca(addr, t1).with_comment("allocating array");
 	return {chunk, addr};
 }
@@ -169,8 +169,8 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto t1 = make_register();
-			chunk.emit_alloca(t1, Operand::make_immediate_integer(1));
-			chunk.emit_storea(res_opnd, Operand::make_immediate_integer(0), t1);
+			chunk.emit_alloca(t1, lir::Immediate(1));
+			chunk.emit_storea(res_opnd, lir::Immediate(0), t1);
 			return {chunk, t1};
 		}
 	}
@@ -288,7 +288,7 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 			chunk = chunk + step_res.code;
 			return step_res.opnd;
 		} else {
-			return Operand::make_immediate_integer(1);
+			return lir::Operand(lir::Immediate(1));
 		}
 	}();
 
@@ -316,7 +316,7 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	const auto t2 = make_register();
 
 	chunk.add_label(beg);
-	chunk.emit_loada(t1, Operand::make_immediate_integer(0), var);
+	chunk.emit_loada(t1, lir::Immediate(0), var);
 	chunk.emit(Opcode::EQ, cmp, t1, to);
 	chunk.emit(Opcode::JMP_TRUE, cmp, end);
 
@@ -328,7 +328,7 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 
 	chunk.add_label(inc);
 	chunk.emit(Opcode::ADD, t2, t1, step);
-	chunk.emit_storea(t2, Operand::make_immediate_integer(0), var);
+	chunk.emit_storea(t2, lir::Immediate(0), var);
 	chunk.emit(Opcode::JMP, beg);
 	chunk.add_label(end);
 
@@ -516,9 +516,8 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		if (is_array) {
 			chunk.emit_mov(*var, initial);
 		} else {
-			chunk.emit_alloca(*var, Operand::make_immediate_integer(1))
-				.with_comment(comment);
-			chunk.emit_storea(initial, Operand::make_immediate_integer(0), *var);
+			chunk.emit_alloca(*var, lir::Immediate(1)).with_comment(comment);
+			chunk.emit_storea(initial, lir::Immediate(0), *var);
 		}
 		return {chunk, *var};
 	}
@@ -585,7 +584,7 @@ Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
 	chunk = chunk + exp_res.code;
 	Operand exp = exp_res.opnd;
 
-	chunk.emit_storea(exp, Operand::make_immediate_integer(0), cell)
+	chunk.emit_storea(exp, lir::Immediate(0), cell)
 		.with_comment("assigning to array variable");
 
 	return {chunk, exp};
@@ -628,13 +627,9 @@ Result Compiler::compile_str(NodeIndex node_idx, Context) {
 	auto str_len = strlen(str);
 
 	auto t1 = make_register();
-	chunk.emit_alloca(t1, Operand::make_immediate_integer((int)str_len));
+	chunk.emit_alloca(t1, lir::Immediate((int)str_len));
 	for (size_t i = 0; i < str_len; i++) {
-		chunk.emit_storea(
-			Operand::make_immediate_integer(str[i]),
-			Operand::make_immediate_integer((int)i),
-			t1
-		);
+		chunk.emit_storea(lir::Immediate(str[i]), lir::Immediate((int)i), t1);
 	}
 
 	chunk.result_opnd = t1;
@@ -679,7 +674,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
 		case NodeType::NUM: {
 			Chunk chunk {};
-			auto opnd = Operand::make_immediate_integer(node.num);
+			auto opnd = lir::Immediate(node.num);
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}
@@ -790,7 +785,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
-			chunk.emit_loada(tmp, Operand::make_immediate_integer(0), res_opnd);
+			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
 			return {chunk, tmp};
 		}
 		case NodeType::ID: {
@@ -799,20 +794,20 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
-			chunk.emit_loada(tmp, Operand::make_immediate_integer(0), res_opnd);
+			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
 			return {chunk, tmp};
 		}
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
 		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
-		case NodeType::NIL: return {{}, Operand::make_immediate_integer(0)};
-		case NodeType::TRUE: return {{}, lir::Operand::make_immediate_integer(1)};
-		case NodeType::FALSE: return {{}, lir::Operand::make_immediate_integer(0)};
+		case NodeType::NIL: return {{}, lir::Immediate(0)};
+		case NodeType::TRUE: return {{}, lir::Immediate(1)};
+		case NodeType::FALSE: return {{}, lir::Immediate(0)};
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: {
 			Chunk chunk {};
-			auto opnd = lir::Operand::make_immediate_integer(node.character);
+			auto opnd = lir::Immediate(node.character);
 			chunk.result_opnd = opnd;
 			return {chunk, opnd};
 		}
@@ -822,7 +817,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk = chunk + res.code;
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
-			chunk.emit_loada(tmp, Operand::make_immediate_integer(0), res_opnd);
+			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
 			chunk.result_opnd = tmp;
 			return {chunk, tmp};
 		}

@@ -110,9 +110,10 @@ struct Operand {
 	std::variant<Register, Label, Immediate, Function> data;
 
 	Operand() : type {Type::NOTHING}, data {Immediate {0}} {}
-	explicit Operand(Register reg) : type(Type::REGISTER), data {reg} {}
-	explicit Operand(Label lab) : type(Type::LABEL), data {lab} {}
-	explicit Operand(Function fun) : type(Type::FUN), data {fun} {}
+	Operand(Register reg) : type(Type::REGISTER), data {reg} {}
+	Operand(Label lab) : type(Type::LABEL), data {lab} {}
+	Operand(Function fun) : type(Type::FUN), data {fun} {}
+	Operand(Immediate imm) : type(Type::IMMEDIATE), data(imm) {}
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
@@ -121,8 +122,6 @@ struct Operand {
 	const Label& as_label() const { return std::get<Label>(data); }
 	const Register& as_register() const { return std::get<Register>(data); }
 	const Immediate& as_immediate() const { return std::get<Immediate>(data); }
-
-	static auto make_immediate_integer(int integer) -> Operand;
 };
 
 struct Instruction {

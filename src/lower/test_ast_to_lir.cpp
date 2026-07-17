@@ -139,16 +139,16 @@ TEST(LIRTest, emit_binop) {
 	chunk.emit_binop(
 		BinaryOperator::PLUS,
 		lir::Operand(lir::Register(1, lir::Type::make_integer())),
-		lir::Operand::make_immediate_integer(1),
-		lir::Operand::make_immediate_integer(1)
+		lir::Immediate(1),
+		lir::Immediate(1)
 	);
 	EXPECT_EQ(chunk.m_vec.size(), 1);
 	lir::Chunk expected {};
 	lir::Instruction i {};
 	i.opcode = lir::Opcode::ADD;
 	i.operands[0] = lir::Operand(lir::Register(1, lir::Type::make_integer()));
-	i.operands[1] = lir::Operand::make_immediate_integer(1);
-	i.operands[2] = lir::Operand::make_immediate_integer(1);
+	i.operands[1] = lir::Immediate(1);
+	i.operands[2] = lir::Immediate(1);
 	expected.m_vec.push_back(i);
 	EXPECT_TRUE(chunk == expected);
 }
@@ -157,15 +157,14 @@ TEST(LIRTest, emit_mov) {
 	lir::Chunk chunk {};
 	EXPECT_EQ(chunk.m_vec.size(), 0);
 	chunk.emit_mov(
-		lir::Operand(lir::Register(1, lir::Type::make_integer())),
-		lir::Operand::make_immediate_integer(1)
+		lir::Operand(lir::Register(1, lir::Type::make_integer())), lir::Immediate(1)
 	);
 	EXPECT_EQ(chunk.m_vec.size(), 1);
 	lir::Chunk expected {};
 	lir::Instruction i {};
 	i.opcode = lir::Opcode::MOV;
 	i.operands[0] = lir::Operand(lir::Register(1, lir::Type::make_integer()));
-	i.operands[1] = lir::Operand::make_immediate_integer(1);
+	i.operands[1] = lir::Immediate(1);
 	expected.m_vec.push_back(i);
 	EXPECT_TRUE(chunk == expected);
 }
@@ -213,8 +212,8 @@ TEST(CompilerTest, add_integers) {
 	{
 		const auto r0 = make_int_reg(0);
 		const auto l0 = lir::Operand(lir::Label(0));
-		const auto c_one = lir::Operand::make_immediate_integer(1);
-		const auto c_two = lir::Operand::make_immediate_integer(2);
+		const auto c_one = lir::Immediate(1);
+		const auto c_two = lir::Immediate(2);
 		expected //
 			.emit_jmp(l0)
 			.add_label(l0)
@@ -250,13 +249,11 @@ TEST(CompilerTest, let_expression) {
 	const auto chunk = comp.compile();
 	lir::Chunk expected {};
 	{
-		const auto hp = lir::Operand::make_immediate_integer(2047);
+		const auto hp = lir::Immediate(2047);
 		const auto r0 = make_int_reg(0);
 		const auto r1 = make_int_reg(1);
 		const auto l0 = lir::Operand(lir::Label(0));
-		const auto c_one = lir::Operand::make_immediate_integer(1);
-		const auto c_two = lir::Operand::make_immediate_integer(2);
-		const auto c_three = lir::Operand::make_immediate_integer(3);
+		const auto c_three = lir::Immediate(3);
 		expected
 			.emit_mov(r0, hp) //
 			.emit_jmp(l0)

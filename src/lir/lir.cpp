@@ -129,13 +129,6 @@ std::ostream& operator<<(std::ostream& st, const Chunk& chunk) {
 	return st;
 }
 
-auto Operand::make_immediate_integer(int integer) -> Operand {
-	Operand opnd;
-	opnd.type = Operand::Type::IMMEDIATE;
-	opnd.data.emplace<Immediate>(integer);
-	return opnd;
-}
-
 int print_operand(FILE* fd, Operand opnd) {
 	switch (opnd.type) {
 		case Operand::Type::NOTHING: return fprintf(fd, "0");

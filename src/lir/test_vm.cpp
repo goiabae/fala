@@ -26,7 +26,7 @@ TEST(VMTest, move_immediate) {
 	auto a = make_integer_register(0);
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
+	chunk.emit(lir::Opcode::MOV, a, lir::Immediate(69));
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -43,7 +43,7 @@ TEST(VMTest, move_integer_register) {
 	auto b = make_integer_register(1);
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(69));
+	chunk.emit(lir::Opcode::MOV, a, lir::Immediate(69));
 	chunk.emit(lir::Opcode::MOV, b, a);
 
 	std::istringstream input {""};
@@ -62,9 +62,9 @@ TEST(VMTest, arithmetic) {
 	auto c = make_integer_register(2);
 
 	lir::Chunk chunk {};
-	chunk.emit(lir::Opcode::MOV, a, lir::Operand::make_immediate_integer(3));
-	chunk.emit(lir::Opcode::MOV, b, lir::Operand::make_immediate_integer(4));
-	chunk.emit(lir::Opcode::MOV, c, lir::Operand::make_immediate_integer(5));
+	chunk.emit(lir::Opcode::MOV, a, lir::Immediate(3));
+	chunk.emit(lir::Opcode::MOV, b, lir::Immediate(4));
+	chunk.emit(lir::Opcode::MOV, c, lir::Immediate(5));
 	chunk.emit(lir::Opcode::ADD, a, b, c);
 	chunk.emit(lir::Opcode::MUL, c, a, b);
 
@@ -79,7 +79,7 @@ TEST(VMTest, arithmetic) {
 }
 
 TEST(VMTest, push_immediate) {
-	auto a = lir::Operand::make_immediate_integer(69);
+	auto a = lir::Immediate(69);
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PUSH, a);
@@ -95,9 +95,9 @@ TEST(VMTest, push_immediate) {
 }
 
 TEST(VMTest, heap_allocation) {
-	auto _1 = lir::Operand::make_immediate_integer(1);
-	auto _69 = lir::Operand::make_immediate_integer(69);
-	auto _0 = lir::Operand::make_immediate_integer(0);
+	auto _1 = lir::Immediate(1);
+	auto _69 = lir::Immediate(69);
+	auto _0 = lir::Immediate(0);
 
 	auto r1 = make_integer_register(1);
 	auto r2 = make_integer_register(2);
@@ -142,9 +142,9 @@ TEST(VMTest, function_call) {
 	//     call L001
 	//     pop %4
 
-	auto heap_start = lir::Operand::make_immediate_integer(2047);
-	auto imm_one = lir::Operand::make_immediate_integer(1);
-	auto imm_three = lir::Operand::make_immediate_integer(3);
+	auto heap_start = lir::Immediate(2047);
+	auto imm_one = lir::Immediate(1);
+	auto imm_three = lir::Immediate(3);
 
 	auto l0 = lir::Operand(lir::Label {0});
 	auto l1 = lir::Operand(lir::Label {1});
@@ -219,10 +219,10 @@ TEST(VMTest, function_integer_out_parameter) {
 
 	// Should evaluate to 4
 
-	auto heap_start = lir::Operand::make_immediate_integer(2047);
-	auto imm_zero = lir::Operand::make_immediate_integer(0);
-	auto imm_one = lir::Operand::make_immediate_integer(1);
-	auto imm_three = lir::Operand::make_immediate_integer(3);
+	auto heap_start = lir::Immediate(2047);
+	auto imm_zero = lir::Immediate(0);
+	auto imm_one = lir::Immediate(1);
+	auto imm_three = lir::Immediate(3);
 
 	auto l0 = lir::Operand(lir::Label {0});
 	auto l1 = lir::Operand(lir::Label {1});
@@ -319,13 +319,12 @@ TEST(VMTest, function_integer_array_out_parameter) {
 
 	// Should evaluate to 70 (stored in %8)
 
-	auto heap_start = lir::Operand::make_immediate_integer(2047);
-	auto imm_zero = lir::Operand::make_immediate_integer(0);
-	auto imm_one = lir::Operand::make_immediate_integer(1);
-	auto imm_three = lir::Operand::make_immediate_integer(3);
-	auto imm_svtn = lir::Operand::make_immediate_integer(17);
-	auto imm_ttwo = lir::Operand::make_immediate_integer(32);
-	auto imm_snine = lir::Operand::make_immediate_integer(69);
+	auto heap_start = lir::Immediate(2047);
+	auto imm_zero = lir::Immediate(0);
+	auto imm_one = lir::Immediate(1);
+	auto imm_svtn = lir::Immediate(17);
+	auto imm_ttwo = lir::Immediate(32);
+	auto imm_snine = lir::Immediate(69);
 
 	auto l0 = lir::Operand(lir::Label {0});
 	auto l1 = lir::Operand(lir::Label {1});
@@ -390,8 +389,8 @@ TEST(VMTest, function_integer_array_out_parameter) {
 }
 
 TEST(VMTest, io_operations) {
-	const auto _69 = lir::Operand::make_immediate_integer(69);
-	const auto _A = lir::Operand::make_immediate_integer('A');
+	const auto _69 = lir::Immediate(69);
+	const auto _A = lir::Immediate('A');
 
 	const auto r1 =
 		lir::Operand(lir::Register(1, lir::Type::make_integer_array()));
@@ -401,22 +400,10 @@ TEST(VMTest, io_operations) {
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PRINTV, _69);
 	chunk.emit(lir::Opcode::PRINTC, _A);
-	chunk.emit_alloca(r1, lir::Operand::make_immediate_integer(3));
-	chunk.emit_storea(
-		lir::Operand::make_immediate_integer('f'),
-		lir::Operand::make_immediate_integer(0),
-		r1
-	);
-	chunk.emit_storea(
-		lir::Operand::make_immediate_integer('o'),
-		lir::Operand::make_immediate_integer(1),
-		r1
-	);
-	chunk.emit_storea(
-		lir::Operand::make_immediate_integer('o'),
-		lir::Operand::make_immediate_integer(2),
-		r1
-	);
+	chunk.emit_alloca(r1, lir::Immediate(3));
+	chunk.emit_storea(lir::Immediate('f'), lir::Immediate(0), r1);
+	chunk.emit_storea(lir::Immediate('o'), lir::Immediate(1), r1);
+	chunk.emit_storea(lir::Immediate('o'), lir::Immediate(2), r1);
 	chunk.emit(lir::Opcode::PRINTF, r1);
 	chunk.emit(lir::Opcode::READV, r2);
 	chunk.emit(lir::Opcode::PRINTV, r2);
