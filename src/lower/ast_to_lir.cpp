@@ -149,9 +149,7 @@ lir::Operand Compiler::make_register() {
 	return lir::Operand(Register(reg_count++, lir::Type::make_integer()));
 }
 
-lir::Operand Compiler::make_label() {
-	return lir::Operand(lir::Label(label_count++));
-}
+lir::Label Compiler::make_label() { return lir::Label(label_count++); }
 
 Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
@@ -273,8 +271,8 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	const auto result_register = make_register();
 
 	SignalHandlers new_handlers {
-		{inc.as_label(), result_register},
-		{end.as_label(), result_register},
+		{inc, result_register},
+		{end, result_register},
 		ctx.handlers.return_handler,
 		true,
 		true,

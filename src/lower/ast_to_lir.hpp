@@ -43,7 +43,7 @@ struct Compiler {
 	Result compile_lvalue(NodeIndex node_idx, Context ctx);
 	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
 	lir::Operand make_register();
-	lir::Operand make_label();
+	lir::Label make_label();
 
 #define DECLARE_NODE_HANDLER(NAME) \
 	Result compile_##NAME(NodeIndex node_idx, Context ctx)
