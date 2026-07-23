@@ -32,23 +32,29 @@ fail() {
 }
 
 interpret() {
-	test=$1
+	testname="$1"
 	inter="$2"
 	file="$3"
-	if [ -f ./test/$test.sh ]; then
-		sh ./test/$test.sh > $tmp/$test.in
-	elif [ -f ./test/$test.c ]; then
-		cc -o $tmp/$test ./test/$test.c
-		$tmp/$test $tmp/$test.in $tmp/$test.expected
+	if [ -f ./test/$testname.sh ]; then
+		sh ./test/$testname.sh > $tmp/$testname.in
+	elif [ -f ./test/$testname.c ]; then
+		cc -o $tmp/$testname ./test/$testname.c
+		$tmp/$testname $tmp/$testname.in $tmp/$testname.expected
 	else
-		touch $tmp/$test.in
+		touch $tmp/$testname.in
 	fi
-	test "INTERPRETED ${test}"
-	timeout 10s $inter -i $file < $tmp/$test.in > $tmp/$test.actual
-	compare $test
-	test "INTERPRETED(walk) ${test}"
-	timeout 10s $inter -i -b walk $file < $tmp/$test.in > $tmp/$test.actual
-	compare $test
+	test "INTERPRETED(lir) ${testname}"
+	timeout 10s $inter -i $file < $tmp/$testname.in > $tmp/$testname.actual
+	if [ $? -ne 0 ]; then
+		fail $testname out
+	fi
+	compare $testname
+	test "INTERPRETED(walk) ${testname}"
+	timeout 10s $inter -i -b walk $file < $tmp/$testname.in > $tmp/$testname.actual
+	if [ $? -ne 0 ]; then
+		fail $testname out
+	fi
+	compare $testname
 }
 
 compare() {
