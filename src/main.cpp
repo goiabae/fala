@@ -97,6 +97,7 @@ int interpret(Options opts) {
 				vm.run(chunk);
 			} catch (std::exception& exn) {
 				std::cerr << "ERROR: " << exn.what() << '\n';
+				return 1;
 			}
 		} else {
 			std::cerr << "Backend can't be used for interpreting" << '\n';
