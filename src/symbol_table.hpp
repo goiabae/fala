@@ -29,6 +29,7 @@ class SymbolTable {
 	std::optional<ScopeIndex> declaration_scope_of(Guid) const;
 	std::vector<Guid> symbols_in(ScopeIndex) const;
 	Guid define_builtin(StrID);
+	std::vector<Guid> all_symbols() const;
 
  public:
 	static constexpr ScopeIndex builtin_scope {.index = 0};

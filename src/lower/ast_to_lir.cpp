@@ -116,6 +116,7 @@ Result make_array(Compiler& comp, vector<lir::Operand> args) {
 } // namespace builtin
 
 lir::Chunk Compiler::compile() {
+	allocate_variables();
 	lir::Chunk preamble {};
 	lir::Chunk chunk;
 
@@ -496,8 +497,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		auto initial_res = compile_lvalue(exp_idx, ctx);
 		chunk = chunk + initial_res.code;
 		auto initial = initial_res.opnd;
-		// FIXME: properly set register type
-		const auto var = variables[id_node.guid] = make_register();
+		const auto var = variables.at(id_node.guid);
 		chunk.emit_clonea(var, initial);
 		return {chunk, var};
 	} else {
@@ -505,7 +505,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		chunk = chunk + initial_res.code;
 		auto initial = initial_res.opnd;
 		// FIXME: properly set register type
-		const auto var = variables[id_node.guid] = make_register();
+		const auto var = variables.at(id_node.guid);
 		if (is_array) {
 			chunk.emit_mov(var, initial);
 		} else {
@@ -516,13 +516,30 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	}
 }
 
+void Compiler::allocate_variables() {
+	const auto syms = symtab.all_symbols();
+	for (const auto& sym : syms) {
+		const auto scope = symtab.declaration_scope_of(sym).value();
+		if (scope != symtab.builtin_scope) {
+			const auto ty = tpc.variables.at(sym);
+			const auto dty = get_datatype(ty);
+			const auto is_function =
+				std::dynamic_pointer_cast<Function>(dty) != nullptr;
+			if (is_function) {
+				variables[sym] = make_label();
+			} else {
+				variables[sym] = make_register();
+			}
+		}
+	}
+}
+
 Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	lir::Chunk chunk {};
 	const auto& node = ast.at(node_idx);
 
 	auto id_idx = node[0];
 	auto params_idx = node[1];
-	auto opt_type_idx = node[2];
 	auto body_idx = node[3];
 
 	const auto& id_node = ast.at(id_idx);
@@ -530,11 +547,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 
 	assert(id_node.type == NodeType::GUID);
 
-	(void)opt_type_idx;
-
-	const auto func_name = make_label();
-	const auto opnd = variables[id_node.guid] = func_name;
-
+	const auto func_name = variables.at(id_node.guid);
 	lir::Chunk func {};
 
 	func.add_label(func_name);
@@ -542,10 +555,9 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 
 	for (auto param_idx : params_node) {
 		const auto& param_node = ast.at(param_idx);
-		auto arg = make_register();
-		func.emit(Opcode::POP, arg);
 		assert(param_node.type == NodeType::GUID);
-		variables[param_node.guid] = arg;
+		const auto arg = variables.at(param_node.guid);
+		func.emit(Opcode::POP, arg);
 	}
 
 	Context body_ctx {

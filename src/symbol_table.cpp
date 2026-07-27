@@ -146,3 +146,11 @@ std::vector<ScopeIndex> SymbolTable::function_scopes(
 			);
 	return result;
 }
+
+std::vector<Guid> SymbolTable::all_symbols() const {
+	std::vector<Guid> syms {};
+	for (auto i = 0ul; i < m_symbols.size(); i++) {
+		syms.push_back(Guid {.index = static_cast<Guid::index_type>(i)});
+	}
+	return syms;
+}
