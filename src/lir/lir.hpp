@@ -75,11 +75,7 @@ class Type : public std::variant<Pointer, Integer> {
 };
 
 struct Register {
-	explicit Register(size_t idx, Type type, bool is_lvalue_pointer = false)
-	: index {idx}, is_lvalue_pointer {is_lvalue_pointer}, type {type} {}
 	size_t index;
-	bool is_lvalue_pointer;
-	Type type;
 };
 
 struct Function {
@@ -162,6 +158,7 @@ int print_inst(FILE*, const Instruction& inst);
 std::ostream& operator<<(std::ostream&, const Chunk&);
 
 Chunk operator+(Chunk x, Chunk y);
+Chunk& operator+=(Chunk& x, Chunk y);
 
 const char* operand_type_repr(Operand::Type type);
 

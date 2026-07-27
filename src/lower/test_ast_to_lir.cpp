@@ -59,10 +59,6 @@ bool operator==(const lir::Type& a, const lir::Type& b) {
 
 bool operator==(const lir::Register& a, const lir::Register& b) {
 	if (a.index != b.index) return false;
-	if (a.is_lvalue_pointer != b.is_lvalue_pointer) {
-		throw std::runtime_error("is_lvalue_pointer values are different");
-	}
-	if (a.type != b.type) return false;
 	return true;
 }
 
@@ -131,7 +127,7 @@ bool operator==(const lir::Chunk& a, const lir::Chunk& b) {
 }
 
 static lir::Operand make_int_reg(size_t idx) {
-	return lir::Operand(lir::Register(idx, lir::Type::make_integer()));
+	return lir::Operand(lir::Register(idx));
 }
 
 TEST(LIRTest, emit_binop) {
@@ -139,7 +135,7 @@ TEST(LIRTest, emit_binop) {
 	EXPECT_EQ(chunk.m_vec.size(), 0);
 	chunk.emit_binop(
 		BinaryOperator::PLUS,
-		lir::Operand(lir::Register(1, lir::Type::make_integer())),
+		lir::Operand(lir::Register(1)),
 		lir::Immediate(1),
 		lir::Immediate(1)
 	);
@@ -147,7 +143,7 @@ TEST(LIRTest, emit_binop) {
 	lir::Chunk expected {};
 	lir::Instruction i {};
 	i.opcode = lir::Opcode::ADD;
-	i.operands[0] = lir::Operand(lir::Register(1, lir::Type::make_integer()));
+	i.operands[0] = lir::Operand(lir::Register(1));
 	i.operands[1] = lir::Immediate(1);
 	i.operands[2] = lir::Immediate(1);
 	expected.m_vec.push_back(i);
@@ -157,14 +153,12 @@ TEST(LIRTest, emit_binop) {
 TEST(LIRTest, emit_mov) {
 	lir::Chunk chunk {};
 	EXPECT_EQ(chunk.m_vec.size(), 0);
-	chunk.emit_mov(
-		lir::Operand(lir::Register(1, lir::Type::make_integer())), lir::Immediate(1)
-	);
+	chunk.emit_mov(lir::Operand(lir::Register(1)), lir::Immediate(1));
 	EXPECT_EQ(chunk.m_vec.size(), 1);
 	lir::Chunk expected {};
 	lir::Instruction i {};
 	i.opcode = lir::Opcode::MOV;
-	i.operands[0] = lir::Operand(lir::Register(1, lir::Type::make_integer()));
+	i.operands[0] = lir::Operand(lir::Register(1));
 	i.operands[1] = lir::Immediate(1);
 	expected.m_vec.push_back(i);
 	EXPECT_TRUE(chunk == expected);

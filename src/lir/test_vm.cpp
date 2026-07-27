@@ -7,19 +7,15 @@
 #include "vm.hpp"
 
 static lir::Operand make_integer_register(std::size_t index) {
-	return lir::Operand(lir::Register(index, lir::Type::make_integer()));
+	return lir::Operand(lir::Register(index));
 }
 
 static lir::Operand make_intptr_register(std::size_t index) {
-	return lir::Operand(
-		lir::Register(index, lir::Type::make_integer_pointer(), true)
-	);
+	return lir::Operand(lir::Register(index));
 }
 
 static lir::Operand make_array_register(std::size_t index) {
-	return lir::Operand(
-		lir::Register(index, lir::Type::make_integer_array(), true)
-	);
+	return lir::Operand(lir::Register(index));
 }
 
 TEST(VMTest, move_immediate) {
@@ -99,7 +95,6 @@ TEST(VMTest, heap_allocation) {
 	auto _69 = lir::Immediate(69);
 	auto _0 = lir::Immediate(0);
 
-	auto r1 = make_integer_register(1);
 	auto r2 = make_integer_register(2);
 	auto r3 = make_integer_register(3);
 	auto r4 = make_integer_register(5);
@@ -150,7 +145,6 @@ TEST(VMTest, function_call) {
 	auto l1 = lir::Operand(lir::Label {1});
 
 	auto r0 = make_integer_register(0);
-	auto r1 = make_integer_register(1);
 	auto r2 = make_integer_register(2);
 	auto r3 = make_integer_register(3);
 	auto r4 = make_integer_register(4);
@@ -392,10 +386,9 @@ TEST(VMTest, io_operations) {
 	const auto _69 = lir::Immediate(69);
 	const auto _A = lir::Immediate('A');
 
-	const auto r1 =
-		lir::Operand(lir::Register(1, lir::Type::make_integer_array()));
-	const auto r2 = lir::Operand(lir::Register(2, lir::Type::make_integer()));
-	const auto r3 = lir::Operand(lir::Register(2, lir::Type::make_integer()));
+	const auto r1 = lir::Operand(lir::Register(1));
+	const auto r2 = lir::Operand(lir::Register(2));
+	const auto r3 = lir::Operand(lir::Register(2));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PRINTV, _69);

@@ -295,6 +295,11 @@ Chunk operator+(Chunk x, Chunk y) {
 	return res;
 }
 
+Chunk& operator+=(Chunk& x, Chunk y) {
+	x = x + y;
+	return x;
+}
+
 const char* operand_type_repr(Operand::Type type) {
 	switch (type) {
 		case Operand::Type::NOTHING: return "Operand::Type::NIL";
