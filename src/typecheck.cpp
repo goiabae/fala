@@ -313,28 +313,39 @@ bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
 	auto a_is_concrete = std::holds_alternative<ConcreteMode>(a->data);
 	auto b_is_concrete = std::holds_alternative<ConcreteMode>(b->data);
 	if (a_is_concrete and not b_is_concrete) {
-		auto& t2 = std::get<Variable<Mode>>(b->data);
-		if (t2.is_bound()) {
-			return unify(a, t2.get_bound());
+		auto& bv = std::get<Variable<Mode>>(b->data);
+		if (bv.is_bound()) {
+			return unify(a, bv.get_bound());
 		} else {
-			t2.bind_to(a);
+			bv.bind_to(a);
 			return true;
 		}
 	} else if (b_is_concrete and not a_is_concrete) {
-		auto& t2 = std::get<Variable<Mode>>(a->data);
-		if (t2.is_bound()) {
-			return unify(b, t2.get_bound());
+		auto& av = std::get<Variable<Mode>>(a->data);
+		if (av.is_bound()) {
+			return unify(b, av.get_bound());
 		} else {
-			t2.bind_to(b);
+			av.bind_to(b);
 			return true;
 		}
 	} else if (a_is_concrete and b_is_concrete) {
 		// FIXME: how to deal with submoding when creating new variables?
 		return true;
-	} else if (not a_is_concrete and not b_is_concrete) {
-		auto& t1 = std::get<Variable<Mode>>(b->data);
-		t1.bind_to(a);
-		return true;
+	} else if ((not a_is_concrete) and (not b_is_concrete)) {
+		auto& bv = std::get<Variable<Mode>>(b->data);
+		auto& av = std::get<Variable<Mode>>(a->data);
+		if (bv.is_bound() and av.is_bound()) {
+			return unify(av.get_bound(), bv.get_bound());
+		} else if (bv.is_bound()) {
+			av.bind_to(b);
+			return true;
+		} else if (av.is_bound()) {
+			bv.bind_to(a);
+			return true;
+		} else {
+			bv.bind_to(a);
+			return true;
+		}
 	}
 	assert(false);
 }
