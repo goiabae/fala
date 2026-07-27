@@ -424,14 +424,20 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			return ASSOC_TYPE(node_idx, make_type(VAL_, VOID_));
 		}
 
-			// | f : (t1 t2 ... tn) -> t0
-			// | a1 : t1
-			// | a2 : t2
+			// | f : _ (m1 t1, m2 t2, ..., mn tn) -> t0
+			// |
+			// | a1 : m1' t1
+			// | a2 : m2' t2
 			// | ...
-			// | an : tn
+			// | an : mn' tn
+			// |
+			// | m1' <: m1
+			// | m2' <: m2
+			// | ...
+			// | mn' <: mn
 			// +-----------
-			// | |- f a1 a2 ... an : t0
-
+			// | |- f a1 a2 ... an : val t0
+			//
 		case NodeType::APP: {
 			auto func_idx = node[0];
 			auto args_idx = node[1];
