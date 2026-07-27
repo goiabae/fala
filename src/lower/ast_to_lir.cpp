@@ -16,6 +16,7 @@
 #include "ast.hpp"
 #include "lir/lir.hpp"
 #include "str_pool.h"
+#include "symbol_table.hpp"
 #include "type.hpp"
 
 namespace compiler {
@@ -123,11 +124,9 @@ lir::Chunk Compiler::compile() {
 	chunk.add_label(main);
 
 	SignalHandlers handlers {};
-	auto scope_id = env.root_scope_id;
 
 	Context ctx {
 		.handlers = handlers,
-		.scope_id = scope_id,
 	};
 
 	auto res_ = compile(ast.root_index, ctx);
@@ -192,19 +191,24 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		args.push_back(res.opnd);
 	}
 
-	const auto func_name = std::string_view(pool.find(func_node.str_id));
-	constexpr auto get_name = [](const auto& x) { return x.name; };
-
-	if (const auto* builtin_ptr =
-	      std::ranges::find(builtin::builtins, func_name, get_name);
-	    builtin_ptr != std::end(builtin::builtins)) {
-		const auto& builtin = *builtin_ptr;
-		const auto result = builtin.ptr(*this, args);
-		chunk = chunk + result.code;
-		return {chunk, result.opnd};
+	assert(func_node.type == NodeType::GUID);
+	auto scope = symtab.relative_scope_of(func_node.guid, node[0]).value();
+	if (scope == RelativeScope::BUILTIN) {
+		const auto name = symtab.name_of(func_node.guid).value();
+		const auto func_name = std::string_view(pool.find(name));
+		constexpr auto get_name = [](const auto& x) { return x.name; };
+		if (const auto* builtin_ptr =
+		      std::ranges::find(builtin::builtins, func_name, get_name);
+		    builtin_ptr != std::end(builtin::builtins)) {
+			const auto& builtin = *builtin_ptr;
+			const auto result = builtin.ptr(*this, args);
+			chunk = chunk + result.code;
+			return {chunk, result.opnd};
+		} else {
+			throw std::runtime_error("unknown builtin");
+		}
 	} else {
-		const auto* func_opnd_ptr = env.find(ctx.scope_id, func_node.str_id);
-		const auto func_opnd = *func_opnd_ptr;
+		const auto func_opnd = variables.at(func_node.guid);
 
 		for (const auto& arg : std::ranges::reverse_view(args))
 			chunk.emit(Opcode::PUSH, arg);
@@ -289,16 +293,12 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 		}
 	}();
 
-	auto new_scope_id = env.create_child_scope(ctx.scope_id);
-
 	Context header_ctx {
 		.handlers = ctx.handlers,
-		.scope_id = new_scope_id,
 	};
 
 	Context body_ctx {
 		.handlers = new_handlers,
-		.scope_id = new_scope_id,
 	};
 
 	const auto var_res = compile(decl_idx, header_ctx);
@@ -387,7 +387,6 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 
 	Context body_ctx {
 		.handlers = new_handlers,
-		.scope_id = ctx.scope_id,
 	};
 
 	auto exp_res = compile(node[1], body_ctx);
@@ -444,16 +443,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::DIV: assert(false);
 		case NodeType::MOD: assert(false);
 		case NodeType::NOT: assert(false);
-		case NodeType::ID: {
-			lir::Chunk chunk {};
-			lir::Operand* opnd = env.find(ctx.scope_id, node.str_id);
-			if (opnd == nullptr) {
-				fprintf(stderr, "%s ", pool.find(node.str_id));
-				err("Variable not found");
-			}
-			chunk.result_opnd = *opnd;
-			return {chunk, *opnd};
-		}
+		case NodeType::ID: assert(false);
 		case NodeType::STR: assert(false);
 		case NodeType::VAR_DECL: assert(false);
 		case NodeType::FUN_DECL: assert(false);
@@ -468,6 +458,10 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::AS: assert(false);
 		case NodeType::INSTANCE: assert(false);
 		case NodeType::METALIST: assert(false);
+		case NodeType::GUID: {
+			assert(variables.contains(node.guid));
+			return {{}, variables.at(node.guid)};
+		}
 	}
 	assert(false);
 }
@@ -485,8 +479,11 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	const auto& id_node = ast.at(id_idx);
 	const auto& exp_node = ast.at(exp_idx);
 
-	const auto comment =
-		std::format("creating variable \"{}\"", pool.find(id_node.str_id));
+	assert(id_node.type == NodeType::GUID);
+
+	const auto name =
+		std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+	const auto comment = std::format("creating variable \"{}\"", name);
 
 	bool is_array = false;
 	{
@@ -500,22 +497,22 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		chunk = chunk + initial_res.code;
 		auto initial = initial_res.opnd;
 		// FIXME: properly set register type
-		auto* var = env.insert(ctx.scope_id, id_node.str_id, make_register());
-		chunk.emit_clonea(*var, initial);
-		return {chunk, *var};
+		const auto var = variables[id_node.guid] = make_register();
+		chunk.emit_clonea(var, initial);
+		return {chunk, var};
 	} else {
 		auto initial_res = compile(exp_idx, ctx);
 		chunk = chunk + initial_res.code;
 		auto initial = initial_res.opnd;
 		// FIXME: properly set register type
-		auto* var = env.insert(ctx.scope_id, id_node.str_id, make_register());
+		const auto var = variables[id_node.guid] = make_register();
 		if (is_array) {
-			chunk.emit_mov(*var, initial);
+			chunk.emit_mov(var, initial);
 		} else {
-			chunk.emit_alloca(*var, lir::Immediate(1));
-			chunk.emit_storea(initial, lir::Immediate(0), *var);
+			chunk.emit_alloca(var, lir::Immediate(1));
+			chunk.emit_storea(initial, lir::Immediate(0), var);
 		}
-		return {chunk, *var};
+		return {chunk, var};
 	}
 }
 
@@ -531,14 +528,12 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto& id_node = ast.at(id_idx);
 	const auto& params_node = ast.at(params_idx);
 
+	assert(id_node.type == NodeType::GUID);
+
 	(void)opt_type_idx;
 
-	lir::Operand* opnd =
-		env.insert(ctx.scope_id, id_node.str_id, make_register());
-
-	auto func_name = make_label();
-	*opnd = func_name;
-	auto new_scope_id = env.create_child_scope(ctx.scope_id);
+	const auto func_name = make_label();
+	const auto opnd = variables[id_node.guid] = func_name;
 
 	lir::Chunk func {};
 
@@ -549,12 +544,12 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 		const auto& param_node = ast.at(param_idx);
 		auto arg = make_register();
 		func.emit(Opcode::POP, arg);
-		env.insert(new_scope_id, param_node.str_id, arg);
+		assert(param_node.type == NodeType::GUID);
+		variables[param_node.guid] = arg;
 	}
 
 	Context body_ctx {
 		.handlers = ctx.handlers,
-		.scope_id = new_scope_id,
 	};
 
 	auto op_res = compile(body_idx, body_ctx);
@@ -596,10 +591,8 @@ Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
 	const auto& decls_node = ast.at(decls_idx);
 
 	{
-		auto new_scope_id = env.create_child_scope(ctx.scope_id);
 		Context exp_ctx {
 			.handlers = ctx.handlers,
-			.scope_id = new_scope_id,
 		};
 		for (size_t i = 0; i < decls_node.branch.children_count; i++) {
 			auto res = compile(decls_node[i], exp_ctx);
@@ -666,11 +659,9 @@ Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 Result Compiler::compile_block(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	lir::Chunk chunk {};
-	auto new_scope_id = env.create_child_scope(ctx.scope_id);
 	lir::Operand opnd;
 	Context inner_ctx {
 		.handlers = ctx.handlers,
-		.scope_id = new_scope_id,
 	};
 	for (size_t i = 0; i < node.branch.children_count; i++) {
 		auto opnd_res = compile(node[i], inner_ctx);
@@ -785,15 +776,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
 			return {chunk, tmp};
 		}
-		case NodeType::ID: {
-			lir::Chunk chunk {};
-			auto res = compile_lvalue(node_idx, ctx);
-			chunk = chunk + res.code;
-			auto res_opnd = res.opnd;
-			auto tmp = make_register();
-			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
-			return {chunk, tmp};
-		}
+		case NodeType::ID: assert(false);
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
 		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
@@ -821,6 +804,15 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::INSTANCE: assert(false);
 		case NodeType::AS: return compile(node[0], ctx);
 		case NodeType::METALIST: assert(false);
+		case NodeType::GUID: {
+			lir::Chunk chunk {};
+			auto res = compile_lvalue(node_idx, ctx);
+			chunk = chunk + res.code;
+			auto res_opnd = res.opnd;
+			auto tmp = make_register();
+			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
+			return {chunk, tmp};
+		}
 	}
 	assert(false);
 }

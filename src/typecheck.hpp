@@ -10,6 +10,7 @@
 #include "env.hpp"
 #include "logger.hpp"
 #include "str_pool.h"
+#include "symbol_table.hpp"
 #include "type.hpp"
 
 #define T std::shared_ptr<Type>
@@ -17,18 +18,21 @@
 #define M std::shared_ptr<Mode>
 
 struct Typechecker {
-	Typechecker(AST& ast, StringPool& pool)
-	: ast(ast), pool(pool), logger("TYPECHECKER", ast.file_name, ast.lines) {}
+	Typechecker(AST& ast, StringPool& pool, const SymbolTable& symtab)
+	: ast(ast),
+		pool(pool),
+		symtab(symtab),
+		logger("TYPECHECKER", ast.file_name, ast.lines) {}
 
 	bool typecheck();
-	T typecheck(NodeIndex node_idx, Env<T>::ScopeID scope_id);
+	T typecheck(NodeIndex node_idx);
 
 	D substitute(D gen, std::vector<D> args);
 	D substitute_aux(
 		D body, std::vector<TYPE_VARIABLE> vars, std::vector<D> args
 	);
 
-	D eval(NodeIndex, Env<T>::ScopeID scope_id);
+	D eval(NodeIndex);
 
 	bool unify(M, M);
 	bool unify(D, D);
@@ -41,10 +45,11 @@ struct Typechecker {
 
 	AST& ast;
 	StringPool& pool;
+	const SymbolTable& symtab;
 
 	size_t next_var_id {0};
 	size_t next_modevar_id {0};
-	Env<T> env {};
+	std::map<Guid, T> variables;
 	std::map<NodeIndex, Env<T>::ScopeID> node_to_scope_id {};
 	std::map<NodeIndex, T> node_to_type {};
 	Logger logger;

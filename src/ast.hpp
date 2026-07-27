@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "index.hpp"
 #include "location.hpp"
 #include "str_pool.h"
 
@@ -54,6 +55,7 @@ enum class NodeType {
 	AS,
 	INSTANCE,
 	METALIST, // meta node for containing a list of other nodes
+	GUID,     // a unique identifier inside a given ast
 };
 
 enum class BinaryOperator {
@@ -96,6 +98,8 @@ typedef struct BranchNode {
 	NodeIndex* children;
 } BranchNode;
 
+using Guid = Index<7>;
+
 struct Node {
 	NodeType type;
 	Location loc;
@@ -105,6 +109,7 @@ struct Node {
 		StrID str_id;
 		char character;
 		BranchNode branch;
+		Guid guid;
 	};
 
 	NodeIndex& operator[](size_t index) const;

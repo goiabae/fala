@@ -13,6 +13,7 @@
 
 #include "ast.hpp"
 #include "str_pool.h"
+#include "symbol_table.hpp"
 
 namespace walk {
 
@@ -26,9 +27,9 @@ void Interpreter::close_current_scope() {
 	ctx.scope_id = ctx.env.get_parent_scope(ctx.scope_id).value();
 }
 
-auto Interpreter::find_variable(StrID string_id)
+auto Interpreter::find_variable(Guid string_id)
 	-> std::optional<std::reference_wrapper<ValueCell>> {
-	auto cell = ctx.env.find(ctx.scope_id, string_id);
+	auto cell = ctx.env.find(ctx.scope_id, symtab.name_of(string_id).value());
 	if (cell == nullptr) return {};
 	return {*cell};
 }
@@ -43,10 +44,9 @@ auto Interpreter::eval_application(
 ) -> ValueCell {
 	const auto& func_node = ast.at(func_idx);
 
-	if (func_node.type != NodeType::ID)
-		err("Unnamed functions are not implemented");
+	assert(func_node.type == NodeType::GUID);
 
-	auto maybe_func_ptr = find_variable(func_node.str_id);
+	auto maybe_func_ptr = find_variable(func_node.guid);
 	if (not maybe_func_ptr.has_value()) {
 		auto msg = "Function with name " + std::string(pool.find(func_node.str_id))
 		         + " not found";
@@ -73,8 +73,9 @@ auto Interpreter::eval_application(
 		enter_new_scope();
 		for (size_t i = 0; i < args.size(); i++) {
 			const auto& param_node = ast.at(custom.param_idxs[i]);
-			assert(param_node.type == NodeType::ID);
-			auto cell = ctx.env.insert(ctx.scope_id, param_node.str_id, args[i]);
+			assert(param_node.type == NodeType::GUID);
+			const auto name = symtab.name_of(param_node.guid).value();
+			auto cell = ctx.env.insert(ctx.scope_id, name, args[i]);
 			assert(cell != nullptr);
 		}
 
@@ -214,9 +215,11 @@ auto Interpreter::eval_variable_declaration(
 	NodeIndex exp_idx
 ) -> ValueCell {
 	const auto& id_node = ast.at(id_idx);
+	assert(id_node.type == NodeType::GUID);
 	const auto value = eval_node(exp_idx);
 	auto copied_value = copy_value(value);
-	auto cell = ctx.env.insert(ctx.scope_id, id_node.str_id, copied_value);
+	const auto name = symtab.name_of(id_node.guid).value();
+	auto cell = ctx.env.insert(ctx.scope_id, name, copied_value);
 	if (cell == nullptr) err("Could not initialize variable");
 	if (*cell == nullptr) err("Value was null");
 	return copied_value;
@@ -227,6 +230,7 @@ auto Interpreter::eval_function_declaration(
 	[[maybe_unused]] std::optional<NodeIndex> type_idx, NodeIndex exp_idx
 ) -> ValueCell {
 	const auto& id_node = ast.at(id_idx);
+	assert(id_node.type == NodeType::GUID);
 	std::vector<NodeIndex> param_idxs_vec {};
 	for (auto param_idx : param_idxs) {
 		param_idxs_vec.push_back(param_idx);
@@ -234,7 +238,8 @@ auto Interpreter::eval_function_declaration(
 	auto value =
 		std::make_shared<Value>(CustomFunction {param_idxs_vec, exp_idx});
 	assert(value != nullptr);
-	auto cell = ctx.env.insert(ctx.scope_id, id_node.str_id, value);
+	const auto name = symtab.name_of(id_node.guid).value();
+	auto cell = ctx.env.insert(ctx.scope_id, name, value);
 	if (!cell) err("Could not initialize variable");
 	return value;
 }
@@ -395,9 +400,10 @@ auto Interpreter::eval_indexing(NodeIndex var_idx, NodeIndex index_idx)
 	return value;
 }
 
-auto Interpreter::eval_variable(StrID string_id)
+auto Interpreter::eval_variable(Guid string_id)
 	-> std::optional<std::reference_wrapper<ValueCell>> {
-	auto cell = ctx.env.find(ctx.scope_id, string_id);
+	const auto name = symtab.name_of(string_id).value();
+	auto cell = ctx.env.find(ctx.scope_id, name);
 	if (cell == nullptr) {
 		err("Variable not previously declared.");
 		return std::optional<std::reference_wrapper<ValueCell>> {};
@@ -462,13 +468,7 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::EQ: return eval_comparison('=', node[0], node[1]);
 		case NodeType::NOT: return eval_negation(node[0]);
 		case NodeType::AT: return eval_indexing(node[0], node[1]);
-		case NodeType::ID: {
-			auto maybe_value = eval_variable(node.str_id);
-			if (not maybe_value.has_value()) err("Variable not found");
-			ValueCell val = maybe_value.value();
-			if (val == nullptr) err("Variable was null");
-			return val;
-		}
+		case NodeType::ID: assert(false);
 		case NodeType::STR: return eval_string(node.str_id);
 		case NodeType::VAR_DECL:
 			return eval_variable_declaration(
@@ -497,6 +497,13 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 			assert(false && "used only in typechecking. should not be evaluated");
 		case NodeType::AS: return eval_node(node[0]);
 		case NodeType::METALIST: assert(false);
+		case NodeType::GUID: {
+			auto maybe_value = eval_variable(node.guid);
+			if (not maybe_value.has_value()) err("Variable not found");
+			ValueCell val = maybe_value.value();
+			if (val == nullptr) err("Variable was null");
+			return val;
+		}
 	}
 	assert(false);
 }
@@ -557,9 +564,10 @@ ValueCell Interpreter::builtin_exit(std::vector<ValueCell> args) {
 }
 
 Interpreter::Interpreter(
-	StringPool& pool, const AST& ast, std::istream& input, std::ostream& output
+	StringPool& pool, const AST& ast, const SymbolTable& symtab,
+	std::istream& input, std::ostream& output
 )
-: pool {pool}, ast {ast}, input {input}, output {output} {}
+: pool {pool}, ast {ast}, symtab {symtab}, input {input}, output {output} {}
 
 #define PUSH_BUILTIN(STR, FUNC, COUNT)                      \
 	*ctx.env.insert(ctx.scope_id, pool.intern(strdup(STR))) = \

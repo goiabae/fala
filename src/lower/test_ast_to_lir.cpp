@@ -10,6 +10,7 @@
 #include "ast.hpp"
 #include "lir/lir.hpp"
 #include "lower/ast_to_lir.hpp"
+#include "scope_analyser.hpp"
 #include "str_pool.h"
 #include "typecheck.hpp"
 
@@ -204,9 +205,11 @@ TEST(CompilerTest, add_integers) {
 		const auto _3 = new_node(&ast, NodeType::ADD, {_1, _2});
 		ast.root_index = _3;
 	}
-	Typechecker checker {ast, pool};
+	ScopeAnalyser scop {ast, pool};
+	const auto symtab = scop.analyse();
+	Typechecker checker {ast, pool, symtab};
 	checker.typecheck();
-	compiler::Compiler comp {ast, pool, checker};
+	compiler::Compiler comp {ast, pool, checker, symtab};
 	const auto chunk = comp.compile();
 	lir::Chunk expected {};
 	{
@@ -243,9 +246,11 @@ TEST(CompilerTest, let_expression) {
 		const auto _8 = new_node(&ast, NodeType::LET, {_6, _7});
 		ast.root_index = _8;
 	}
-	Typechecker checker {ast, pool};
+	ScopeAnalyser scop {ast, pool};
+	const auto symtab = scop.analyse();
+	Typechecker checker {ast, pool, symtab};
 	checker.typecheck();
-	compiler::Compiler comp {ast, pool, checker};
+	compiler::Compiler comp {ast, pool, checker, symtab};
 	const auto chunk = comp.compile();
 	lir::Chunk expected {};
 	{

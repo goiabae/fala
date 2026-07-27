@@ -70,6 +70,7 @@ bool is_branch_node(NodeType type) {
 		case NodeType::AS: return true;
 		case NodeType::INSTANCE: return true;
 		case NodeType::METALIST: return false;
+		case NodeType::GUID: return false;
 	}
 	assert(false);
 }
@@ -114,6 +115,7 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::INSTANCE: return "NodeType::INSTANCE";
 		case NodeType::AS: return "NodeType::AS";
 		case NodeType::METALIST: return "NodeType::METALIST";
+		case NodeType::GUID: return "NodeType::GUID";
 	}
 	assert(false);
 }
@@ -122,6 +124,7 @@ bool node_has_fixed_repr(enum NodeType type) {
 	switch (type) {
 		case NodeType::NUM:
 		case NodeType::ID:
+		case NodeType::GUID:
 		case NodeType::STR:
 		case NodeType::EMPTY:
 		case NodeType::CHAR:
@@ -179,6 +182,8 @@ static std::string ast_node_format(
 		return std::format("{}", node.num);
 	} else if (node.type == NodeType::ID) {
 		return std::format("{}", pool.find(node.str_id));
+	} else if (node.type == NodeType::GUID) {
+		return std::format("{}", node.guid.index);
 	} else if (node.type == NodeType::STR) {
 		std::string s {};
 		s += "\"";
@@ -298,6 +303,9 @@ static void ast_node_print_detailed(
 	} else if (node.type == NodeType::ID) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "id = %s\n", pool.find(node.str_id));
+	} else if (node.type == NodeType::GUID) {
+		print_spaces(fd, space + 2);
+		fprintf(fd, "guid = %u\n", node.guid.index);
 	} else if (node.type == NodeType::STR) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "str = \"");
@@ -491,7 +499,8 @@ void node_deinit(AST* ast, NodeIndex node_idx) {
 	// if it's a terminal node, we don't free the children and children indexes
 	// buffer
 	if (node.type == NodeType::ID || node.type == NodeType::NUM
-	    || node.type == NodeType::STR || node.type == NodeType::CHAR)
+	    || node.type == NodeType::STR || node.type == NodeType::CHAR
+	    || node.type == NodeType::GUID)
 		return;
 
 	for (size_t i = 0; i < node.branch.children_count; i++)
@@ -544,6 +553,8 @@ bool operator==(const NodeRef& a, const NodeRef& b) {
 
 	if (type == NodeType::ID or type == NodeType::STR)
 		return a().str_id == b().str_id;
+
+	if (type == NodeType::GUID) return a().guid.index == b().guid.index;
 
 	if (type == NodeType::CHAR) return a().character == b().character;
 

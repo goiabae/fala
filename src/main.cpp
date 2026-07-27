@@ -11,7 +11,9 @@
 #include "lower/ast_to_lir.hpp"
 #include "options.hpp"
 #include "parser.hpp"
+#include "scope_analyser.hpp"
 #include "str_pool.h"
+#include "symbol_table.hpp"
 #include "typecheck.hpp"
 #include "walk.hpp"
 
@@ -68,13 +70,16 @@ int interpret(Options opts) {
 			printf("\n");
 		}
 
+		ScopeAnalyser scop {ast, pool};
+		const auto symtab = scop.analyse();
+
 		print_phase(opts, "type checking");
-		Typechecker checker {ast, pool};
+		Typechecker checker {ast, pool, symtab};
 		checker.typecheck();
 
 		if (opts.backend == Backend::WALK) {
 			print_phase(opts, "interpreting(walk)");
-			walk::Interpreter inter {pool, ast, std::cin, std::cout};
+			walk::Interpreter inter {pool, ast, symtab, std::cin, std::cout};
 			auto val = inter.eval();
 			if (opts.from_stdin) {
 				std::cout << val;
@@ -82,7 +87,7 @@ int interpret(Options opts) {
 			}
 		} else if (opts.backend == Backend::LIR) {
 			print_phase(opts, "compiling(lir)");
-			compiler::Compiler comp {ast, pool, checker};
+			compiler::Compiler comp {ast, pool, checker, symtab};
 			auto chunk = comp.compile();
 
 			if (opts.verbosity >= 2) {
@@ -125,13 +130,16 @@ int compile(Options opts) {
 		printf("\n");
 	}
 
+	ScopeAnalyser scop {ast, pool};
+	const auto symtab = scop.analyse();
+
 	print_phase(opts, "type checking");
-	Typechecker checker {ast, pool};
+	Typechecker checker {ast, pool, symtab};
 	checker.typecheck();
 
 	if (opts.backend == Backend::LIR) {
 		print_phase(opts, "compiling(lir)");
-		compiler::Compiler comp {ast, pool, checker};
+		compiler::Compiler comp {ast, pool, checker, symtab};
 		auto chunk = comp.compile();
 
 		File output = (opts.output_path) ? File(opts.output_path, "w") : stdout;

@@ -1,10 +1,13 @@
 #ifndef FALA_COMPILER_HPP
 #define FALA_COMPILER_HPP
 
+#include <map>
+
 #include "ast.hpp"
 #include "env.hpp"
 #include "lir/lir.hpp"
 #include "str_pool.h"
+#include "symbol_table.hpp"
 #include "typecheck.hpp"
 
 namespace compiler {
@@ -31,12 +34,14 @@ struct SignalHandlers {
 
 struct Context {
 	SignalHandlers handlers;
-	Env<lir::Operand>::ScopeID scope_id;
 };
 
 struct Compiler {
-	Compiler(const AST& ast, const StringPool& pool, const Typechecker& tpc)
-	: ast(ast), pool(pool), tpc(tpc) {}
+	Compiler(
+		const AST& ast, const StringPool& pool, const Typechecker& tpc,
+		const SymbolTable& symtab
+	)
+	: ast(ast), pool(pool), tpc(tpc), symtab(symtab) {}
 
 	lir::Chunk compile();
 	Result compile(NodeIndex node_idx, Context ctx);
@@ -69,9 +74,10 @@ struct Compiler {
 	const AST& ast;
 	const StringPool& pool;
 	const Typechecker& tpc;
+	const SymbolTable& symtab;
 	std::size_t label_count {0};
 	std::size_t reg_count {0};
-	Env<lir::Operand> env {};
+	std::map<Guid, lir::Operand> variables;
 	vector<lir::Chunk> functions {};
 };
 

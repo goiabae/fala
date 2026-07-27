@@ -54,7 +54,9 @@ add_library(falalib SHARED
 	src/file_reader.cpp
 	src/line_reader.cpp
 	src/type.cpp
-	src/string_reader.cpp)
+	src/string_reader.cpp
+	src/symbol_table.cpp
+	src/scope_analyser.cpp)
 
 target_link_libraries(falalib falaparser)
 

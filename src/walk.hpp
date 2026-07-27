@@ -12,6 +12,7 @@
 #include "env.hpp"
 #include "evaluator.hpp"
 #include "str_pool.h"
+#include "symbol_table.hpp"
 
 namespace walk {
 
@@ -56,11 +57,13 @@ struct Context {
 
 struct Interpreter {
 	Interpreter(
-		StringPool& pool, const AST& ast, std::istream& input, std::ostream& output
+		StringPool& pool, const AST& ast, const SymbolTable& symtab,
+		std::istream& input, std::ostream& output
 	);
 
 	StringPool& pool;
 	const AST& ast;
+	const SymbolTable& symtab;
 	std::istream& input;
 	std::ostream& output;
 
@@ -86,7 +89,7 @@ struct Interpreter {
 	auto eval_logical(char operation, NodeIndex left_idx, NodeIndex right_idx) -> ValueCell;
 	auto eval_negation(NodeIndex exp_idx) -> ValueCell;
 	auto eval_comparison(char operation, NodeIndex left_idx, NodeIndex right_idx) -> ValueCell;
-	auto eval_variable(StrID string_id) -> std::optional<std::reference_wrapper<ValueCell>>;
+	auto eval_variable(Guid string_id) -> std::optional<std::reference_wrapper<ValueCell>>;
 	auto eval_boolean(bool boolean) -> ValueCell;
 	auto eval_nil() -> ValueCell;
 	auto eval_character(char character) -> ValueCell;
@@ -97,7 +100,7 @@ struct Interpreter {
 
 	auto eval_node(NodeIndex node_idx) -> ValueCell;
 
-	auto find_variable(StrID string_id)
+	auto find_variable(Guid string_id)
 		-> std::optional<std::reference_wrapper<ValueCell>>;
 	auto find_type_variable(StrID string_id)
 		-> std::optional<std::reference_wrapper<Nothing>>;
@@ -110,8 +113,6 @@ struct Interpreter {
 	ValueCell builtin_write(std::vector<ValueCell> args);
 	ValueCell builtin_array(std::vector<ValueCell> args);
 	ValueCell builtin_exit(std::vector<ValueCell> args);
-
-	static_assert(evaluator<Interpreter, Context, ValueCell, Nothing>);
 };
 
 std::ostream& operator<<(std::ostream& st, const ValueCell& val);

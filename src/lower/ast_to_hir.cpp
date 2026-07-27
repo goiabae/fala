@@ -625,6 +625,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			return compile(node[0], ctx);
 		}
 		case NodeType::METALIST: assert(false);
+		case NodeType::GUID: assert(false);
 	}
 	assert(false);
 }
@@ -717,6 +718,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			return compile_lvalue(node[0], ctx);
 		}
 		case NodeType::METALIST: assert(false);
+		case NodeType::GUID: assert(false);
 	}
 	assert(false);
 }
