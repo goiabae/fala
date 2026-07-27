@@ -28,6 +28,11 @@ bool operator==(const Index<N>& a, const Index<N>& b) {
 	return a.index == b.index;
 }
 
+template<int N>
+bool operator<(const Index<N>& a, const Index<N>& b) {
+	return a.index < b.index;
+}
+
 static_assert(std::is_default_constructible<Index<0>>());
 
 #endif
