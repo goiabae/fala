@@ -196,7 +196,7 @@ TEST(LIRTest, add_label) {
 	EXPECT_TRUE(chunk == expected);
 }
 
-TEST(CompilerTest, add_integers) {
+TEST(ASTToLIRTest, add_integers) {
 	StringPool pool {};
 	AST ast {};
 	{
@@ -231,7 +231,7 @@ TEST(CompilerTest, add_integers) {
 	}
 }
 
-TEST(CompilerTest, let_expression) {
+TEST(ASTToLIRTest, let_expression) {
 	StringPool pool {};
 	AST ast {};
 	{
