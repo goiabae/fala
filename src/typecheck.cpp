@@ -936,10 +936,6 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// | E |- m x : t
 			//
 		case NodeType::GUID: {
-			std::cerr << std::format(
-				"retrieving type information about identifier {}",
-				std::string_view(pool.find(symtab.name_of(node.guid).value()))
-			) << '\n';
 			assert(variables.contains(node.guid));
 			auto found_typ = variables.at(node.guid);
 			assert(found_typ != nullptr);
