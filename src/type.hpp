@@ -170,4 +170,7 @@ inline bool mode_is_assignable(ConcreteMode m) {
 	return m == ConcreteMode::VAL or m == ConcreteMode::OUT;
 }
 
+std::ostream& operator<<(std::ostream&, ConcreteMode);
+std::ostream& operator<<(std::ostream&, const Mode&);
+
 #endif

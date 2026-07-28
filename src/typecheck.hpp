@@ -42,6 +42,7 @@ struct Typechecker {
 	D make_datavar();
 	M make_modevar();
 	T deref(T);
+	bool submode(M sub, M sup);
 
 	AST& ast;
 	StringPool& pool;

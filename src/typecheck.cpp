@@ -10,6 +10,7 @@
 #include <memory>
 #include <ranges>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 
 #include "ast.hpp"
@@ -397,6 +398,54 @@ bool Typechecker::unify(T a, T b) {
 	return unify(a->mode, b->mode) and unify(a->datatype, b->datatype);
 }
 
+bool Typechecker::submode(M sub, M sup) {
+	auto sub_is_concrete = std::holds_alternative<ConcreteMode>(sub->data);
+	auto sup_is_concrete = std::holds_alternative<ConcreteMode>(sup->data);
+	if (sub_is_concrete and not sup_is_concrete) {
+		auto& bv = std::get<Variable<Mode>>(sup->data);
+		if (bv.is_bound()) {
+			return submode(sub, bv.get_bound());
+		} else {
+			bv.bind_to(sub);
+			return true;
+		}
+	} else if (sup_is_concrete and not sub_is_concrete) {
+		auto& av = std::get<Variable<Mode>>(sub->data);
+		if (av.is_bound()) {
+			return submode(av.get_bound(), sup);
+		} else {
+			av.bind_to(sup);
+			return true;
+		}
+	} else if (sub_is_concrete and sup_is_concrete) {
+		auto subc = std::get<ConcreteMode>(sub->data);
+		auto supc = std::get<ConcreteMode>(sup->data);
+		std::ostringstream ss {};
+		ss << subc << ", " << supc;
+		logger.log(LogLevel::INFO, {}, "submode: {}", ss.str());
+		if (subc == ConcreteMode::VAL
+		    and (supc == ConcreteMode::OUT or supc == ConcreteMode::VAR))
+			return false;
+		return true;
+	} else if ((not sub_is_concrete) and (not sup_is_concrete)) {
+		auto& bv = std::get<Variable<Mode>>(sup->data);
+		auto& av = std::get<Variable<Mode>>(sub->data);
+		if (bv.is_bound() and av.is_bound()) {
+			return submode(av.get_bound(), bv.get_bound());
+		} else if (bv.is_bound()) {
+			av.bind_to(sup);
+			return true;
+		} else if (av.is_bound()) {
+			bv.bind_to(sub);
+			return true;
+		} else {
+			bv.bind_to(sub);
+			return true;
+		}
+	}
+	assert(false);
+}
+
 #define ASSOC_TYPE(NODE, TYP) \
 	[&]() {                     \
 		T typ = TYP;              \
@@ -464,6 +513,16 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					expected_func_type
 				);
 			}
+
+			std::ostringstream oss {};
+			for (auto input_ty : inputs) {
+				oss << ", " << *input_ty;
+			}
+			std::ostringstream a {};
+			a << *func_type;
+			logger.log(
+				LogLevel::INFO, node.loc, "func: {}, args: {}", a.str(), oss.str()
+			);
 
 			return ASSOC_TYPE(node_idx, make_type(VAL_, outdata));
 		}
@@ -630,11 +689,22 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			return ASSOC_TYPE(node_idx, exp_typ);
 		}
 
+			// | e1 : m1 t1
+			// | e2 : m2 t2
+			// | m1 <: var
+			// +--------------
+			// | |- e1 = e2 : m2 t2
+
 			// FIXME: add typing rules
 		case NodeType::ASS: {
 			auto path = typecheck(node[0]);
 			auto val = typecheck(node[1]);
 			auto t1 = make_type(VAR_, make_datavar());
+			std::ostringstream ss {};
+			ss << *path << ", " << *t1;
+			logger.log(LogLevel::INFO, node.loc, "assignment: {}", ss.str());
+			if (not submode(path->mode, t1->mode))
+				logger.err(node.loc, "Left side of assignment must var or out");
 			if (not unify(path, t1))
 				logger.err(node.loc, "Left side of assignment must be an lvalue");
 			if (not unify(path, val))

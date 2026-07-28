@@ -2,7 +2,14 @@
 
 #include <variant>
 
-static std::ostream& operator<<(std::ostream& st, const Mode& m);
+std::ostream& operator<<(std::ostream& st, ConcreteMode cm) {
+	switch (cm) {
+		case ConcreteMode::VAL: st << "val"; break;
+		case ConcreteMode::VAR: st << "var"; break;
+		case ConcreteMode::OUT: st << "out"; break;
+	}
+	return st;
+}
 
 std::ostream& operator<<(std::ostream& st, const Datatype& t) {
 	t.print(st);
@@ -12,11 +19,7 @@ std::ostream& operator<<(std::ostream& st, const Datatype& t) {
 std::ostream& operator<<(std::ostream& st, const Mode& m) {
 	if (std::holds_alternative<ConcreteMode>(m.data)) {
 		auto cm = std::get<ConcreteMode>(m.data);
-		switch (cm) {
-			case ConcreteMode::VAL: st << "val"; break;
-			case ConcreteMode::VAR: st << "var"; break;
-			case ConcreteMode::OUT: st << "out"; break;
-		}
+		st << cm;
 	} else {
 		auto mv = std::get<Variable<Mode>>(m.data);
 		if (mv.is_bound()) {

@@ -175,8 +175,19 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::NIL: return "nil";
 		case NodeType::TRUE: return "true";
 		case NodeType::FALSE: return "false";
-		default: assert(false && "unreachable");
+		case NodeType::EMPTY: assert(false);
+		case NodeType::NUM: assert(false);
+		case NodeType::ID: assert(false);
+		case NodeType::STR: assert(false);
+		case NodeType::CHAR: assert(false);
+		case NodeType::PATH: assert(false);
+		case NodeType::INSTANCE: assert(false);
+		case NodeType::METALIST: assert(false);
+		case NodeType::GUID: assert(false);
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: return "param";
 	}
+	assert(false);
 }
 
 static std::string ast_node_format(
