@@ -182,7 +182,7 @@ arg : term ;
 /* Assignment */
 ass : path "=" nls exp { $$ = NODE(NodeType::ASS, $1, $exp); } ;
 
-at: id "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); } ;
+at: path "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); } ;
 
 path
   : id { $$ = NODE(NodeType::PATH, $1); }
