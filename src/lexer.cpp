@@ -201,7 +201,10 @@ int Lexer::lex() {
 	loc->begin.column = loc->end.column;
 
 	char c = advance();
-	if (c < 0) return tk::YYEOF;
+	if (c < 0) {
+		lines.push_back(current_line);
+		return tk::YYEOF;
+	}
 	switch (c) {
 		case '(': return tk::PAREN_OPEN;
 		case ')': return tk::PAREN_CLOSE;
