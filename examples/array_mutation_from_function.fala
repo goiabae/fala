@@ -1,0 +1,9 @@
+let var xs = make_array 10 in
+let fun f (out ys) = do
+  ys[7] = 420
+end in
+do
+  xs[7] = 69
+	f xs
+	write_int xs[7]
+end

@@ -1,0 +1,7 @@
+let var n = read_int nil in
+let var i = 1 in
+while i <= 10 then do
+	write_int (n * i);
+	write_str "\n";
+	i = i + 1
+end
