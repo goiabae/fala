@@ -73,8 +73,10 @@ auto Interpreter::eval_application(
 		enter_new_scope();
 		for (size_t i = 0; i < args.size(); i++) {
 			const auto& param_node = ast.at(custom.param_idxs[i]);
-			assert(param_node.type == NodeType::GUID);
-			const auto name = symtab.name_of(param_node.guid).value();
+			assert(param_node.type == NodeType::PARAM);
+			const auto& param_name = ast.at(param_node[1]);
+			assert(param_name.type == NodeType::GUID);
+			const auto name = symtab.name_of(param_name.guid).value();
 			auto cell = ctx.env.insert(ctx.scope_id, name, args[i]);
 			assert(cell != nullptr);
 		}
@@ -504,6 +506,8 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 			if (val == nullptr) err("Variable was null");
 			return val;
 		}
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 	assert(false);
 }

@@ -40,6 +40,8 @@ enum {
 	KW_BREAK,
 	KW_CONTINUE,
 	KW_VAR,
+	KW_VAL,
+	KW_OUT,
 	KW_LET,
 	KW_IN,
 	KW_FUN,
@@ -72,6 +74,8 @@ const char* keyword_repr(size_t i) {
 		case KW_BREAK: return "break";
 		case KW_CONTINUE: return "continue";
 		case KW_VAR: return "var";
+		case KW_VAL: return "val";
+		case KW_OUT: return "out";
 		case KW_LET: return "let";
 		case KW_IN: return "in";
 		case KW_FUN: return "fun";
@@ -119,6 +123,8 @@ int keyword_to_bison(size_t i) {
 		case KW_UINT: return tk::UINT;
 		case KW_BOOL: return tk::BOOL;
 		case KW_AS: return tk::AS;
+		case KW_VAL: return tk::VAL;
+		case KW_OUT: return tk::OUT;
 	}
 	assert(false);
 }

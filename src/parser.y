@@ -46,7 +46,7 @@ AST parse(Reader* reader, StringPool& pool);
 %token <character> CHAR
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR LET IN FUN BOOL INT UINT AS
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS
 %token NIL TRUE FALSE
 
 /* pontuation */
@@ -74,7 +74,7 @@ AST parse(Reader* reader, StringPool& pool);
 %type <node> jump
 %type <node> let decls
 %type <node> decl params opt_type
-%type <node> app func args arg
+%type <node> app func args arg param mode
 %type <node> ass path at
 %type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
@@ -155,8 +155,17 @@ opt_type : %empty { $$ = new_empty_node(ast); }
          ;
 
 params : %empty    { $$ = new_list_node(ast, NodeType::METALIST); }
-       | params id { $$ = list_append_node(ast, $$, $2);}
+       | params param { $$ = list_append_node(ast, $$, $2);}
        ;
+
+param : id { $$ = NODE(NodeType::PARAM, new_empty_node(ast), $1); }
+      | "(" mode id ")" { $$ = NODE(NodeType::PARAM, $2, $3); }
+			;
+
+mode : VAR { $$ = new_mode_node(ast, @$, ModeLiteral::VAR); }
+     | VAL { $$ = new_mode_node(ast, @$, ModeLiteral::VAL); }
+     | OUT { $$ = new_mode_node(ast, @$, ModeLiteral::OUT); }
+		 ;
 
 /* Function application */
 app : func arg args { $$ = NODE(NodeType::APP, $1, list_prepend_node(ast, $3, $2)); };

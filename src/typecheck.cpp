@@ -835,8 +835,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			//   [t1, ..., tn] -> t
 			auto typ = [&]() {
 				vector<T> inputs {};
-				for ([[maybe_unused]] auto param_idx : params_node)
+				for ([[maybe_unused]] auto param_idx : params_node) {
 					inputs.push_back(make_type(make_modevar(), make_datavar()));
+				}
 
 				// if no return type is provided, must be infered
 				DATATYPE output = nullptr;
@@ -855,10 +856,29 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 				for (auto param_idx : params_node) {
 					const auto& param = ast.at(param_idx);
-					auto var = make_type(make_modevar(), make_datavar());
+					assert(param.type == NodeType::PARAM);
+					const auto& param_name = ast.at(param[1]);
+					assert(param_name.type == NodeType::GUID);
+					const auto& param_mode = ast.at(param[0]);
+					assert(
+						param_mode.type == NodeType::MODE
+						|| param_mode.type == NodeType::EMPTY
+					);
+					const auto modety = [&]() {
+						if (param_mode.type == NodeType::EMPTY)
+							return make_modevar();
+						else if (param_mode.mode == ModeLiteral::VAL)
+							return VAL_;
+						else if (param_mode.mode == ModeLiteral::VAR)
+							return VAR_;
+						else if (param_mode.mode == ModeLiteral::OUT)
+							return OUT_;
+						else
+							assert(false);
+					}();
+					auto var = make_type(modety, make_datavar());
 					param_types.push_back(var);
-					assert(param.type == NodeType::GUID);
-					variables[param.guid] = var;
+					variables[param_name.guid] = var;
 				}
 
 				auto output = [&]() {
@@ -958,6 +978,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			assert(found_typ != nullptr);
 			return ASSOC_TYPE(node_idx, found_typ);
 		}
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 
 	assert(false && "unreachable");

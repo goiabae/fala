@@ -137,10 +137,12 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			const auto& params_node = m_ast.at(params_idx);
 			for (const auto param_idx : params_node) {
 				const auto& param_node = m_ast.at(param_idx);
-				assert(param_node.type == NodeType::ID);
+				assert(param_node.type == NodeType::PARAM);
+				const auto& param_id_node = m_ast.at(param_node[1]);
+				assert(param_id_node.type == NodeType::ID);
 				const auto guid =
-					m_symtab.define(param_node.str_id, inner_scope_idx, param_idx);
-				auto& m = m_ast.at(param_idx);
+					m_symtab.define(param_id_node.str_id, inner_scope_idx, param_idx);
+				auto& m = m_ast.at(param_node[1]);
 				m.type = NodeType::GUID;
 				m.guid = guid;
 			}
@@ -164,5 +166,7 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		case NodeType::INSTANCE: assert(false);
 		case NodeType::METALIST: assert(false);
 		case NodeType::GUID: break;
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 }

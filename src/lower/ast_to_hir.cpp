@@ -497,6 +497,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			for (auto param_id : params_node) {
 				const auto& param_node = ast.at(param_id);
+				assert(param_node.type == NodeType::ID);
 				const auto name = std::string(pool.find(param_node.str_id));
 				auto param_register = make_variable(name);
 				parameter_registers.push_back(param_register);
@@ -626,6 +627,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::METALIST: assert(false);
 		case NodeType::GUID: assert(false);
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 	assert(false);
 }
@@ -719,6 +722,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::METALIST: assert(false);
 		case NodeType::GUID: assert(false);
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 	assert(false);
 }

@@ -110,6 +110,50 @@ Result make_array(Compiler& comp, vector<lir::Operand> args) {
 
 } // namespace builtin
 
+enum class PassingConvention {
+	CLONE,
+	ALIAS,
+	INVALID,
+};
+
+static PassingConvention passing_convention_for(
+	ConcreteMode param_mode, ConcreteMode arg_mode
+) {
+	if (param_mode == ConcreteMode::OUT) {
+		if (arg_mode == ConcreteMode::OUT) {
+			return PassingConvention::ALIAS;
+		} else if (arg_mode == ConcreteMode::VAL) {
+			return PassingConvention::INVALID;
+		} else if (arg_mode == ConcreteMode::VAR) {
+			return PassingConvention::ALIAS;
+		} else {
+			assert(false);
+		}
+	} else if (param_mode == ConcreteMode::VAL) {
+		if (arg_mode == ConcreteMode::OUT) {
+			return PassingConvention::CLONE;
+		} else if (arg_mode == ConcreteMode::VAL) {
+			return PassingConvention::ALIAS;
+		} else if (arg_mode == ConcreteMode::VAR) {
+			return PassingConvention::CLONE;
+		} else {
+			assert(false);
+		}
+	} else if (param_mode == ConcreteMode::VAR) {
+		if (arg_mode == ConcreteMode::OUT) {
+			return PassingConvention::CLONE;
+		} else if (arg_mode == ConcreteMode::VAL) {
+			return PassingConvention::CLONE;
+		} else if (arg_mode == ConcreteMode::VAR) {
+			return PassingConvention::CLONE;
+		} else {
+			assert(false);
+		}
+	} else {
+		assert(false);
+	}
+}
+
 lir::Chunk Compiler::compile() {
 	allocate_variables();
 
@@ -169,10 +213,13 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 
 	lir::Chunk chunk {};
 
-	vector<lir::Operand> args {};
+	std::vector<lir::Operand> args {};
+	std::vector<std::shared_ptr<Type>> arg_tys {};
 	for (const auto arg_idx : args_node) {
 		const auto res = compile_or_allocate_lvalue(arg_idx, ctx);
 		chunk += res.code;
+		auto ty = tpc.node_to_type.at(arg_idx);
+		arg_tys.push_back(ty);
 		args.push_back(res.opnd);
 	}
 
@@ -194,8 +241,31 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	} else {
 		const auto func_opnd = variables.at(func_node.guid);
 
-		for (const auto& arg : std::ranges::reverse_view(args))
-			chunk.emit(Opcode::PUSH, arg);
+		const auto ty = tpc.variables.at(func_node.guid);
+		const auto dty = get_datatype(ty);
+		const auto fty = std::dynamic_pointer_cast<Function>(dty);
+		for (const auto& [i, arg] :
+		     std::ranges::views::enumerate(std::ranges::reverse_view(args))) {
+			const auto param_mode =
+				(*(fty->inputs.at(static_cast<std::size_t>(i))->mode))
+					.to_concrete()
+					.value();
+			const auto arg_mode =
+				arg_tys.at(static_cast<std::size_t>(i))->mode->to_concrete().value();
+			const auto convention = passing_convention_for(param_mode, arg_mode);
+
+			if (convention == PassingConvention::ALIAS) {
+				chunk.emit(Opcode::PUSH, arg);
+			} else if (convention == PassingConvention::CLONE) {
+				const auto t = make_register();
+				chunk.emit_clonea(t, arg);
+				chunk.emit(Opcode::PUSH, t);
+			} else if (convention == PassingConvention::INVALID) {
+				throw std::runtime_error("cannot call function. conflicting modes");
+			} else {
+				assert(false);
+			}
+		}
 
 		chunk.emit(Opcode::CALL, func_opnd);
 		const auto res = make_register();
@@ -409,6 +479,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			assert(variables.contains(node.guid));
 			return {{}, variables.at(node.guid)};
 		}
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 	assert(false);
 }
@@ -490,8 +562,10 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 		func.emit(Opcode::FUNC);
 		for (auto param_idx : params_node) {
 			const auto& param_node = ast.at(param_idx);
-			assert(param_node.type == NodeType::GUID);
-			const auto arg = variables.at(param_node.guid);
+			assert(param_node.type == NodeType::PARAM);
+			const auto& param_name = ast.at(param_node[1]);
+			assert(param_name.type == NodeType::GUID);
+			const auto arg = variables.at(param_name.guid);
 			func.emit(Opcode::POP, arg);
 		}
 		func = func + r0.code;
@@ -725,6 +799,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
 			return {chunk, tmp};
 		}
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
 	}
 	assert(false);
 }

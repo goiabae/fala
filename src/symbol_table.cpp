@@ -154,3 +154,13 @@ std::vector<Guid> SymbolTable::all_symbols() const {
 	}
 	return syms;
 }
+
+std::vector<Guid> SymbolTable::symbols_with_name(StrID name) const {
+	const std::vector<Guid> syms = all_symbols();
+	std::vector<Guid> with_name {};
+	for (auto sym : syms) {
+		const auto name_ = name_of(sym).value();
+		if (name_ == name) with_name.push_back(sym);
+	}
+	return with_name;
+}

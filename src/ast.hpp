@@ -56,6 +56,8 @@ enum class NodeType {
 	INSTANCE,
 	METALIST, // meta node for containing a list of other nodes
 	GUID,     // a unique identifier inside a given ast
+	MODE,
+	PARAM,
 };
 
 enum class BinaryOperator {
@@ -72,6 +74,12 @@ typedef struct NodeIndex {
 } NodeIndex;
 
 typedef struct AST AST;
+
+enum class ModeLiteral {
+	VAR,
+	VAL,
+	OUT,
+};
 
 // AST
 void ast_print(AST* ast, const StringPool& pool);
@@ -90,6 +98,7 @@ NodeIndex new_true_node(AST* ast, Location loc);
 NodeIndex new_false_node(AST* ast, Location loc);
 NodeIndex new_char_node(AST* ast, Location loc, char character);
 NodeIndex new_empty_node(AST* ast);
+NodeIndex new_mode_node(AST* ast, Location loc, ModeLiteral mode);
 NodeIndex list_append_node(AST* ast, NodeIndex list, NodeIndex next);
 NodeIndex list_prepend_node(AST* ast, NodeIndex list, NodeIndex next);
 
@@ -110,6 +119,7 @@ struct Node {
 		char character;
 		BranchNode branch;
 		Guid guid;
+		ModeLiteral mode;
 	};
 
 	NodeIndex& operator[](size_t index) const;

@@ -71,6 +71,8 @@ bool is_branch_node(NodeType type) {
 		case NodeType::INSTANCE: return true;
 		case NodeType::METALIST: return false;
 		case NodeType::GUID: return false;
+		case NodeType::MODE: return false;
+		case NodeType::PARAM: return true;
 	}
 	assert(false);
 }
@@ -116,6 +118,8 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::AS: return "NodeType::AS";
 		case NodeType::METALIST: return "NodeType::METALIST";
 		case NodeType::GUID: return "NodeType::GUID";
+		case NodeType::MODE: return "NodeType::MODE";
+		case NodeType::PARAM: return "NodeType::PARAM";
 	}
 	assert(false);
 }
@@ -129,6 +133,7 @@ bool node_has_fixed_repr(enum NodeType type) {
 		case NodeType::EMPTY:
 		case NodeType::CHAR:
 		case NodeType::PATH:
+		case NodeType::MODE:
 		case NodeType::INSTANCE: return false;
 		default: return true;
 	}
@@ -500,7 +505,7 @@ void node_deinit(AST* ast, NodeIndex node_idx) {
 	// buffer
 	if (node.type == NodeType::ID || node.type == NodeType::NUM
 	    || node.type == NodeType::STR || node.type == NodeType::CHAR
-	    || node.type == NodeType::GUID)
+	    || node.type == NodeType::GUID || node.type == NodeType::MODE)
 		return;
 
 	for (size_t i = 0; i < node.branch.children_count; i++)
@@ -577,4 +582,13 @@ bool operator==(const AST& a, const AST& b) {
 	NodeRef ra {a.root_index, a};
 	NodeRef rb {b.root_index, b};
 	return ra == rb;
+}
+
+NodeIndex new_mode_node(AST* ast, Location loc, ModeLiteral mode) {
+	const auto idx = ast->alloc_node();
+	auto& node = ast->at(idx);
+	node.type = NodeType::MODE;
+	node.loc = loc;
+	node.mode = mode;
+	return idx;
 }
