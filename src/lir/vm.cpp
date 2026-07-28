@@ -178,6 +178,8 @@ void VM::run(const lir::Chunk& code) {
 					stack.push(Value(inst.operands[0].as_immediate().number));
 				} else if (inst.operands[0].type == Operand::Type::REGISTER) {
 					stack.push(cells[inst.operands[0].as_register().index]);
+				} else if (inst.operands[0].type == Operand::Type::NOTHING) {
+					stack.push(Value(0));
 				} else {
 					throw std::runtime_error("can't push value");
 				}
