@@ -170,14 +170,18 @@ mode : VAR { $$ = new_mode_node(ast, @$, ModeLiteral::VAR); }
 		 ;
 
 /* Function application */
-app : func arg args { $$ = NODE(NodeType::APP, $1, list_prepend_node(ast, $3, $2)); };
+app : func "(" args ")" { $$ = NODE(NodeType::APP, $1, $3); };
 
 /* TODO: allow application of function expressions to arguments */
 func : id ;
 
-args : %empty   { $$ = new_list_node(ast, NodeType::METALIST); }
-     | args arg { $$ = list_append_node(ast, $$, $2); }
-     ;
+args
+  : arg {
+    $$ = new_list_node(ast, NodeType::METALIST);
+    $$ = list_append_node(ast, $$, $1);
+  }
+  | args "," arg { $$ = list_append_node(ast, $$, $3); }
+  ;
 
 arg : term ;
 

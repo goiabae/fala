@@ -1,6 +1,6 @@
 # ==> 24
 let
-  var xs = make_array 10,
+  var xs = make_array(10),
 	var ys = xs
 in do
   ys[7] = 11;

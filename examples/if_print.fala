@@ -1,5 +1,5 @@
 if false then do
-  write_int 69
-	write_str "\n"
+  write_int(69)
+	write_str("\n")
 end else
-  write_str "not true\n"
+  write_str("not true\n")

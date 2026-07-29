@@ -1,8 +1,8 @@
 let
-	var xs = make_array 100
+	var xs = make_array(100)
 in do
 	for var i = 0 to 100 then
-		xs[i] = read_int nil;
+		xs[i] = read_int(nil);
 
 	# insertion sort xs
 	# impl took from https://pt.wikipedia.org/wiki/Insertion_sort
@@ -19,5 +19,5 @@ in do
 	end;
 
 	for var i = 0 to 100 then
-		do write_int xs[i]; write_str "\n" end;
+		do write_int(xs[i]); write_str("\n") end;
 end

@@ -9,7 +9,7 @@
 #include "typecheck.hpp"
 
 TEST(TypecheckTest, function_application) {
-	std::string source {"let fun is_inst op = op >= 0 and op <= 7 in is_inst 6"};
+	std::string source {"let fun is_inst op = op >= 0 and op <= 7 in is_inst(6)"};
 	Reader* reader = new StringReader(source);
 	StringPool pool {};
 	auto ast = parse(reader, pool);
