@@ -187,14 +187,19 @@ ValueCell copy_value(ValueCell value) {
 	if (std::holds_alternative<int>(*value)) {
 		return std::make_shared<Value>(std::get<int>(*value));
 	} else if (std::holds_alternative<Array>(*value)) {
-		auto result = std::make_shared<Value>(Array {});
 		auto size = std::get<Array>(*value).size;
-		std::get<Array>(*result).size = size;
-		std::get<Array>(*result).items.reserve(size);
-		const auto& items = std::get<Array>(*value).items;
+		Array arr {
+			.size = size,
+			.items = {},
+		};
+		arr.items.reserve(size);
+		const auto a = std::get<Array>(*value);
+		const auto items = a.items;
 		for (auto i = 0ul; i < size; i++) {
-			std::get<Array>(*result).items[i] = copy_value(items[i]);
+			arr.items.push_back(copy_value(items.at(i)));
 		}
+		assert(arr.items.size() == size);
+		auto result = std::make_shared<Value>(arr);
 		return result;
 	} else if (std::holds_alternative<bool>(*value)) {
 		return std::make_shared<Value>(std::get<bool>(*value));
