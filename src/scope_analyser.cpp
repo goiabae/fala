@@ -168,5 +168,17 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		case NodeType::GUID: break;
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: {
+			for (auto field_idx : node) analyse(field_idx, scope_idx);
+			return;
+		}
+		case NodeType::FIELD: {
+			analyse(node[1], scope_idx);
+			return;
+		}
+		case NodeType::FIELD_ACCESS: {
+			analyse(node[0], scope_idx);
+			return;
+		}
 	}
 }

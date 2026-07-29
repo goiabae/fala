@@ -508,6 +508,21 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: {
+			std::vector<std::pair<std::string, ValueCell>> fields;
+			for (auto field_idx : node) {
+				const auto& field_node = ast.at(field_idx);
+				assert(field_node.type == NodeType::FIELD);
+				const auto& field_name = ast.at(field_node[0]);
+				assert(field_name.type == NodeType::ID);
+				const auto field_value = eval_node(field_node[1]);
+				const auto name = std::string(pool.find(field_name.str_id));
+				fields.push_back(std::make_pair(name, field_value));
+			}
+			return std::make_shared<Value>(Record {fields});
+		}
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: assert(false);
 	}
 	assert(false);
 }

@@ -73,6 +73,9 @@ bool is_branch_node(NodeType type) {
 		case NodeType::GUID: return false;
 		case NodeType::MODE: return false;
 		case NodeType::PARAM: return true;
+		case NodeType::RECORD_LITERAL: return true;
+		case NodeType::FIELD: return true;
+		case NodeType::FIELD_ACCESS: return true;
 	}
 	assert(false);
 }
@@ -120,6 +123,9 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::GUID: return "NodeType::GUID";
 		case NodeType::MODE: return "NodeType::MODE";
 		case NodeType::PARAM: return "NodeType::PARAM";
+		case NodeType::RECORD_LITERAL: return "NodeType::RECORD_LITERAL";
+		case NodeType::FIELD: return "NodeType::FIELD";
+		case NodeType::FIELD_ACCESS: return "NodeType::FIELD_ACCESS";
 	}
 	assert(false);
 }
@@ -186,6 +192,9 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::GUID: assert(false);
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: return "param";
+		case NodeType::RECORD_LITERAL: return "record_literal";
+		case NodeType::FIELD: return "field";
+		case NodeType::FIELD_ACCESS: return ".";
 	}
 	assert(false);
 }

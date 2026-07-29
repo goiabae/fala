@@ -57,6 +57,10 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
 		if (not t2->is_bound)
 			throw std::runtime_error("type variable was not bound");
 		return t2->bound_type;
+	} else if (auto t2 = std::dynamic_pointer_cast<RowSet>(t)) {
+		throw std::runtime_error("row set is not a concrete record");
+	} else if (auto t2 = std::dynamic_pointer_cast<Record>(t)) {
+		return t2;
 	} else {
 		assert(false && "no more variants of type!!!");
 	}

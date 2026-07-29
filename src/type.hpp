@@ -2,8 +2,10 @@
 #define TYPE_HPP
 
 #include <cassert>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -147,6 +149,42 @@ struct General : Datatype {
 };
 
 using GENERAL = std::shared_ptr<General>;
+
+struct Record : Datatype {
+	Record(std::vector<std::pair<std::string, DATATYPE>> fields)
+	: fields(fields) {}
+	std::vector<std::pair<std::string, DATATYPE>> fields;
+	size_t size_of() override { assert(false); }
+	std::ostream& print(std::ostream& st) const override {
+		st << '{';
+		for (auto i = 0ul; i < fields.size(); i++) {
+			st << fields.at(i).first << ':';
+			fields.at(i).second->print(st);
+			if (i != (fields.size() - 1)) {
+				st << ';';
+			}
+		}
+		st << '}';
+		return st;
+	}
+};
+
+struct RowSet : Datatype {
+	RowSet(std::map<std::string, DATATYPE> rows) : rows(rows) {}
+	std::map<std::string, DATATYPE> rows;
+	size_t size_of() override { assert(false); }
+	std::ostream& print(std::ostream& st) const override {
+		st << '{';
+		for (const auto& [n, d] : rows) {
+			st << n << ':';
+			d->print(st);
+			st << ';';
+		}
+		st << "...";
+		st << '}';
+		return st;
+	}
+};
 
 enum class ConcreteMode {
 	VAL,

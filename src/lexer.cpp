@@ -210,6 +210,8 @@ int Lexer::lex() {
 		case ')': return tk::PAREN_CLOSE;
 		case '[': return tk::BRACKET_OPEN;
 		case ']': return tk::BRACKET_CLOSE;
+		case '{': return tk::CURLY_OPEN;
+		case '}': return tk::CURLY_CLOSE;
 		case ';': return tk::SEMICOL;
 		case ':': return tk::COLON;
 		case ',': return tk::COMMA;

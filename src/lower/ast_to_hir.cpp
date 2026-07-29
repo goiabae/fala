@@ -629,6 +629,38 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::GUID: assert(false);
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: {
+			const auto field_count = node.size();
+			hir::Code code {};
+			auto t1 = make_register();
+			const auto l1 = ctx.current_module.register_static_initialization(
+				make_label(),
+				hir::Visibility::HIDDEN,
+				hir::StaticAllocation {field_count}
+			);
+			code.get_global(t1, l1);
+			const auto t2 = make_register();
+			code.alloc(t2, t1);
+			for (auto i = 0ul; i < field_count; i++) {
+				const auto& field_node = ast.at(node[i]);
+				assert(field_node.type == NodeType::FIELD);
+				const auto ti = make_register();
+				const auto li = ctx.current_module.register_constant(
+					make_label(),
+					hir::Visibility::HIDDEN,
+					hir::Integer(static_cast<int>(i))
+				);
+				const auto ti2 = make_register();
+				code.get_global(ti2, li);
+				code.get_element(ti, t2, ti2);
+				const auto c0 = compile(field_node[1], ctx);
+				code = code + c0.code;
+				code.store(ti, c0.result_register);
+			}
+			return {code, t2};
+		}
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: assert(false);
 	}
 	assert(false);
 }
@@ -724,6 +756,9 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::GUID: assert(false);
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: assert(false);
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: assert(false);
 	}
 	assert(false);
 }

@@ -26,11 +26,12 @@ struct CustomFunction {
 };
 
 struct Array;
+struct Record;
 
 struct Nil {};
 
 using Value = std::variant<
-	BuiltinFunction, CustomFunction, Array, int, bool, std::string, Nil>;
+	BuiltinFunction, CustomFunction, Array, int, bool, std::string, Nil, Record>;
 
 using ValueCell = std::shared_ptr<Value>;
 
@@ -42,6 +43,10 @@ struct Array {
 struct BuiltinFunction {
 	size_t param_count;
 	ValueCell (Interpreter::*builtin)(std::vector<ValueCell>);
+};
+
+struct Record {
+	std::vector<std::pair<std::string, ValueCell>> fields;
 };
 
 struct Nothing {};

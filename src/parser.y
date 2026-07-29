@@ -52,6 +52,7 @@ AST parse(Reader* reader, StringPool& pool);
 /* pontuation */
 %token PAREN_OPEN "(" PAREN_CLOSE ")"
 %token BRACKET_OPEN "[" BRACKET_CLOSE "]"
+%token CURLY_OPEN "{" CURLY_CLOSE "}"
 %token SEMICOL ";" COLON ":"
 %token COMMA ","
 %token DOT "."
@@ -75,11 +76,12 @@ AST parse(Reader* reader, StringPool& pool);
 %type <node> let decls
 %type <node> decl params opt_type
 %type <node> app func args arg param mode
-%type <node> ass path at
+%type <node> ass path at dot
 %type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id int
 %type <node> type_expression type_argument_list type_argument
+%type <node> record_literal field_list field
 
 %%
 
@@ -184,9 +186,12 @@ ass : path "=" nls exp { $$ = NODE(NodeType::ASS, $1, $exp); } ;
 
 at: path "[" exp "]" { $$ = NODE(NodeType::AT, $1, $3); } ;
 
+dot : path "." id { $$ = NODE(NodeType::FIELD_ACCESS, $1, $3); } ;
+
 path
   : id { $$ = NODE(NodeType::PATH, $1); }
   | at { $$ = NODE(NodeType::PATH, $1); }
+  | dot { $$ = NODE(NodeType::PATH, $1); }
   ;
 
 /* Operators. Infix and prefix */
@@ -217,7 +222,32 @@ term : "(" nls exp nls ")" { $$ = $exp; }
      | FALSE       { $$ = new_false_node(ast, @$); }
      | TRUE        { $$ = new_true_node(ast, @$); }
      | CHAR        { $$ = new_char_node(ast, @$, $1); }
+     | record_literal
      ;
+
+record_literal
+  : "{" field_list opt_field_sep "}" { $$ = $2; }
+  ;
+
+field_list
+  : field {
+    $$ = new_list_node(ast, NodeType::RECORD_LITERAL);
+    $$ = list_append_node(ast, $$, $1);
+  }
+  | field_list[prefix] field_sep field[postfix] {
+    $$ = list_append_node(ast, $prefix, $postfix);
+  }
+  ;
+
+field
+  : id "=" exp {
+    $$ = NODE(NodeType::FIELD, $1, $3);
+  }
+  ;
+
+field_sep : ";" ;
+
+opt_field_sep : %empty | field_sep ;
 
 id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 

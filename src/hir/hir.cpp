@@ -473,4 +473,13 @@ void print_module(
 	fprintf(fd, "}\n");
 }
 
+hir::Label Module::register_static_initialization(
+	hir::Label name, Visibility visibility,
+	const StaticInitialization& static_init
+) {
+	// FIXME
+	static_symbols[name.name] = std::make_pair(visibility, static_init);
+	return name;
+}
+
 } // namespace hir

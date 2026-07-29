@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <ranges>
 #include <string_view>
@@ -421,6 +422,12 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 	return {chunk, result_register};
 }
 
+static bool fits_in_register(const Datatype& d) {
+	if (dynamic_cast<const Integer*>(&d) != nullptr) return true;
+	if (dynamic_cast<const Nil*>(&d) != nullptr) return true;
+	return false;
+}
+
 Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
@@ -481,6 +488,34 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: assert(false);
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: {
+			const auto r0 = compile_lvalue(node[0], ctx);
+			const auto t0 = std::dynamic_pointer_cast<Record>(
+				get_datatype(tpc.node_to_type.at(node[0]))
+			);
+			const auto& field_node = ast.at(node[1]);
+			assert(field_node.type == NodeType::ID);
+			const auto field_name = std::string(pool.find(field_node.str_id));
+			auto found = std::ranges::find(t0->fields, field_name, [](const auto& x) {
+				return x.first;
+			});
+			assert(found != t0->fields.end());
+			auto d = std::distance(t0->fields.begin(), found);
+			const auto field_ty = found->second;
+			const auto t1 = make_register();
+			lir::Chunk chunk {};
+			chunk += r0.code;
+			chunk.emit_shifta(t1, lir::Immediate(static_cast<int>(d)), r0.opnd);
+			if (not fits_in_register(*field_ty)) {
+				const auto t2 = make_register();
+				chunk.emit_loada(t2, lir::Immediate(0), t1);
+				return {chunk, t2};
+			} else {
+				return {chunk, t1};
+			}
+		}
 	}
 	assert(false);
 }
@@ -504,6 +539,12 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		return (nullptr != std::dynamic_pointer_cast<Array>(t2));
 	}();
 
+	const auto is_record = [&]() {
+		auto t1 = tpc.node_to_type.at(exp_idx);
+		auto t2 = get_datatype(t1);
+		return (nullptr != std::dynamic_pointer_cast<Record>(t2));
+	}();
+
 	lir::Chunk chunk {};
 	const auto var = variables.at(id_node.guid);
 
@@ -514,7 +555,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	} else {
 		const auto r0 = compile(exp_idx, ctx);
 		chunk += r0.code;
-		if (is_array) {
+		if (is_array or is_record) {
 			chunk.emit_mov(var, r0.opnd);
 		} else {
 			chunk.emit_alloca(var, lir::Immediate(1));
@@ -801,6 +842,23 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: {
+			const auto field_count = node.size();
+			lir::Chunk chunk {};
+			const auto t1 = make_register();
+			chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(field_count)));
+			for (auto i = 0ul; i < field_count; i++) {
+				const auto& field_node = ast.at(node[i]);
+				assert(field_node.type == NodeType::FIELD);
+				const auto ri = compile(field_node[1], ctx);
+				chunk += ri.code;
+				chunk.emit_storea(ri.opnd, lir::Immediate(static_cast<int>(i)), t1);
+			}
+			chunk.result_opnd = t1;
+			return {chunk, t1};
+		}
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: assert(false);
 	}
 	assert(false);
 }

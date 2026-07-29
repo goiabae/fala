@@ -58,6 +58,9 @@ enum class NodeType {
 	GUID,     // a unique identifier inside a given ast
 	MODE,
 	PARAM,
+	RECORD_LITERAL,
+	FIELD,
+	FIELD_ACCESS,
 };
 
 enum class BinaryOperator {

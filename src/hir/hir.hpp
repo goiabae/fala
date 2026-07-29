@@ -192,6 +192,9 @@ struct Module {
 	hir::Label register_constant(
 		hir::Label name, Visibility visibility, const Constant& constant
 	);
+	hir::Label register_static_initialization(
+		hir::Label, Visibility visibility, const StaticInitialization& static_init
+	);
 };
 
 Code operator+(Code pre, Code post);

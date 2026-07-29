@@ -391,6 +391,51 @@ bool Typechecker::unify(D a, D b) {
 	if (is<Nil>(a) and is<Nil>(b)) return true;
 	if (is<Void>(a) and is<Void>(b)) return true;
 
+	if (auto ra = to<Record>(a), rb = to<Record>(b); ra and rb) {
+		if (ra->fields.size() != rb->fields.size()) return false;
+		return std::ranges::all_of(
+			std::ranges::views::zip(ra->fields, rb->fields), [&](const auto& p) {
+				const auto& [a, b] = p;
+				return a.first == b.first and unify(a.second, b.second);
+			}
+		);
+	}
+
+	if (auto ra = to<Record>(a)) {
+		if (auto sb = to<RowSet>(b)) {
+			for (const auto& [n, d] : sb->rows) {
+				static constexpr const auto get_first = [](const auto& x) {
+					return x.first;
+				};
+				auto found = std::ranges::find(ra->fields, n, get_first);
+				if (found != ra->fields.end()) {
+					if (not unify((*found).second, d)) return false;
+				} else {
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+
+	if (auto sa = to<RowSet>(a)) {
+		if (auto rb = to<Record>(b)) {
+			return unify(rb, sa);
+		}
+	}
+
+	if (auto sa = to<RowSet>(a), sb = to<RowSet>(b); sa and sb) {
+		std::map<std::string, D> new_rows = sa->rows;
+		for (const auto& [nb, db] : sb->rows) {
+			if (new_rows.contains(nb)) {
+				if (not unify(new_rows.at(nb), db)) return false;
+			} else {
+				new_rows[nb] = db;
+			}
+		}
+		return true;
+	}
+
 	return false;
 }
 
@@ -1050,6 +1095,57 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: {
+			std::vector<std::pair<std::string, D>> field_tys {};
+			for (auto field_idx : node) {
+				const auto& field_node = ast.at(field_idx);
+				assert(field_node.type == NodeType::FIELD);
+				const auto t1 = typecheck(field_node[1]);
+				if (not submode(t1->mode, VAL_))
+					throw std::runtime_error("submoding error");
+				const auto& name_node = ast.at(field_node[0]);
+				assert(name_node.type == NodeType::ID);
+				const auto name = std::string(pool.find(name_node.str_id));
+				field_tys.push_back(std::make_pair(name, t1->datatype));
+			}
+			std::sort(
+				field_tys.begin(), field_tys.end(), [](const auto& x, const auto& y) {
+					return x.first < y.first;
+				}
+			);
+			const auto d2 = std::make_shared<Record>(field_tys);
+			const auto t2 = make_type(VAL_, d2);
+			return ASSOC_TYPE(node_idx, t2);
+		}
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: {
+			const auto t1 = typecheck(node[0]);
+			const auto& field_node = ast.at(node[1]);
+			assert(field_node.type == NodeType::ID);
+			const auto field_name = std::string(pool.find(field_node.str_id));
+			const auto d3 = make_datavar();
+			const auto d2 = std::make_shared<RowSet>(
+				std::map<std::string, std::shared_ptr<Datatype>> {{field_name, d3}}
+			);
+			const auto t2 = make_type(make_modevar(), d2);
+			std::ostringstream ss1 {};
+			ss1 << *t1;
+			std::ostringstream ss2 {};
+			ss2 << *t2;
+			logger.log(
+				LogLevel::INFO,
+				node.loc,
+				"unifying value (t1:{}) with row set (t2:{})",
+				ss1.str(),
+				ss2.str()
+			);
+			if (not unify(t1, t2))
+				logger.err(
+					node.loc, "cannot access value without field \"{}\"", field_name
+				);
+			const auto t4 = make_type(t1->mode, d3);
+			return t4;
+		}
 	}
 
 	assert(false && "unreachable");
