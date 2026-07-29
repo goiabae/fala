@@ -422,11 +422,13 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 	return {chunk, result_register};
 }
 
+#if 0
 static bool fits_in_register(const Datatype& d) {
 	if (dynamic_cast<const Integer*>(&d) != nullptr) return true;
 	if (dynamic_cast<const Nil*>(&d) != nullptr) return true;
 	return false;
 }
+#endif
 
 Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
@@ -450,16 +452,22 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::LTE: assert(false);
 		case NodeType::EQ: assert(false);
 		case NodeType::AT: {
+			//
+			// c0 : *----> (*)----> [... *]----> ...
+			// r0 : (*)----> ...
+			//
 			const auto& node = ast.at(node_idx);
-			const auto r0 = compile_lvalue(node[0], ctx);
-			const auto r1 = compile(node[1], ctx);
-			const auto tmp = make_register();
+			const auto c0 = compile_lvalue(node[0], ctx);
+			const auto c1 = compile(node[1], ctx);
+			const auto r0 = make_register();
+			const auto r1 = make_register();
 
 			lir::Chunk chunk {};
-			chunk += r0.code;
-			chunk += r1.code;
-			chunk.emit_shifta(tmp, r1.opnd, r0.opnd);
-			return {chunk, tmp};
+			chunk += c0.code;
+			chunk += c1.code;
+			chunk.emit_loada(r1, lir::Immediate(0), c0.opnd);
+			chunk.emit_shifta(r0, c1.opnd, r1);
+			return {chunk, r0};
 		}
 		case NodeType::ADD: assert(false);
 		case NodeType::SUB: assert(false);
@@ -505,16 +513,12 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			auto d = std::distance(t0->fields.begin(), found);
 			const auto field_ty = found->second;
 			const auto t1 = make_register();
+			const auto t3 = make_register();
 			lir::Chunk chunk {};
 			chunk += r0.code;
-			chunk.emit_shifta(t1, lir::Immediate(static_cast<int>(d)), r0.opnd);
-			if (not fits_in_register(*field_ty)) {
-				const auto t2 = make_register();
-				chunk.emit_loada(t2, lir::Immediate(0), t1);
-				return {chunk, t2};
-			} else {
-				return {chunk, t1};
-			}
+			chunk.emit_loada(t3, lir::Immediate(0), r0.opnd);
+			chunk.emit_shifta(t1, lir::Immediate(static_cast<int>(d)), t3);
+			return {chunk, t1};
 		}
 		case NodeType::ARRAY_LITERAL: assert(false);
 		case NodeType::REPEAT: assert(false);
@@ -535,18 +539,6 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
 	const auto comment = std::format("creating variable \"{}\"", name);
 
-	const auto is_array = [&]() {
-		auto t1 = tpc.node_to_type.at(exp_idx);
-		auto t2 = get_datatype(t1);
-		return (nullptr != std::dynamic_pointer_cast<Array>(t2));
-	}();
-
-	const auto is_record = [&]() {
-		auto t1 = tpc.node_to_type.at(exp_idx);
-		auto t2 = get_datatype(t1);
-		return (nullptr != std::dynamic_pointer_cast<Record>(t2));
-	}();
-
 	lir::Chunk chunk {};
 	const auto var = variables.at(id_node.guid);
 
@@ -557,12 +549,8 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	} else {
 		const auto r0 = compile(exp_idx, ctx);
 		chunk += r0.code;
-		if (is_array or is_record) {
-			chunk.emit_mov(var, r0.opnd);
-		} else {
-			chunk.emit_alloca(var, lir::Immediate(1));
-			chunk.emit_storea(r0.opnd, lir::Immediate(0), var);
-		}
+		chunk.emit_alloca(var, lir::Immediate(1));
+		chunk.emit_storea(r0.opnd, lir::Immediate(0), var);
 	}
 	return {chunk, var};
 }
