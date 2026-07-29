@@ -111,8 +111,8 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		}
 		case NodeType::STR: return;
 		case NodeType::VAR_DECL: {
-			const auto id_idx = node[0];
-			const auto exp_idx = node[2];
+			const auto id_idx = node[1];
+			const auto exp_idx = node[3];
 			const auto& id_node = m_ast.at(id_idx);
 			assert(id_node.type == NodeType::ID);
 			const auto guid = m_symtab.define(id_node.str_id, scope_idx, id_idx);

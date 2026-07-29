@@ -479,10 +479,10 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::STR: return eval_string(node.str_id);
 		case NodeType::VAR_DECL:
 			return eval_variable_declaration(
-				node[0],
-				(ast.at(node[1]).type == NodeType::EMPTY) ? std::optional<NodeIndex> {}
-																									: node[1],
-				node[2]
+				node[1],
+				(ast.at(node[2]).type == NodeType::EMPTY) ? std::optional<NodeIndex> {}
+																									: node[2],
+				node[3]
 			);
 		case NodeType::FUN_DECL:
 			return eval_function_declaration(

@@ -150,7 +150,7 @@ decls : decl           { $$ = new_list_node(ast, NodeType::METALIST); $$ = list_
       ;
 
 /* Declarations */
-decl : VAR id opt_type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $2, $3, $exp); }
+decl : mode id opt_type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $1, $2, $3, $exp); }
      | FUN id params opt_type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
      ;
 

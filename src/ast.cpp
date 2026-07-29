@@ -279,6 +279,14 @@ static std::string ast_node_format(
 
 		s += ")";
 		return s;
+	} else if (node.type == NodeType::MODE) {
+		std::string s {};
+		switch (node.mode) {
+			case ModeLiteral::VAR: s += "var"; break;
+			case ModeLiteral::VAL: s += "val"; break;
+			case ModeLiteral::OUT: s += "out"; break;
+		}
+		return s;
 	}
 
 	std::size_t total_len = node.branch.children_count - 1;

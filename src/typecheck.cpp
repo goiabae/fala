@@ -905,12 +905,19 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 		// | G |- m x = e1 -> G, (x : t1)
 		//
 		case NodeType::VAR_DECL: {
-			auto id_idx = node[0];
-			auto opt_type_idx = node[1];
-			auto exp_idx = node[2];
+			auto mode_idx = node[0];
+			auto id_idx = node[1];
+			auto opt_type_idx = node[2];
+			auto exp_idx = node[3];
 
+			const auto& mode_node = ast.at(mode_idx);
 			const auto& id_node = ast.at(id_idx);
 			const auto& opt_type_node = ast.at(opt_type_idx);
+			assert(mode_node.type == NodeType::MODE);
+
+			if (mode_node.mode == ModeLiteral::OUT) {
+				logger.err(node.loc, "Cannot defined variable as out");
+			}
 
 			auto exp = typecheck(exp_idx);
 
@@ -925,9 +932,16 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					);
 			}
 
-			// FIXME: should union with the mode the expression to check if they are
-			// compatible. can't assign val to an out!
-			auto t1 = make_type(VAR_, exp->datatype);
+			const auto m1 = [&]() {
+				if (mode_node.mode == ModeLiteral::VAL)
+					return VAL_;
+				else if (mode_node.mode == ModeLiteral::VAR)
+					return VAR_;
+				assert(mode_node.mode != ModeLiteral::OUT);
+				return VAL_;
+			}();
+
+			auto t1 = make_type(m1, exp->datatype);
 			assert(id_node.type == NodeType::GUID);
 			variables[id_node.guid] = t1;
 			return exp;

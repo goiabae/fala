@@ -516,8 +516,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 
-	const auto id_idx = node[0];
-	const auto exp_idx = node[2];
+	const auto id_idx = node[1];
+	const auto exp_idx = node[3];
 	const auto& id_node = ast.at(id_idx);
 	const auto& exp_node = ast.at(exp_idx);
 	assert(id_node.type == NodeType::GUID);

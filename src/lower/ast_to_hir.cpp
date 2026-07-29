@@ -453,11 +453,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::VAR_DECL: {
 			hir::Code code {};
 
-			auto id_idx = node[0];
-			auto opt_type_idx = node[1];
-			auto exp_idx = node[2];
-
-			(void)opt_type_idx;
+			auto id_idx = node[1];
+			auto exp_idx = node[3];
 
 			const auto& id_node = ast.at(id_idx);
 			const auto name = std::string(pool.find(id_node.str_id));
