@@ -1,4 +1,4 @@
-let var xs = make_array 10 in
+let var xs = 0..10 in
 let fun f (out ys) = do
   ys[7] = 420
 end in

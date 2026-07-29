@@ -10,7 +10,11 @@
 namespace lower::ast_to_hir {
 
 constexpr auto builtins = {
-	"read_int", "read_char", "write_int", "write_char", "write_str", "make_array"
+	"read_int",
+	"read_char",
+	"write_int",
+	"write_char",
+	"write_str",
 };
 
 hir::Module Compiler::compile() {

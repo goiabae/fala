@@ -8,7 +8,6 @@ SymbolTable ScopeAnalyser::analyse() {
 	m_symtab.define_builtin(m_pool.intern("write_int"));
 	m_symtab.define_builtin(m_pool.intern("write_char"));
 	m_symtab.define_builtin(m_pool.intern("write_str"));
-	m_symtab.define_builtin(m_pool.intern("make_array"));
 	analyse(m_ast.root_index, m_symtab.root_scope);
 	return m_symtab;
 }

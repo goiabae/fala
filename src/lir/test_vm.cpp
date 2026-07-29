@@ -276,7 +276,7 @@ TEST(VMTest, function_integer_array_out_parameter) {
 	// The following:
 
 	// let fun f (out xs: array<int>): nil = xs[17] = xs[17] + 1 in
-	// let var ys = make_array 32 in do
+	// let var ys = 0..32 in do
 	//   ys[17] = 69
 	//   f ys
 	//   ys[17]

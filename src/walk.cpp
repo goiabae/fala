@@ -626,7 +626,6 @@ ValueCell Interpreter::eval() {
 	PUSH_BUILTIN("read_int", &Interpreter::builtin_read, 1);
 	PUSH_BUILTIN("write_int", &Interpreter::builtin_write, 1);
 	PUSH_BUILTIN("write_str", &Interpreter::builtin_write, 1);
-	PUSH_BUILTIN("make_array", &Interpreter::builtin_array, 1);
 	PUSH_BUILTIN("exit", &Interpreter::builtin_exit, 1);
 	const auto val = eval_node(ast.root_index);
 	return val;

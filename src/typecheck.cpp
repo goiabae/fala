@@ -298,8 +298,6 @@ bool Typechecker::typecheck() {
 			variables[guid] = make_type(VAL_, int64_to_nil_typ);
 		} else if (name == "write_str") {
 			variables[guid] = make_type(VAL_, uint8_arr_to_nil_typ);
-		} else if (name == "make_array") {
-			variables[guid] = make_type(VAL_, int64_to_int64_arr_typ);
 		} else {
 			std::cerr << std::format("unexpected builtin function {}", name) << '\n';
 			assert(false);

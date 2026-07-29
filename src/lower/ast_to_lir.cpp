@@ -38,7 +38,6 @@ static Result read_char(Compiler& comp, vector<lir::Operand> args);
 static Result write_int(Compiler& comp, vector<lir::Operand> args);
 static Result write_char(Compiler& comp, vector<lir::Operand> args);
 static Result write_str(Compiler& comp, vector<lir::Operand> args);
-static Result make_array(Compiler& comp, vector<lir::Operand> args);
 
 struct Builtin {
 	Result (*ptr)(Compiler& comp, vector<lir::Operand> args);
@@ -51,7 +50,6 @@ constexpr auto builtins = {
 	Builtin {write_int, "write_int"},
 	Builtin {write_char, "write_char"},
 	Builtin {write_str, "write_str"},
-	Builtin {make_array, "make_array"}
 };
 
 Result write_int(Compiler& comp, vector<lir::Operand> args) {
@@ -96,17 +94,6 @@ Result read_char(Compiler& comp, vector<lir::Operand>) {
 	lir::Operand tmp = comp.make_register();
 	chunk.emit(Opcode::READC, tmp);
 	return {chunk, tmp};
-}
-
-Result make_array(Compiler& comp, vector<lir::Operand> args) {
-	if (args.size() != 1)
-		err("The `array' builtin expects a size as the first and only argument.");
-	const auto addr = comp.make_register();
-	const auto t1 = comp.make_register();
-	lir::Chunk chunk {};
-	chunk.emit_loada(t1, lir::Immediate(0), args[0]);
-	chunk.emit_alloca(addr, t1);
-	return {chunk, addr};
 }
 
 } // namespace builtin
