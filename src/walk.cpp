@@ -538,7 +538,20 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 				.items = values,
 			});
 		}
-		case NodeType::REPEAT: assert(false);
+		case NodeType::REPEAT: {
+			auto init = eval_node(node[0]);
+			auto v1 = eval_node(node[1]);
+			assert(std::holds_alternative<int>(*v1));
+			auto amount = std::get<int>(*v1);
+			std::vector<ValueCell> values {};
+			for (auto i = 0ul; i < static_cast<std::size_t>(amount); i++) {
+				values.push_back(copy_value(init));
+			}
+			return std::make_shared<Value>(Array {
+				.size = values.size(),
+				.items = values,
+			});
+		}
 	}
 	assert(false);
 }
