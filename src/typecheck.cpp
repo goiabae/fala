@@ -1144,7 +1144,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					node.loc, "cannot access value without field \"{}\"", field_name
 				);
 			const auto t4 = make_type(t1->mode, d3);
-			return t4;
+			return ASSOC_TYPE(node_idx, t4);
 		}
 		case NodeType::ARRAY_LITERAL: {
 			auto t1 = make_datavar();
@@ -1164,7 +1164,6 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			return ASSOC_TYPE(node_idx, t2);
 		}
 	}
-
 	assert(false && "unreachable");
 }
 
