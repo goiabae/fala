@@ -658,9 +658,7 @@ Result Compiler::compile_str(NodeIndex node_idx, Context) {
 
 	lir::Chunk chunk {};
 	chunk.emit_alloca(t1, lir::Immediate((int)str.size()));
-	for (auto i = 0ul; i < str.size(); i++) {
-		chunk.emit_storea(lir::Immediate(str[i]), lir::Immediate((int)i), t1);
-	}
+	chunk.emit(Opcode::INITA, t1, lir::ByteString {std::string(str)});
 	chunk.result_opnd = t1;
 
 	return {chunk, t1};

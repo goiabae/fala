@@ -40,6 +40,8 @@ struct std::formatter<Operand::Type> {
 			case lir::Operand::Type::LABEL: return std::format_to(ctx.out(), "LABEL");
 			case lir::Operand::Type::IMMEDIATE:
 				return std::format_to(ctx.out(), "IMMEDIATE");
+			case lir::Operand::Type::BYTE_STRING:
+				return std::format_to(ctx.out(), "BYTE_STRING");
 		}
 		assert(false);
 	}
@@ -325,6 +327,19 @@ void VM::run(const lir::Chunk& code) {
 					*iptr = clone(t1);
 				}
 				cells[result_register.as_register().index] = ptr;
+				break;
+			}
+			case Opcode::INITA: {
+				auto result_register = inst.operands[0];
+				auto element_register = inst.operands[1];
+				assert(result_register.type == Operand::Type::REGISTER);
+				assert(element_register.type == Operand::Type::BYTE_STRING);
+				auto t1 = fetch(result_register).as_pointer();
+				auto i = 0ul;
+				for (auto byte : element_register.as_byte_string().bytes) {
+					*(&t1[i]) = byte;
+					i++;
+				}
 				break;
 			}
 		}

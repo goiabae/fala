@@ -84,6 +84,8 @@ bool operator==(const lir::Operand& a, const lir::Operand& b) {
 		case lir::Operand::Type::IMMEDIATE: {
 			return a.as_immediate() == b.as_immediate();
 		}
+		case lir::Operand::Type::BYTE_STRING: {
+			return a.as_byte_string().bytes == b.as_byte_string().bytes;
 		}
 	}
 	return false;

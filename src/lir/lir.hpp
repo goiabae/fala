@@ -52,6 +52,7 @@ enum class Opcode {
 	SHIFTA,
 	CLONEA,
 	REPEAT,
+	INITA,
 };
 
 class Type;
@@ -88,29 +89,39 @@ struct Immediate {
 	int number;
 };
 
+struct ByteString {
+	std::string bytes;
+};
+
 struct Operand {
 	enum class Type {
 		NOTHING,   // no operand
 		REGISTER,  // variables register
 		LABEL,     // label
 		IMMEDIATE, // immediate number
+		BYTE_STRING,
 	};
 
 	Type type;
-	std::variant<Register, Label, Immediate> data;
+	std::variant<Register, Label, Immediate, ByteString> data;
 
 	Operand() : type {Type::NOTHING}, data {Immediate {0}} {}
 	Operand(Register reg) : type(Type::REGISTER), data {reg} {}
 	Operand(Label lab) : type(Type::LABEL), data {lab} {}
 	Operand(Immediate imm) : type(Type::IMMEDIATE), data(imm) {}
+	Operand(ByteString bs) : type(Type::BYTE_STRING), data(bs) {}
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
 	Immediate& as_immediate() { return std::get<Immediate>(data); }
+	ByteString& as_byte_string() { return std::get<ByteString>(data); }
 
 	const Label& as_label() const { return std::get<Label>(data); }
 	const Register& as_register() const { return std::get<Register>(data); }
 	const Immediate& as_immediate() const { return std::get<Immediate>(data); }
+	const ByteString& as_byte_string() const {
+		return std::get<ByteString>(data);
+	}
 };
 
 struct Instruction {

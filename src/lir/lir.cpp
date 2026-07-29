@@ -26,6 +26,8 @@ std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
 			return st << std::format("L{:03}", opnd.as_label().id);
 		case Operand::Type::IMMEDIATE:
 			return st << std::format("{}", opnd.as_immediate().number);
+		case Operand::Type::BYTE_STRING:
+			return st << std::format("\"{}\"", opnd.as_byte_string().bytes);
 	}
 	return st;
 }
@@ -77,6 +79,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::CLONEA: return 2;
 		case Opcode::NOP: return 0;
 		case Opcode::REPEAT: return 3;
+		case Opcode::INITA: return 2;
 	}
 	assert(false);
 };
@@ -132,6 +135,8 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
 		case Operand::Type::IMMEDIATE:
 			return fprintf(fd, "%d", opnd.as_immediate().number);
+		case Operand::Type::BYTE_STRING:
+			return fprintf(fd, "\"%s\"", opnd.as_byte_string().bytes.c_str());
 	}
 	return 0;
 }
@@ -174,6 +179,7 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::CLONEA: return "clonea";
 		case Opcode::NOP: return "nop";
 		case Opcode::REPEAT: return "repeat";
+		case Opcode::INITA: return "inita";
 	}
 	assert(false);
 }
@@ -306,6 +312,7 @@ const char* operand_type_repr(Operand::Type type) {
 		case Operand::Type::REGISTER: return "Operand::Type::REG";
 		case Operand::Type::LABEL: return "Operand::Type::LAB";
 		case Operand::Type::IMMEDIATE: return "Operand::Type::NUM";
+		case Operand::Type::BYTE_STRING: return "Operand::Type::BYTE_STRING";
 	}
 	assert(false);
 }
