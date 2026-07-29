@@ -180,5 +180,9 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse(node[0], scope_idx);
 			return;
 		}
+		case NodeType::ARRAY_LITERAL: {
+			for (auto elt_idx : node) analyse(elt_idx, scope_idx);
+			return;
+		}
 	}
 }

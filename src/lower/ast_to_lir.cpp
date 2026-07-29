@@ -516,6 +516,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 				return {chunk, t1};
 			}
 		}
+		case NodeType::ARRAY_LITERAL: assert(false);
 	}
 	assert(false);
 }
@@ -859,6 +860,18 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: assert(false);
+		case NodeType::ARRAY_LITERAL: {
+			lir::Chunk chunk {};
+			const auto t1 = make_register();
+			chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(node.size())));
+			for (const auto& [i, elt_idx] : std::ranges::views::enumerate(node)) {
+				const auto ri = compile(elt_idx, ctx);
+				chunk += ri.code;
+				chunk.emit_storea(ri.opnd, lir::Immediate(static_cast<int>(i)), t1);
+			}
+			chunk.result_opnd = t1;
+			return {chunk, t1};
+		}
 	}
 	assert(false);
 }

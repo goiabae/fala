@@ -82,6 +82,7 @@ AST parse(Reader* reader, StringPool& pool);
 %type <node> term id int
 %type <node> type_expression type_argument_list type_argument
 %type <node> record_literal field_list field
+%type <node> array_literal element_list
 
 %%
 
@@ -227,6 +228,7 @@ term : "(" nls exp nls ")" { $$ = $exp; }
      | TRUE        { $$ = new_true_node(ast, @$); }
      | CHAR        { $$ = new_char_node(ast, @$, $1); }
      | record_literal
+     | array_literal
      ;
 
 record_literal
@@ -246,6 +248,20 @@ field_list
 field
   : id "=" exp {
     $$ = NODE(NodeType::FIELD, $1, $3);
+  }
+  ;
+
+array_literal
+  : "[" element_list opt_field_sep "]" { $$ = $2; }
+  ;
+
+element_list
+  : term {
+    $$ = new_list_node(ast, NodeType::ARRAY_LITERAL);
+    $$ = list_append_node(ast, $$, $1);
+  }
+  | element_list[prefix] field_sep term[postfix] {
+    $$ = list_append_node(ast, $prefix, $postfix);
   }
   ;
 

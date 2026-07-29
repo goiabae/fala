@@ -61,6 +61,7 @@ enum class NodeType {
 	RECORD_LITERAL,
 	FIELD,
 	FIELD_ACCESS,
+	ARRAY_LITERAL,
 };
 
 enum class BinaryOperator {

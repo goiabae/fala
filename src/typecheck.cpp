@@ -1146,6 +1146,23 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto t4 = make_type(t1->mode, d3);
 			return t4;
 		}
+		case NodeType::ARRAY_LITERAL: {
+			auto t1 = make_datavar();
+			std::vector<D> elt_dtys {t1};
+			for (auto elt_idx : node) {
+				const auto elt_ty = typecheck(elt_idx);
+				elt_dtys.push_back(elt_ty->datatype);
+			}
+			for (auto [x, y] : std::views::adjacent<2>(elt_dtys)) {
+				if (not unify(x, y))
+					logger.err(
+						node.loc,
+						"array literal contains element expression of different types"
+					);
+			}
+			auto t2 = make_type(VAL_, make_array(t1));
+			return ASSOC_TYPE(node_idx, t2);
+		}
 	}
 
 	assert(false && "unreachable");

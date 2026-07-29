@@ -523,6 +523,16 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		}
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: assert(false);
+		case NodeType::ARRAY_LITERAL: {
+			std::vector<ValueCell> values {};
+			for (auto elt_idx : node) {
+				values.push_back(eval_node(elt_idx));
+			}
+			return std::make_shared<Value>(Array {
+				.size = values.size(),
+				.items = values,
+			});
+		}
 	}
 	assert(false);
 }
