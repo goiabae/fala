@@ -79,12 +79,6 @@ struct Register {
 	size_t index;
 };
 
-struct Function {
-	size_t argc;
-	Node* args;
-	Node root;
-};
-
 struct Label {
 	size_t id;
 };
@@ -100,16 +94,14 @@ struct Operand {
 		REGISTER,  // variables register
 		LABEL,     // label
 		IMMEDIATE, // immediate number
-		FUN,
 	};
 
 	Type type;
-	std::variant<Register, Label, Immediate, Function> data;
+	std::variant<Register, Label, Immediate> data;
 
 	Operand() : type {Type::NOTHING}, data {Immediate {0}} {}
 	Operand(Register reg) : type(Type::REGISTER), data {reg} {}
 	Operand(Label lab) : type(Type::LABEL), data {lab} {}
-	Operand(Function fun) : type(Type::FUN), data {fun} {}
 	Operand(Immediate imm) : type(Type::IMMEDIATE), data(imm) {}
 
 	Label& as_label() { return std::get<Label>(data); }

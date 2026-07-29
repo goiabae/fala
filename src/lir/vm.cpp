@@ -40,7 +40,6 @@ struct std::formatter<Operand::Type> {
 			case lir::Operand::Type::LABEL: return std::format_to(ctx.out(), "LABEL");
 			case lir::Operand::Type::IMMEDIATE:
 				return std::format_to(ctx.out(), "IMMEDIATE");
-			case lir::Operand::Type::FUN: return std::format_to(ctx.out(), "FUN");
 		}
 		assert(false);
 	}

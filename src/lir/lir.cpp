@@ -26,7 +26,6 @@ std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
 			return st << std::format("L{:03}", opnd.as_label().id);
 		case Operand::Type::IMMEDIATE:
 			return st << std::format("{}", opnd.as_immediate().number);
-		case Operand::Type::FUN: assert(false && "unreachable");
 	}
 	return st;
 }
@@ -133,7 +132,6 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
 		case Operand::Type::IMMEDIATE:
 			return fprintf(fd, "%d", opnd.as_immediate().number);
-		case Operand::Type::FUN: assert(false && "unreachable");
 	}
 	return 0;
 }
@@ -308,7 +306,6 @@ const char* operand_type_repr(Operand::Type type) {
 		case Operand::Type::REGISTER: return "Operand::Type::REG";
 		case Operand::Type::LABEL: return "Operand::Type::LAB";
 		case Operand::Type::IMMEDIATE: return "Operand::Type::NUM";
-		case Operand::Type::FUN: return "Operand::Type::FUN";
 	}
 	assert(false);
 }

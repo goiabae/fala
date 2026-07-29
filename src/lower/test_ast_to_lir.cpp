@@ -21,7 +21,6 @@ static bool operator==(const lir::Type& a, const lir::Type& b);
 static bool operator==(const lir::Register& a, const lir::Register& b);
 static bool operator==(const lir::Label& a, const lir::Label& b);
 static bool operator==(const lir::Immediate& a, const lir::Immediate& b);
-static bool operator==(const lir::Function&, const lir::Function&);
 static bool operator==(const lir::Operand& a, const lir::Operand& b);
 static bool operator==(const lir::Chunk& a, const lir::Chunk& b);
 
@@ -70,11 +69,6 @@ bool operator==(const lir::Immediate& a, const lir::Immediate& b) {
 	return a.number == b.number;
 }
 
-bool operator==(const lir::Function&, const lir::Function&) {
-	// TODO
-	return true;
-}
-
 bool operator==(const lir::Operand& a, const lir::Operand& b) {
 	if (a.type != b.type) {
 		throw std::runtime_error("operand types not equal");
@@ -90,8 +84,6 @@ bool operator==(const lir::Operand& a, const lir::Operand& b) {
 		case lir::Operand::Type::IMMEDIATE: {
 			return a.as_immediate() == b.as_immediate();
 		}
-		case lir::Operand::Type::FUN: {
-			return std::get<lir::Function>(a.data) == std::get<lir::Function>(b.data);
 		}
 	}
 	return false;
