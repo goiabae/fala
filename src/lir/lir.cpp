@@ -77,6 +77,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::SHIFTA: return 3;
 		case Opcode::CLONEA: return 2;
 		case Opcode::NOP: return 0;
+		case Opcode::REPEAT: return 3;
 	}
 	assert(false);
 };
@@ -174,6 +175,7 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::SHIFTA: return "shifta";
 		case Opcode::CLONEA: return "clonea";
 		case Opcode::NOP: return "nop";
+		case Opcode::REPEAT: return "repeat";
 	}
 	assert(false);
 }

@@ -533,6 +533,7 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 				.items = values,
 			});
 		}
+		case NodeType::REPEAT: assert(false);
 	}
 	assert(false);
 }

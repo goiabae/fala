@@ -51,6 +51,7 @@ enum class Opcode {
 	STOREA,
 	SHIFTA,
 	CLONEA,
+	REPEAT,
 };
 
 class Type;

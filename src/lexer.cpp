@@ -222,7 +222,7 @@ int Lexer::lex() {
 		case '-': return tk::MINUS;
 		case '*': return tk::ASTER;
 		case '/': return tk::SLASH;
-		case '.': return tk::DOT;
+		case '.': return match('.') ? tk::DOTDOT : tk::DOT;
 		case '%':
 			return tk::PERCT;
 

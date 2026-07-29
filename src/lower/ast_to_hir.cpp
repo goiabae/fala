@@ -662,6 +662,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: assert(false);
 		case NodeType::ARRAY_LITERAL: assert(false);
+		case NodeType::REPEAT: assert(false);
 	}
 	assert(false);
 }
@@ -761,6 +762,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: assert(false);
 		case NodeType::ARRAY_LITERAL: assert(false);
+		case NodeType::REPEAT: assert(false);
 	}
 	assert(false);
 }

@@ -64,6 +64,7 @@ AST parse(Reader* reader, StringPool& pool);
 %token GREATER_EQ ">=" LESSER_EQ "<=" EQ_EQ "==" GREATER ">" LESSER "<"
 %token PLUS "+" MINUS "-"
 %token ASTER "*" SLASH "/" PERCT "%"
+%token DOTDOT ".."
 %token NOT
 
 /* non-terminals */
@@ -77,7 +78,7 @@ AST parse(Reader* reader, StringPool& pool);
 %type <node> decl params opt_type
 %type <node> app func args arg param mode
 %type <node> ass path at dot
-%type <node> op op0 op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
+%type <node> op op0 opa op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
 
 %type <node> term id int
 %type <node> type_expression type_argument_list type_argument
@@ -202,7 +203,8 @@ path
 /* Operators. Infix and prefix */
 op : op0;
 
-op0  : op1  | op1[lft] AS type_expression[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
+op0  : opa  | opa[lft] AS type_expression[rgt] { $$ = NODE(NodeType::AS, $lft, $rgt); } ;
+opa  : op1  | opa[lft] ".." nls op1[rgt]  { $$ = NODE(NodeType::REPEAT, $lft, $rgt); } ;
 op1  : op2  | op1[lft] OR   nls op2[rgt]  { $$ = NODE(NodeType::OR,  $lft, $rgt); } ;
 op2  : op3  | op2[lft] AND  nls op3[rgt]  { $$ = NODE(NodeType::AND, $lft, $rgt); } ;
 op3  : op4  | op3[lft] ">"  nls op4[rgt]  { $$ = NODE(NodeType::GTN, $lft, $rgt); } ;

@@ -1163,6 +1163,19 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto t2 = make_type(VAL_, make_array(t1));
 			return ASSOC_TYPE(node_idx, t2);
 		}
+		case NodeType::REPEAT: {
+			const auto t0 = typecheck(node[0]);
+			const auto t1 = typecheck(node[1]);
+			const auto t2 =
+				make_type(make_modevar(), make_integer(64, Sign::UNSIGNED));
+			if (not cast_to(t1, t2)) {
+				logger.err(
+					node.loc, "array expansion second argument must be an integer"
+				);
+			}
+			const auto t3 = make_type(VAL_, make_array(t1->datatype));
+			return ASSOC_TYPE(node_idx, t3);
+		}
 	}
 	assert(false && "unreachable");
 }

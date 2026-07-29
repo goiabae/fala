@@ -302,6 +302,32 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::NOP: {
 				break;
 			}
+			case Opcode::REPEAT: {
+				auto result_register = inst.operands[0];
+				auto element_register = inst.operands[1];
+				auto amount_register = inst.operands[2];
+				assert(result_register.type == Operand::Type::REGISTER);
+				assert(
+					element_register.type == Operand::Type::REGISTER
+					|| element_register.type == Operand::Type::IMMEDIATE
+				);
+				assert(
+					amount_register.type == Operand::Type::REGISTER
+					|| amount_register.type == Operand::Type::IMMEDIATE
+				);
+				auto t1 = fetch(element_register);
+				auto amount = fetch(amount_register).as_integer();
+				auto ptr = Value(
+					new Value[static_cast<std::size_t>(amount)],
+					static_cast<std::size_t>(amount)
+				);
+				for (auto i = 0ul; i < static_cast<std::size_t>(amount); i++) {
+					auto iptr = &(ptr.as_pointer())[i];
+					*iptr = clone(t1);
+				}
+				cells[result_register.as_register().index] = ptr;
+				break;
+			}
 		}
 		pc++;
 	dont_inc:

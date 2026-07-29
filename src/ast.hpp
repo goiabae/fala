@@ -62,6 +62,7 @@ enum class NodeType {
 	FIELD,
 	FIELD_ACCESS,
 	ARRAY_LITERAL,
+	REPEAT,
 };
 
 enum class BinaryOperator {

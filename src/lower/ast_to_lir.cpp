@@ -517,6 +517,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			}
 		}
 		case NodeType::ARRAY_LITERAL: assert(false);
+		case NodeType::REPEAT: assert(false);
 	}
 	assert(false);
 }
@@ -869,6 +870,17 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				chunk += ri.code;
 				chunk.emit_storea(ri.opnd, lir::Immediate(static_cast<int>(i)), t1);
 			}
+			chunk.result_opnd = t1;
+			return {chunk, t1};
+		}
+		case NodeType::REPEAT: {
+			const auto r0 = compile(node[0], ctx);
+			const auto r1 = compile(node[1], ctx);
+			const auto t1 = make_register();
+			lir::Chunk chunk {};
+			chunk += r0.code;
+			chunk += r1.code;
+			chunk.emit(Opcode::REPEAT, t1, r0.opnd, r1.opnd);
 			chunk.result_opnd = t1;
 			return {chunk, t1};
 		}

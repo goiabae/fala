@@ -184,5 +184,10 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			for (auto elt_idx : node) analyse(elt_idx, scope_idx);
 			return;
 		}
+		case NodeType::REPEAT: {
+			analyse(node[0], scope_idx);
+			analyse(node[1], scope_idx);
+			return;
+		}
 	}
 }
