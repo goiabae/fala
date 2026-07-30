@@ -29,7 +29,7 @@ struct Typechecker {
 
 	D substitute(D gen, std::vector<D> args);
 	D substitute_aux(
-		D body, std::vector<TYPE_VARIABLE> vars, std::vector<D> args
+		D body, std::vector<std::shared_ptr<TypeVariable>> vars, std::vector<D> args
 	);
 
 	D eval(NodeIndex);

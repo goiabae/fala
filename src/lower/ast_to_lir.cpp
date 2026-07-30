@@ -105,34 +105,34 @@ enum class PassingConvention {
 };
 
 static PassingConvention passing_convention_for(
-	ConcreteMode param_mode, ConcreteMode arg_mode
+	Mode::Concrete param_mode, Mode::Concrete arg_mode
 ) {
-	if (param_mode == ConcreteMode::OUT) {
-		if (arg_mode == ConcreteMode::OUT) {
+	if (param_mode == Mode::Concrete::OUT) {
+		if (arg_mode == Mode::Concrete::OUT) {
 			return PassingConvention::ALIAS;
-		} else if (arg_mode == ConcreteMode::VAL) {
+		} else if (arg_mode == Mode::Concrete::VAL) {
 			return PassingConvention::INVALID;
-		} else if (arg_mode == ConcreteMode::VAR) {
+		} else if (arg_mode == Mode::Concrete::VAR) {
 			return PassingConvention::ALIAS;
 		} else {
 			assert(false);
 		}
-	} else if (param_mode == ConcreteMode::VAL) {
-		if (arg_mode == ConcreteMode::OUT) {
+	} else if (param_mode == Mode::Concrete::VAL) {
+		if (arg_mode == Mode::Concrete::OUT) {
 			return PassingConvention::CLONE;
-		} else if (arg_mode == ConcreteMode::VAL) {
+		} else if (arg_mode == Mode::Concrete::VAL) {
 			return PassingConvention::ALIAS;
-		} else if (arg_mode == ConcreteMode::VAR) {
+		} else if (arg_mode == Mode::Concrete::VAR) {
 			return PassingConvention::CLONE;
 		} else {
 			assert(false);
 		}
-	} else if (param_mode == ConcreteMode::VAR) {
-		if (arg_mode == ConcreteMode::OUT) {
+	} else if (param_mode == Mode::Concrete::VAR) {
+		if (arg_mode == Mode::Concrete::OUT) {
 			return PassingConvention::CLONE;
-		} else if (arg_mode == ConcreteMode::VAL) {
+		} else if (arg_mode == Mode::Concrete::VAL) {
 			return PassingConvention::CLONE;
-		} else if (arg_mode == ConcreteMode::VAR) {
+		} else if (arg_mode == Mode::Concrete::VAR) {
 			return PassingConvention::CLONE;
 		} else {
 			assert(false);

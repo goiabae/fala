@@ -2,11 +2,13 @@
 
 #include <variant>
 
-std::ostream& operator<<(std::ostream& st, ConcreteMode cm) {
+#include "utils.hpp"
+
+std::ostream& operator<<(std::ostream& st, Mode::Concrete cm) {
 	switch (cm) {
-		case ConcreteMode::VAL: st << "val"; break;
-		case ConcreteMode::VAR: st << "var"; break;
-		case ConcreteMode::OUT: st << "out"; break;
+		case Mode::Concrete::VAL: st << "val"; break;
+		case Mode::Concrete::VAR: st << "var"; break;
+		case Mode::Concrete::OUT: st << "out"; break;
 	}
 	return st;
 }
@@ -17,8 +19,8 @@ std::ostream& operator<<(std::ostream& st, const Datatype& t) {
 }
 
 std::ostream& operator<<(std::ostream& st, const Mode& m) {
-	if (std::holds_alternative<ConcreteMode>(m.data)) {
-		auto cm = std::get<ConcreteMode>(m.data);
+	if (std::holds_alternative<Mode::Concrete>(m.data)) {
+		auto cm = std::get<Mode::Concrete>(m.data);
 		st << cm;
 	} else {
 		auto mv = std::get<Variable<Mode>>(m.data);
@@ -66,9 +68,9 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
 	}
 }
 
-std::optional<ConcreteMode> Mode::to_concrete() {
-	if (std::holds_alternative<ConcreteMode>(data))
-		return std::get<ConcreteMode>(data);
+std::optional<Mode::Concrete> Mode::to_concrete() {
+	if (std::holds_alternative<Mode::Concrete>(data))
+		return std::get<Mode::Concrete>(data);
 	else {
 		auto v = std::get<Variable<Mode>>(data);
 		if (not v.is_bound())
@@ -76,4 +78,104 @@ std::optional<ConcreteMode> Mode::to_concrete() {
 		else
 			return v.get_bound()->to_concrete();
 	}
+}
+
+std::ostream& Function::print(std::ostream& st) const {
+	st << "(" << SeparatedPrinter(inputs, ", ") << ") -> " << *output;
+	return st;
+}
+
+size_t Function::size_of() { return 1; }
+
+size_t Void::size_of() { return 0; }
+
+std::ostream& Void::print(std::ostream& st) const {
+	st << "Void";
+	return st;
+}
+
+size_t TypeVariable::size_of() {
+	if (is_bound)
+		return bound_type->size_of();
+	else
+		assert(false);
+}
+
+std::ostream& TypeVariable::print(std::ostream& st) const {
+	if (is_bound) {
+		st << "(" << "t" << "vt->unbound_name" << " := " << *bound_type << ")";
+	} else {
+		st << "'t" << unbound_name;
+	}
+	return st;
+}
+
+size_t Array::size_of() { return 1; }
+
+std::ostream& Array::print(std::ostream& st) const {
+	st << "Array<" << *item_type << ">";
+	return st;
+}
+
+std::ostream& Integer::print(std::ostream& st) const {
+	if (sign == Sign::SIGNED)
+		st << "Int<" << bit_count << ">";
+	else
+		st << "UInt<" << bit_count << ">";
+	return st;
+}
+
+size_t Integer::size_of() { return 1; }
+
+size_t Toat::size_of() { assert(false); }
+
+std::ostream& Toat::print(std::ostream&) const {
+	throw std::domain_error("can't print toat");
+}
+
+size_t General::size_of() { assert(false); }
+
+std::ostream& General::print(std::ostream&) const {
+	throw std::domain_error("can't print general type");
+}
+
+size_t Record::size_of() { assert(false); }
+
+std::ostream& Record::print(std::ostream& st) const {
+	st << '{';
+	for (auto i = 0ul; i < fields.size(); i++) {
+		st << fields.at(i).first << ':';
+		fields.at(i).second->print(st);
+		if (i != (fields.size() - 1)) {
+			st << ';';
+		}
+	}
+	st << '}';
+	return st;
+}
+
+size_t RowSet::size_of() { assert(false); }
+
+std::ostream& RowSet::print(std::ostream& st) const {
+	st << '{';
+	for (const auto& [n, d] : rows) {
+		st << n << ':';
+		d->print(st);
+		st << ';';
+	}
+	st << "...";
+	st << '}';
+	return st;
+}
+
+size_t Nil::size_of() { return 0; }
+
+std::ostream& Nil::print(std::ostream& st) const {
+	st << "Nil";
+	return st;
+}
+
+void TypeVariable::bind_to(std::shared_ptr<Datatype> t) {
+	bound_type = t;
+	is_bound = true;
 }

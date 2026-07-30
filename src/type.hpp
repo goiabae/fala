@@ -5,196 +5,86 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <set>
-#include <stdexcept>
 #include <vector>
 
-#include "utils.hpp"
 #include "variable.hpp"
 
 struct Type;
 struct Datatype;
-
-std::ostream& operator<<(std::ostream& st, const Type& t);
-std::ostream& operator<<(std::ostream& st, const Datatype& t);
-
-using DATATYPE = std::shared_ptr<Datatype>;
+struct Mode;
 
 struct Datatype {
-	virtual ~Datatype() {}
+	virtual ~Datatype() = default;
 	virtual size_t size_of() = 0;
 	virtual std::ostream& print(std::ostream&) const = 0;
-
- protected:
-	Datatype() {}
 };
 
-enum Sign { SIGNED, UNSIGNED };
+struct Integer;
+struct Nil;
+struct Void;
+struct Function;
+struct TypeVariable;
+struct Array;
+struct Toat;
+struct General;
+struct Record;
+struct RowSet;
 
-struct Integer : Datatype {
-	Integer(int bit_count, Sign sign) : bit_count(bit_count), sign(sign) {}
+#define DERIVE(...)                                        \
+	Datatype {                                               \
+		size_t size_of() override;                             \
+		std::ostream& print(std::ostream & st) const override; \
+		__VA_ARGS__                                            \
+	}
+
+// clang-format off
+
+struct Integer final : DERIVE (
+	enum class Sign { SIGNED, UNSIGNED };
 	int bit_count;
 	Sign sign;
+);
 
-	size_t size_of() override { return 1; }
+struct Nil final : DERIVE();
+struct Void final : DERIVE();
+struct Toat final : DERIVE(); // top type
 
-	std::ostream& print(std::ostream& st) const override {
-		if (sign == SIGNED)
-			st << "Int<" << bit_count << ">";
-		else
-			st << "UInt<" << bit_count << ">";
-		return st;
-	}
-};
-
-using INTEGER = std::shared_ptr<Integer>;
-
-struct Nil : Datatype {
-	size_t size_of() override { return 0; }
-	std::ostream& print(std::ostream& st) const override {
-		st << "Nil";
-		return st;
-	}
-};
-
-struct Void : Datatype {
-	size_t size_of() override { return 0; }
-	std::ostream& print(std::ostream& st) const override {
-		st << "Void";
-		return st;
-	}
-};
-
-struct Function : Datatype {
-	Function(std::vector<std::shared_ptr<Type>> inputs, DATATYPE output)
-	: inputs(inputs), output(output) {}
+struct Function final : DERIVE (
 	std::vector<std::shared_ptr<Type>> inputs;
-	DATATYPE output;
+	std::shared_ptr<Datatype> output;
+);
 
-	// label to function?
-	size_t size_of() override { return 1; }
-	std::ostream& print(std::ostream& st) const override {
-		st << "(" << SeparatedPrinter(inputs, ", ") << ") -> " << *output;
-		return st;
-	}
-};
-
-using FUNCTION = std::shared_ptr<Function>;
-
-struct TypeVariable : Datatype {
+struct TypeVariable final : DERIVE (
 	TypeVariable(std::size_t name) : unbound_name(name) {}
-
-	size_t size_of() override {
-		if (is_bound)
-			return bound_type->size_of();
-		else
-			assert(false);
-	}
-
-	std::ostream& print(std::ostream& st) const override {
-		if (is_bound) {
-			st << "(" << "t" << "vt->unbound_name" << " := " << *bound_type << ")";
-		} else {
-			st << "'t" << unbound_name;
-		}
-		return st;
-	}
-
-	void bind_to(DATATYPE t) {
-		bound_type = t;
-		is_bound = true;
-	}
-
 	std::size_t unbound_name {};
-	DATATYPE bound_type {nullptr};
+	std::shared_ptr<Datatype> bound_type {nullptr};
 	bool is_bound {false};
-};
+	void bind_to(std::shared_ptr<Datatype> t);
+);
 
-using TYPE_VARIABLE = std::shared_ptr<TypeVariable>;
+struct Array final : DERIVE (
+	std::shared_ptr<Datatype> item_type;
+);
 
-// Array of Int 64, really
-struct Array : Datatype {
-	Array(DATATYPE item_type) : item_type(item_type) {}
-	DATATYPE item_type;
+struct General final : DERIVE (
+	std::vector<std::shared_ptr<Datatype>> vars;
+	std::shared_ptr<Datatype> body;
+);
 
-	// pointer to beginning of allocated region
-	size_t size_of() override { return 1; }
-	std::ostream& print(std::ostream& st) const override {
-		st << "Array<" << *item_type << ">";
-		return st;
-	}
-};
+struct Record final : DERIVE (
+	std::vector<std::pair<std::string, std::shared_ptr<Datatype>>> fields;
+);
 
-using ARRAY = std::shared_ptr<Array>;
+struct RowSet final : DERIVE (
+	std::map<std::string, std::shared_ptr<Datatype>> rows;
+);
 
-// Type of all types
-struct Toat : Datatype {
-	size_t size_of() override { assert(false); }
-	std::ostream& print(std::ostream&) const override {
-		throw std::domain_error("can't print toat");
-	}
-};
-
-using TOAT = std::shared_ptr<Toat>;
-
-struct General : Datatype {
-	General(std::vector<DATATYPE> vars, DATATYPE body) : vars(vars), body(body) {}
-	std::vector<DATATYPE> vars;
-	DATATYPE body;
-
-	size_t size_of() override { assert(false); }
-	std::ostream& print(std::ostream&) const override {
-		throw std::domain_error("can't print general type");
-	}
-};
-
-using GENERAL = std::shared_ptr<General>;
-
-struct Record : Datatype {
-	Record(std::vector<std::pair<std::string, DATATYPE>> fields)
-	: fields(fields) {}
-	std::vector<std::pair<std::string, DATATYPE>> fields;
-	size_t size_of() override { assert(false); }
-	std::ostream& print(std::ostream& st) const override {
-		st << '{';
-		for (auto i = 0ul; i < fields.size(); i++) {
-			st << fields.at(i).first << ':';
-			fields.at(i).second->print(st);
-			if (i != (fields.size() - 1)) {
-				st << ';';
-			}
-		}
-		st << '}';
-		return st;
-	}
-};
-
-struct RowSet : Datatype {
-	RowSet(std::map<std::string, DATATYPE> rows) : rows(rows) {}
-	std::map<std::string, DATATYPE> rows;
-	size_t size_of() override { assert(false); }
-	std::ostream& print(std::ostream& st) const override {
-		st << '{';
-		for (const auto& [n, d] : rows) {
-			st << n << ':';
-			d->print(st);
-			st << ';';
-		}
-		st << "...";
-		st << '}';
-		return st;
-	}
-};
-
-enum class ConcreteMode {
-	VAL,
-	VAR,
-	OUT,
-};
+// clang-format on
 
 struct Mode {
-	std::variant<ConcreteMode, Variable<Mode>> data;
-	std::optional<ConcreteMode> to_concrete();
+	enum class Concrete { VAL, VAR, OUT };
+	std::variant<Concrete, Variable<Mode>> data;
+	std::optional<Concrete> to_concrete();
 };
 
 struct Type {
@@ -204,11 +94,15 @@ struct Type {
 
 std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type>);
 
-inline bool mode_is_assignable(ConcreteMode m) {
-	return m == ConcreteMode::VAL or m == ConcreteMode::OUT;
+inline bool mode_is_assignable(Mode::Concrete m) {
+	return m == Mode::Concrete::VAL or m == Mode::Concrete::OUT;
 }
 
-std::ostream& operator<<(std::ostream&, ConcreteMode);
+std::ostream& operator<<(std::ostream&, const Type&);
+std::ostream& operator<<(std::ostream&, const Datatype&);
 std::ostream& operator<<(std::ostream&, const Mode&);
+std::ostream& operator<<(std::ostream&, Mode::Concrete);
+
+#undef DERIVE
 
 #endif

@@ -34,9 +34,9 @@ using M = std::shared_ptr<Mode>;
 using D = std::shared_ptr<Datatype>;
 using T = std::shared_ptr<Type>;
 
-const auto VAR_ = std::make_shared<Mode>(ConcreteMode::VAR);
-const auto VAL_ = std::make_shared<Mode>(ConcreteMode::VAL);
-const auto OUT_ = std::make_shared<Mode>(ConcreteMode::OUT);
+const auto VAR_ = std::make_shared<Mode>(Mode::Concrete::VAR);
+const auto VAL_ = std::make_shared<Mode>(Mode::Concrete::VAL);
+const auto OUT_ = std::make_shared<Mode>(Mode::Concrete::OUT);
 
 const auto NIL_ = std::make_shared<Nil>();
 const auto VOID_ = std::make_shared<Void>();
@@ -44,20 +44,37 @@ const auto TOAT_ = std::make_shared<Toat>();
 
 static M make_modevar(std::size_t index);
 static D make_datavar(std::size_t index);
-static D make_integer(int bit_count, Sign sign);
+static D make_integer(int bit_count, Integer::Sign sign);
 static D make_array(D item);
 static D make_function(std::vector<T> inputs, D output);
 static D make_bool();
 static D make_general(std::vector<D> var, D body);
+static D make_record(std::vector<std::pair<std::string, D>> field_tys);
+static D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
 static T make_type(M mode, D datatype);
 static bool cast_to(M, M);
 static bool cast_to(D, D);
 
-D make_general(std::vector<D> var, D body) {
-	return std::make_shared<General>(var, body);
+D make_row_set(std::map<std::string, std::shared_ptr<Datatype>> x) {
+	RowSet rs;
+	rs.rows = x;
+	return std::make_shared<RowSet>(rs);
 }
 
-D make_bool() { return make_integer(1, Sign::UNSIGNED); }
+D make_record(std::vector<std::pair<std::string, D>> field_tys) {
+	Record r;
+	r.fields = field_tys;
+	return std::make_shared<Record>(r);
+}
+
+D make_general(std::vector<D> vars, D body) {
+	General g {};
+	g.vars = vars;
+	g.body = body;
+	return std::make_shared<General>(g);
+}
+
+D make_bool() { return make_integer(1, Integer::Sign::UNSIGNED); }
 
 M make_modevar(std::size_t index) {
 	return std::make_shared<Mode>(Mode {.data = Variable<Mode>(index)});
@@ -67,21 +84,31 @@ D make_datavar(std::size_t index) {
 	return std::make_shared<TypeVariable>(index);
 }
 
-D make_integer(int bit_count, Sign sign) {
-	return std::make_shared<Integer>(bit_count, sign);
+D make_integer(int bit_count, Integer::Sign sign) {
+	Integer i {};
+	i.bit_count = bit_count;
+	i.sign = sign;
+	return std::make_shared<Integer>(i);
 }
 
-D make_array(D item_type) { return std::make_shared<Array>(item_type); }
+D make_array(D item_type) {
+	Array a {};
+	a.item_type = item_type;
+	return std::make_shared<Array>(a);
+}
 
 D make_function(std::vector<T> inputs, D output) {
-	return std::make_shared<Function>(inputs, output);
+	auto x = std::make_shared<Function>();
+	x->inputs = inputs;
+	x->output = output;
+	return x;
 }
 
 T make_type(M mode, D datatype) {
 	return std::make_shared<Type>(mode, datatype);
 }
 
-DATATYPE Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
+D Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
 
 M Typechecker::make_modevar() { return ::make_modevar(next_modevar_id++); }
 
@@ -112,13 +139,13 @@ std::shared_ptr<Type> Typechecker::deref(std::shared_ptr<Type> typ) {
 	auto om = typ->mode->to_concrete();
 	if (om.has_value()) {
 		auto m = om.value();
-		if (m == ConcreteMode::OUT || m == ConcreteMode::VAR) {
+		if (m == Mode::Concrete::OUT || m == Mode::Concrete::VAR) {
 			return std::make_shared<Type>(Type {
-				.mode = std::make_shared<Mode>(Mode {.data = ConcreteMode::VAL}),
+				.mode = std::make_shared<Mode>(Mode {.data = Mode::Concrete::VAL}),
 				.datatype = typ->datatype,
 			});
 		} else {
-			assert(m == ConcreteMode::VAL);
+			assert(m == Mode::Concrete::VAL);
 			return typ;
 		}
 	} else {
@@ -129,16 +156,16 @@ std::shared_ptr<Type> Typechecker::deref(std::shared_ptr<Type> typ) {
 	}
 }
 
-DATATYPE Typechecker::substitute(DATATYPE gen, std::vector<DATATYPE> args) {
+D Typechecker::substitute(D gen, std::vector<D> args) {
 	auto general = to<General>(gen);
-	std::vector<TYPE_VARIABLE> vars;
+	std::vector<std::shared_ptr<TypeVariable>> vars;
 	std::ranges::transform(args, vars.begin(), to<TypeVariable>);
 	auto body = general->body;
 	return substitute_aux(body, vars, args);
 }
 
-DATATYPE Typechecker::substitute_aux(
-	DATATYPE body, std::vector<TYPE_VARIABLE> vars, std::vector<DATATYPE> args
+D Typechecker::substitute_aux(
+	D body, std::vector<std::shared_ptr<TypeVariable>> vars, std::vector<D> args
 ) {
 	if (is<Nil>(body)) {
 		return body;
@@ -171,8 +198,8 @@ DATATYPE Typechecker::substitute_aux(
 		}
 	} else if (is<General>(body)) {
 		auto gen = to<General>(body);
-		std::vector<TYPE_VARIABLE> not_overriden;
-		std::vector<DATATYPE> new_args;
+		std::vector<std::shared_ptr<TypeVariable>> not_overriden;
+		std::vector<D> new_args;
 		for (const auto& [a, v] : std::ranges::views::zip(args, vars)) {
 			auto overriden = std::ranges::any_of(gen->vars, [&](const auto& gen_var) {
 				auto var = to<TypeVariable>(gen_var);
@@ -194,11 +221,11 @@ DATATYPE Typechecker::substitute_aux(
 bool cast_to(M from_, M to_) {
 	return std::visit(
 		overloaded {
-			[&from_]([[maybe_unused]] ConcreteMode& from, Variable<Mode>& to) {
+			[&from_]([[maybe_unused]] Mode::Concrete& from, Variable<Mode>& to) {
 				to.bind_to(from_);
 				return true;
 			},
-			[&to_](Variable<Mode>& from, [[maybe_unused]] ConcreteMode& to) {
+			[&to_](Variable<Mode>& from, [[maybe_unused]] Mode::Concrete& to) {
 				from.bind_to(to_);
 				return true;
 			},
@@ -207,8 +234,8 @@ bool cast_to(M from_, M to_) {
 				from.bind_to(to_);
 				return true;
 			},
-			[](ConcreteMode& from, ConcreteMode& to) {
-				if (from == ConcreteMode::VAL and to == ConcreteMode::OUT)
+			[](Mode::Concrete& from, Mode::Concrete& to) {
+				if (from == Mode::Concrete::VAL and to == Mode::Concrete::OUT)
 					return false;
 				else
 					return true;
@@ -270,8 +297,8 @@ void Typechecker::mismatch_error(
 	env.insert(scope_id, pool.intern(strdup(NAME)), TYP)
 
 bool Typechecker::typecheck() {
-	auto uint8_typ = make_integer(8, UNSIGNED);
-	auto int64_typ = make_integer(64, SIGNED);
+	auto uint8_typ = make_integer(8, Integer::Sign::UNSIGNED);
+	auto int64_typ = make_integer(64, Integer::Sign::SIGNED);
 	auto nil_typ = NIL_;
 	auto uint8_arr_typ = make_array(uint8_typ);
 	auto int64_arr_typ = make_array(int64_typ);
@@ -309,8 +336,8 @@ bool Typechecker::typecheck() {
 }
 
 bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
-	auto a_is_concrete = std::holds_alternative<ConcreteMode>(a->data);
-	auto b_is_concrete = std::holds_alternative<ConcreteMode>(b->data);
+	auto a_is_concrete = std::holds_alternative<Mode::Concrete>(a->data);
+	auto b_is_concrete = std::holds_alternative<Mode::Concrete>(b->data);
 	if (a_is_concrete and not b_is_concrete) {
 		auto& bv = std::get<Variable<Mode>>(b->data);
 		if (bv.is_bound()) {
@@ -442,8 +469,8 @@ bool Typechecker::unify(T a, T b) {
 }
 
 bool Typechecker::submode(M sub, M sup) {
-	auto sub_is_concrete = std::holds_alternative<ConcreteMode>(sub->data);
-	auto sup_is_concrete = std::holds_alternative<ConcreteMode>(sup->data);
+	auto sub_is_concrete = std::holds_alternative<Mode::Concrete>(sub->data);
+	auto sup_is_concrete = std::holds_alternative<Mode::Concrete>(sup->data);
 	if (sub_is_concrete and not sup_is_concrete) {
 		auto& bv = std::get<Variable<Mode>>(sup->data);
 		if (bv.is_bound()) {
@@ -461,13 +488,13 @@ bool Typechecker::submode(M sub, M sup) {
 			return true;
 		}
 	} else if (sub_is_concrete and sup_is_concrete) {
-		auto subc = std::get<ConcreteMode>(sub->data);
-		auto supc = std::get<ConcreteMode>(sup->data);
+		auto subc = std::get<Mode::Concrete>(sub->data);
+		auto supc = std::get<Mode::Concrete>(sup->data);
 		std::ostringstream ss {};
 		ss << subc << ", " << supc;
 		logger.log(LogLevel::INFO, {}, "submode: {}", ss.str());
-		if (subc == ConcreteMode::VAL
-		    and (supc == ConcreteMode::OUT or supc == ConcreteMode::VAR))
+		if (subc == Mode::Concrete::VAL
+		    and (supc == Mode::Concrete::OUT or supc == Mode::Concrete::VAR))
 			return false;
 		return true;
 	} else if ((not sub_is_concrete) and (not sup_is_concrete)) {
@@ -503,8 +530,8 @@ bool Typechecker::submode(M sub, M sup) {
 // | |- e1 : t1
 
 T Typechecker::typecheck(NodeIndex node_idx) {
-	auto int64_typ = make_integer(64, SIGNED);
-	auto uint8_typ = make_integer(8, UNSIGNED);
+	auto int64_typ = make_integer(64, Integer::Sign::SIGNED);
+	auto uint8_typ = make_integer(8, Integer::Sign::UNSIGNED);
 
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
@@ -574,7 +601,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// | |- n : Int<64>
 
 		case NodeType::NUM: {
-			return ASSOC_TYPE(node_idx, make_type(VAL_, make_integer(64, SIGNED)));
+			return ASSOC_TYPE(
+				node_idx, make_type(VAL_, make_integer(64, Integer::Sign::SIGNED))
+			);
 		}
 			// FIXME: add typing rules
 		case NodeType::BLK: {
@@ -967,7 +996,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				}
 
 				// if no return type is provided, must be infered
-				DATATYPE output = nullptr;
+				D output = nullptr;
 				if (opt_type_node.type == NodeType::EMPTY)
 					output = make_datavar();
 				else
@@ -1125,7 +1154,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					return x.first < y.first;
 				}
 			);
-			const auto d2 = std::make_shared<Record>(field_tys);
+			const auto d2 = make_record(field_tys);
 			const auto t2 = make_type(VAL_, d2);
 			return ASSOC_TYPE(node_idx, t2);
 		}
@@ -1136,7 +1165,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			assert(field_node.type == NodeType::ID);
 			const auto field_name = std::string(pool.find(field_node.str_id));
 			const auto d3 = make_datavar();
-			const auto d2 = std::make_shared<RowSet>(
+			const auto d2 = make_row_set(
 				std::map<std::string, std::shared_ptr<Datatype>> {{field_name, d3}}
 			);
 			const auto t2 = make_type(make_modevar(), d2);
@@ -1179,7 +1208,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto t0 = typecheck(node[0]);
 			const auto t1 = typecheck(node[1]);
 			const auto t2 =
-				make_type(make_modevar(), make_integer(64, Sign::UNSIGNED));
+				make_type(make_modevar(), make_integer(64, Integer::Sign::UNSIGNED));
 			if (not cast_to(t1, t2)) {
 				logger.err(
 					node.loc, "array expansion second argument must be an integer"
@@ -1196,7 +1225,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				logger.err(
 					node.loc, "operand to array length operator (#) was not an array"
 				);
-			const auto t2 = make_type(VAL_, make_integer(64, Sign::UNSIGNED));
+			const auto t2 =
+				make_type(VAL_, make_integer(64, Integer::Sign::UNSIGNED));
 			return ASSOC_TYPE(node_idx, t2);
 		}
 	}
@@ -1241,16 +1271,16 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 
 			if (name_node.str_id == pool.intern(strdup("Int"))) {
 				auto bit_count = ast.at(args_node[0]).num;
-				return make_integer(bit_count, Sign::SIGNED);
+				return make_integer(bit_count, Integer::Sign::SIGNED);
 			}
 
 			if (name_node.str_id == pool.intern(strdup("Uint"))) {
 				auto bit_count = ast.at(args_node[0]).num;
-				return make_integer(bit_count, Sign::UNSIGNED);
+				return make_integer(bit_count, Integer::Sign::UNSIGNED);
 			}
 
 			auto general_typ = typecheck(name_idx);
-			std::vector<DATATYPE> arguments;
+			std::vector<D> arguments;
 			for (auto idx : ast.at(args_idx)) {
 				arguments.push_back(eval(idx));
 			}
