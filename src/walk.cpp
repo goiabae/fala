@@ -552,6 +552,11 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 				.items = values,
 			});
 		}
+		case NodeType::LEN: {
+			auto v = eval_node(node[0]);
+			auto a = std::get<Array>(*v);
+			return std::make_shared<Value>(static_cast<int>(a.size));
+		}
 	}
 	assert(false);
 }

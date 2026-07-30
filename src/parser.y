@@ -65,6 +65,7 @@ AST parse(Reader* reader, StringPool& pool);
 %token PLUS "+" MINUS "-"
 %token ASTER "*" SLASH "/" PERCT "%"
 %token DOTDOT ".."
+%token POUND "#"
 %token NOT
 
 /* non-terminals */
@@ -78,7 +79,7 @@ AST parse(Reader* reader, StringPool& pool);
 %type <node> decl params opt_type
 %type <node> app func args arg param mode
 %type <node> ass path at dot
-%type <node> op op0 opa op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15
+%type <node> op op0 opa op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15 op16
 
 %type <node> term id int
 %type <node> type_expression type_argument_list type_argument
@@ -218,7 +219,8 @@ op11 : op12 | op11[lft] "*" nls op12[rgt] { $$ = NODE(NodeType::MUL, $lft, $rgt)
 op12 : op13 | op12[lft] "/" nls op13[rgt] { $$ = NODE(NodeType::DIV, $lft, $rgt); } ;
 op13 : op14 | op13[lft] "%" nls op14[rgt] { $$ = NODE(NodeType::MOD, $lft, $rgt); } ;
 op14 : op15 | NOT op15[rgt]      { $$ = NODE(NodeType::NOT, $rgt); } ;
-op15 : term ;
+op15 : op16 | "#" op16[rgt] { $$ = NODE(NodeType::LEN, $rgt); } ;
+op16 : term ;
 
 /* Terms */
 term : "(" nls exp nls ")" { $$ = $exp; }

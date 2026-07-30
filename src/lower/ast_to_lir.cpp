@@ -512,6 +512,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::ARRAY_LITERAL: assert(false);
 		case NodeType::REPEAT: assert(false);
+		case NodeType::LEN: assert(false);
 	}
 	assert(false);
 }
@@ -880,6 +881,22 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.emit_storea(r1.opnd, lir::Immediate(1), t2);
 			chunk.result_opnd = t2;
 			return {chunk, t2};
+		}
+		case NodeType::LEN: {
+			//
+			// c0 : *---> [data *, len $]
+			//                  |
+			//                  +---> ...
+			// t1 : len $
+			//
+
+			const auto c0 = compile(node[0], ctx);
+			const auto t1 = make_register();
+			lir::Chunk chunk {};
+			chunk += c0.code;
+			chunk.emit_loada(t1, lir::Immediate(1), c0.opnd);
+			chunk.result_opnd = t1;
+			return {chunk, t1};
 		}
 	}
 	assert(false);

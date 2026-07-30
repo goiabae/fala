@@ -188,5 +188,9 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse(node[1], scope_idx);
 			return;
 		}
+		case NodeType::LEN: {
+			analyse(node[0], scope_idx);
+			return;
+		}
 	}
 }

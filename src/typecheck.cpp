@@ -1188,6 +1188,17 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto t3 = make_type(VAL_, make_array(t1->datatype));
 			return ASSOC_TYPE(node_idx, t3);
 		}
+		case NodeType::LEN: {
+			const auto t0 = typecheck(node[0]);
+			const auto d0 = make_datavar();
+			const auto t1 = make_type(VAL_, make_array(d0));
+			if (not unify(t0, t1))
+				logger.err(
+					node.loc, "operand to array length operator (#) was not an array"
+				);
+			const auto t2 = make_type(VAL_, make_integer(64, Sign::UNSIGNED));
+			return ASSOC_TYPE(node_idx, t2);
+		}
 	}
 	assert(false && "unreachable");
 }

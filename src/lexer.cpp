@@ -230,8 +230,9 @@ int Lexer::lex() {
 		case '*': return tk::ASTER;
 		case '/': return tk::SLASH;
 		case '.': return match('.') ? tk::DOTDOT : tk::DOT;
-		case '%':
-			return tk::PERCT;
+		case '%': return tk::PERCT;
+		case '#':
+			return tk::POUND;
 
 			// just skip whitespace
 		case ' ':
