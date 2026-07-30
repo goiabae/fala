@@ -170,24 +170,13 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 	if (node.type == NodeType::PATH) {
 		return compile_lvalue(node_idx, ctx);
 	} else {
-		bool is_array = false;
-		{
-			auto t1 = tpc.node_to_type.at(node_idx);
-			auto t2 = get_datatype(t1);
-			if (nullptr != std::dynamic_pointer_cast<Array>(t2)) is_array = true;
-		}
-		if (is_array) {
-			return compile(node_idx, ctx);
-		} else {
-			lir::Chunk chunk {};
-			auto res = compile(node_idx, ctx);
-			chunk = chunk + res.code;
-			auto res_opnd = res.opnd;
-			auto t1 = make_register();
-			chunk.emit_alloca(t1, lir::Immediate(1));
-			chunk.emit_storea(res_opnd, lir::Immediate(0), t1);
-			return {chunk, t1};
-		}
+		const auto c0 = compile(node_idx, ctx);
+		const auto t1 = make_register();
+		lir::Chunk chunk {};
+		chunk += c0.code;
+		chunk.emit_alloca(t1, lir::Immediate(1));
+		chunk.emit_storea(c0.opnd, lir::Immediate(0), t1);
+		return {chunk, t1};
 	}
 }
 

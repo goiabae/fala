@@ -390,6 +390,7 @@ TEST(VMTest, io_operations) {
 	const auto r2 = lir::Operand(lir::Register(2));
 	const auto r3 = lir::Operand(lir::Register(3));
 	const auto r4 = lir::Operand(lir::Register(4));
+	const auto r5 = lir::Operand(lir::Register(5));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PRINTV, _69);
@@ -401,7 +402,9 @@ TEST(VMTest, io_operations) {
 	chunk.emit_alloca(r4, lir::Immediate(2));
 	chunk.emit_storea(r1, lir::Immediate(0), r4);
 	chunk.emit_storea(lir::Immediate(3), lir::Immediate(1), r4);
-	chunk.emit(lir::Opcode::PRINTF, r4);
+	chunk.emit_alloca(r5, lir::Immediate(1));
+	chunk.emit_storea(r4, lir::Immediate(0), r5);
+	chunk.emit(lir::Opcode::PRINTF, r5);
 	chunk.emit(lir::Opcode::READV, r2);
 	chunk.emit(lir::Opcode::PRINTV, r2);
 	chunk.emit(lir::Opcode::READC, r3);
