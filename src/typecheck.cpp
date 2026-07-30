@@ -830,9 +830,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto num = make_type(VAL_, int64_typ);
 			const auto& left_node = ast.at(node[0]);
 			const auto& right_node = ast.at(node[1]);
-			if (!unify(left, num))
+			if (not cast_to(left, num))
 				logger.err(left_node.loc, "Left-hand side of operator is not numeric");
-			if (!unify(right, num))
+			if (not cast_to(right, num))
 				logger.err(
 					right_node.loc,
 					"Arithmetic operator arguments must be of numeric type"
