@@ -4,8 +4,8 @@ in do
 	for var i = 0 to 100 then
 		xs[i] = read_int(nil);
 
-	# insertion sort xs
-	# impl took from https://pt.wikipedia.org/wiki/Insertion_sort
+	-- insertion sort xs
+	-- impl took from https://pt.wikipedia.org/wiki/Insertion_sort
 
 	for var i = 1 to 100 then
 	let var key = xs[i],

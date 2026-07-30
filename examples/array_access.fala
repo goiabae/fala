@@ -1,4 +1,4 @@
-# ERROR: undefined result
+-- ERROR: undefined result
 let
   var xs = 0..10
 in

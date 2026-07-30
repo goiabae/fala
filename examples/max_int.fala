@@ -1,4 +1,4 @@
-# reads a integer n followed by n integers. outputs max
+-- reads a integer n followed by n integers. outputs max
 do
 	var max = 0;
 	for var i = 1 to read_int(nil) then

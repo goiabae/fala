@@ -1,14 +1,14 @@
-# brainfuck in fala
+-- brainfuck in fala
 
 let
-	var GREAT = 0, # >
-	var LESS  = 1, # <
-	var PLUS  = 2, # +
-	var MINUS = 3, # -
-	var DOT   = 4, # .
-	var COMMA = 5, # ,
-	var OPEN  = 6, # [
-	var CLOSE = 7 # ]
+	var GREAT = 0, -- >
+	var LESS  = 1, -- <
+	var PLUS  = 2, -- +
+	var MINUS = 3, -- -
+	var DOT   = 4, -- .
+	var COMMA = 5, -- ,
+	var OPEN  = 6, -- [
+	var CLOSE = 7 -- ]
 in let
 	var data = 0..256,
 	var inst = 0..512,
@@ -16,13 +16,13 @@ in let
 	var ip = 0,
 	var op = 0,
 in do
-	# clear inst and data tapes
+	-- clear inst and data tapes
 	for var i = 0 to 512 then
 		inst[i] = 0-69;
 	for var i = 0 to 256 then
 		data[i] = 0;
 
-	# read instructions
+	-- read instructions
 	var len = 0;
 	op = read_int(nil);
   while op >= 0 and op <= 7 then do
@@ -36,7 +36,7 @@ in do
 		write_int(inst[i]);
 	write_str("\n");
 
-	# run program
+	-- run program
 	let fun is_inst op =
 		op >= 0 and op <= 7
 	in

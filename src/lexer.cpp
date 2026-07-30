@@ -219,7 +219,14 @@ int Lexer::lex() {
 		case '>': return match('=') ? tk::GREATER_EQ : tk::GREATER;
 		case '<': return match('=') ? tk::LESSER_EQ : tk::LESSER;
 		case '+': return tk::PLUS;
-		case '-': return tk::MINUS;
+		case '-': {
+			if (match('-')) {
+				while ((c = peek()) != '\n') advance();
+				return lex();
+			} else {
+				return tk::MINUS;
+			}
+		}
 		case '*': return tk::ASTER;
 		case '/': return tk::SLASH;
 		case '.': return match('.') ? tk::DOTDOT : tk::DOT;
@@ -234,11 +241,6 @@ int Lexer::lex() {
 				return tk::YYEOF;
 			else
 				return tk::NEWLINE;
-		}
-
-		case '#': {
-			while ((c = peek()) != '\n') advance();
-			return lex();
 		}
 
 		case '"': {
