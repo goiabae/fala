@@ -88,7 +88,8 @@ void VM::run(const lir::Chunk& code) {
 		switch (inst.opcode) {
 			case Opcode::PRINTF: {
 				auto t1 = inst.operands[0];
-				auto t2 = cells[t1.as_register().index];
+				auto t3 = fetch(t1).as_pointer();
+				auto t2 = *(&t3[0]);
 				if (not t2.is_pointer())
 					throw std::runtime_error("printf operand was not a pointer");
 				auto base = t2.as_pointer();

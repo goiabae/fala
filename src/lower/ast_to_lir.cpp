@@ -439,21 +439,24 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::LTE: assert(false);
 		case NodeType::EQ: assert(false);
 		case NodeType::AT: {
-			//
-			// c0 : *----> (*)----> [... *]----> ...
-			// r0 : (*)----> ...
+			//                   +---> [... v]
+			//                   |
+			// c0 : *---> *---> [*, n $]
+			// r0 : *---> v
 			//
 			const auto& node = ast.at(node_idx);
 			const auto c0 = compile_lvalue(node[0], ctx);
 			const auto c1 = compile(node[1], ctx);
 			const auto r0 = make_register();
 			const auto r1 = make_register();
+			const auto r2 = make_register();
 
 			lir::Chunk chunk {};
 			chunk += c0.code;
 			chunk += c1.code;
 			chunk.emit_loada(r1, lir::Immediate(0), c0.opnd);
-			chunk.emit_shifta(r0, c1.opnd, r1);
+			chunk.emit_loada(r2, lir::Immediate(0), r1);
+			chunk.emit_shifta(r0, c1.opnd, r2);
 			return {chunk, r0};
 		}
 		case NodeType::ADD: assert(false);
@@ -627,41 +630,43 @@ Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_str(NodeIndex node_idx, Context) {
+	//
+	// str : "bbbbbbb" n
+	// t2  : *---> [*, n $]
+	//              |
+	//              +---> [b, b, ..., b] (n times)
+	//
+
 	const auto& node = ast.at(node_idx);
 	const auto str = std::string_view(pool.find(node.str_id));
 	const auto t1 = make_register();
+	const auto t2 = make_register();
 
 	lir::Chunk chunk {};
 	chunk.emit_alloca(t1, lir::Immediate((int)str.size()));
 	chunk.emit(Opcode::INITA, t1, lir::ByteString {std::string(str)});
-	chunk.result_opnd = t1;
+	chunk.emit_alloca(t2, lir::Immediate(2));
+	chunk.emit_storea(t1, lir::Immediate(0), t2);
+	chunk.emit_storea(
+		lir::Immediate(static_cast<int>(str.size())), lir::Immediate(1), t2
+	);
+	chunk.result_opnd = t2;
 
-	return {chunk, t1};
+	return {chunk, t2};
 }
 
 Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
+	//
+	// res : *---> value
+	// tmp : value
+	//
 	lir::Chunk chunk {};
-	const auto& node = ast.at(node_idx);
-
-	// evaluates to a temporary register containing the address of the lvalue
-
-	const auto r0 = compile(node[0], ctx);
-	const auto r1 = compile(node[1], ctx);
-
-	chunk += r0.code;
-	chunk += r1.code;
-
-	const auto is_array = [&]() {
-		const auto t1 = tpc.node_to_type.at(node[0]);
-		const auto t3 = get_datatype(t1);
-		return std::dynamic_pointer_cast<Array>(t3) != nullptr;
-	}();
-	if (not is_array) err("Base must be an lvalue");
-
-	lir::Operand tmp = make_register();
-	chunk.emit(Opcode::ADD, tmp, r0.opnd, r1.opnd);
-
-	return {chunk, lir::Operand(tmp)};
+	auto res = compile_lvalue(node_idx, ctx);
+	chunk = chunk + res.code;
+	auto res_opnd = res.opnd;
+	auto tmp = make_register();
+	chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
+	return {chunk, tmp};
 }
 
 // FIXME: Temporary workaround
@@ -769,15 +774,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.emit(Opcode::NOT, res, inverse);
 			return {chunk, res};
 		}
-		case NodeType::AT: {
-			lir::Chunk chunk {};
-			auto res = compile_lvalue(node_idx, ctx);
-			chunk = chunk + res.code;
-			auto res_opnd = res.opnd;
-			auto tmp = make_register();
-			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
-			return {chunk, tmp};
-		}
+		case NodeType::AT: COMPILE_WITH_HANDLER(compile_at)
 		case NodeType::ID: assert(false);
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
@@ -835,6 +832,16 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: assert(false);
 		case NodeType::ARRAY_LITERAL: {
+			//
+			// r1 : v1
+			// r2 : v2
+			// ...
+			// rn : vn
+			//
+			// t2 : *---> [*, n $]
+			//             |
+			//             +---> [r1, r2, ..., rn]
+			//
 			lir::Chunk chunk {};
 			const auto t1 = make_register();
 			chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(node.size())));
@@ -843,19 +850,36 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				chunk += ri.code;
 				chunk.emit_storea(ri.opnd, lir::Immediate(static_cast<int>(i)), t1);
 			}
-			chunk.result_opnd = t1;
-			return {chunk, t1};
+			const auto t2 = make_register();
+			chunk.emit_alloca(t2, lir::Immediate(2));
+			chunk.emit_storea(t1, lir::Immediate(0), t2);
+			chunk.emit_storea(
+				lir::Immediate(static_cast<int>(node.size())), lir::Immediate(1), t2
+			);
+			chunk.result_opnd = t2;
+			return {chunk, t2};
 		}
 		case NodeType::REPEAT: {
+			//
+			// r0 : value
+			// r1 : amnt $
+			// t1 : *---> [*, amnt $]
+			//             |
+			//             +---> [value, value, ...] (amnt times)
+			//
 			const auto r0 = compile(node[0], ctx);
 			const auto r1 = compile(node[1], ctx);
 			const auto t1 = make_register();
+			const auto t2 = make_register();
 			lir::Chunk chunk {};
 			chunk += r0.code;
 			chunk += r1.code;
 			chunk.emit(Opcode::REPEAT, t1, r0.opnd, r1.opnd);
-			chunk.result_opnd = t1;
-			return {chunk, t1};
+			chunk.emit_alloca(t2, lir::Immediate(2));
+			chunk.emit_storea(t1, lir::Immediate(0), t2);
+			chunk.emit_storea(r1.opnd, lir::Immediate(1), t2);
+			chunk.result_opnd = t2;
+			return {chunk, t2};
 		}
 	}
 	assert(false);
