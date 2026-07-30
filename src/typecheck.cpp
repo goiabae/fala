@@ -42,71 +42,8 @@ const auto NIL_ = std::make_shared<Nil>();
 const auto VOID_ = std::make_shared<Void>();
 const auto TOAT_ = std::make_shared<Toat>();
 
-static M make_modevar(std::size_t index);
-static D make_datavar(std::size_t index);
-static D make_integer(int bit_count, Integer::Sign sign);
-static D make_array(D item);
-static D make_function(std::vector<T> inputs, D output);
-static D make_bool();
-static D make_general(std::vector<D> var, D body);
-static D make_record(std::vector<std::pair<std::string, D>> field_tys);
-static D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
-static T make_type(M mode, D datatype);
 static bool cast_to(M, M);
 static bool cast_to(D, D);
-
-D make_row_set(std::map<std::string, std::shared_ptr<Datatype>> x) {
-	RowSet rs;
-	rs.rows = x;
-	return std::make_shared<RowSet>(rs);
-}
-
-D make_record(std::vector<std::pair<std::string, D>> field_tys) {
-	Record r;
-	r.fields = field_tys;
-	return std::make_shared<Record>(r);
-}
-
-D make_general(std::vector<D> vars, D body) {
-	General g {};
-	g.vars = vars;
-	g.body = body;
-	return std::make_shared<General>(g);
-}
-
-D make_bool() { return make_integer(1, Integer::Sign::UNSIGNED); }
-
-M make_modevar(std::size_t index) {
-	return std::make_shared<Mode>(Mode {.data = Variable<Mode>(index)});
-}
-
-D make_datavar(std::size_t index) {
-	return std::make_shared<TypeVariable>(index);
-}
-
-D make_integer(int bit_count, Integer::Sign sign) {
-	Integer i {};
-	i.bit_count = bit_count;
-	i.sign = sign;
-	return std::make_shared<Integer>(i);
-}
-
-D make_array(D item_type) {
-	Array a {};
-	a.item_type = item_type;
-	return std::make_shared<Array>(a);
-}
-
-D make_function(std::vector<T> inputs, D output) {
-	auto x = std::make_shared<Function>();
-	x->inputs = inputs;
-	x->output = output;
-	return x;
-}
-
-T make_type(M mode, D datatype) {
-	return std::make_shared<Type>(mode, datatype);
-}
 
 D Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
 

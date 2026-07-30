@@ -4,6 +4,10 @@
 
 #include "utils.hpp"
 
+using M = std::shared_ptr<Mode>;
+using D = std::shared_ptr<Datatype>;
+using T = std::shared_ptr<Type>;
+
 std::ostream& operator<<(std::ostream& st, Mode::Concrete cm) {
 	switch (cm) {
 		case Mode::Concrete::VAL: st << "val"; break;
@@ -178,4 +182,57 @@ std::ostream& Nil::print(std::ostream& st) const {
 void TypeVariable::bind_to(std::shared_ptr<Datatype> t) {
 	bound_type = t;
 	is_bound = true;
+}
+
+D make_row_set(std::map<std::string, std::shared_ptr<Datatype>> x) {
+	RowSet rs;
+	rs.rows = x;
+	return std::make_shared<RowSet>(rs);
+}
+
+D make_record(std::vector<std::pair<std::string, D>> field_tys) {
+	Record r;
+	r.fields = field_tys;
+	return std::make_shared<Record>(r);
+}
+
+D make_general(std::vector<D> vars, D body) {
+	General g {};
+	g.vars = vars;
+	g.body = body;
+	return std::make_shared<General>(g);
+}
+
+D make_bool() { return make_integer(1, Integer::Sign::UNSIGNED); }
+
+M make_modevar(std::size_t index) {
+	return std::make_shared<Mode>(Mode {.data = Variable<Mode>(index)});
+}
+
+D make_datavar(std::size_t index) {
+	return std::make_shared<TypeVariable>(index);
+}
+
+D make_integer(int bit_count, Integer::Sign sign) {
+	Integer i {};
+	i.bit_count = bit_count;
+	i.sign = sign;
+	return std::make_shared<Integer>(i);
+}
+
+D make_array(D item_type) {
+	Array a {};
+	a.item_type = item_type;
+	return std::make_shared<Array>(a);
+}
+
+D make_function(std::vector<T> inputs, D output) {
+	auto x = std::make_shared<Function>();
+	x->inputs = inputs;
+	x->output = output;
+	return x;
+}
+
+T make_type(M mode, D datatype) {
+	return std::make_shared<Type>(mode, datatype);
 }

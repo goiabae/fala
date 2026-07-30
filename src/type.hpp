@@ -9,6 +9,17 @@
 
 #include "variable.hpp"
 
+#define M std::shared_ptr<Mode>
+#define D std::shared_ptr<Datatype>
+#define T std::shared_ptr<Type>
+
+#define DERIVE(...)                                        \
+	Datatype {                                               \
+		size_t size_of() override;                             \
+		std::ostream& print(std::ostream & st) const override; \
+		__VA_ARGS__                                            \
+	}
+
 struct Type;
 struct Datatype;
 struct Mode;
@@ -29,13 +40,6 @@ struct Toat;
 struct General;
 struct Record;
 struct RowSet;
-
-#define DERIVE(...)                                        \
-	Datatype {                                               \
-		size_t size_of() override;                             \
-		std::ostream& print(std::ostream & st) const override; \
-		__VA_ARGS__                                            \
-	}
 
 // clang-format off
 
@@ -102,6 +106,21 @@ std::ostream& operator<<(std::ostream&, const Type&);
 std::ostream& operator<<(std::ostream&, const Datatype&);
 std::ostream& operator<<(std::ostream&, const Mode&);
 std::ostream& operator<<(std::ostream&, Mode::Concrete);
+
+M make_modevar(std::size_t index);
+D make_datavar(std::size_t index);
+D make_integer(int bit_count, Integer::Sign sign);
+D make_array(D item);
+D make_function(std::vector<T> inputs, D output);
+D make_bool();
+D make_general(std::vector<D> var, D body);
+D make_record(std::vector<std::pair<std::string, D>> field_tys);
+D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
+T make_type(M mode, D datatype);
+
+#undef M
+#undef D
+#undef T
 
 #undef DERIVE
 
