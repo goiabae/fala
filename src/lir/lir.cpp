@@ -8,6 +8,7 @@ namespace lir {
 
 static std::ostream& operator<<(std::ostream& st, const Instruction& inst);
 static std::ostream& operator<<(std::ostream& st, const Operand& opnd);
+static std::ostream& operator<<(std::ostream&, const ByteString&);
 static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd);
 static int print_operand(FILE* fd, Operand opnd);
 static const char* opcode_repr(Opcode op);
@@ -16,6 +17,22 @@ static int print_inst_indirect(FILE* fd, const Instruction& inst);
 static std::ostream& print_inst_indirect(
 	std::ostream& st, const Instruction& inst
 );
+
+std::ostream& operator<<(std::ostream& st, const ByteString& bs) {
+	st << '\"';
+	for (auto c : bs.bytes) {
+		if (c == '\n')
+			st << "\\n";
+		else if (c == '\t')
+			st << "\\t";
+		else if (c == '\r')
+			st << "\\r";
+		else
+			st << c;
+	}
+	st << '\"';
+	return st;
+}
 
 std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
 	switch (opnd.type) {
@@ -26,8 +43,7 @@ std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
 			return st << std::format("L{:03}", opnd.as_label().id);
 		case Operand::Type::IMMEDIATE:
 			return st << std::format("{}", opnd.as_immediate().number);
-		case Operand::Type::BYTE_STRING:
-			return st << std::format("\"{}\"", opnd.as_byte_string().bytes);
+		case Operand::Type::BYTE_STRING: return st << opnd.as_byte_string();
 	}
 	return st;
 }
@@ -136,8 +152,22 @@ int print_operand(FILE* fd, Operand opnd) {
 		case Operand::Type::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
 		case Operand::Type::IMMEDIATE:
 			return fprintf(fd, "%d", opnd.as_immediate().number);
-		case Operand::Type::BYTE_STRING:
-			return fprintf(fd, "\"%s\"", opnd.as_byte_string().bytes.c_str());
+		case Operand::Type::BYTE_STRING: {
+			int printed = 0;
+			printed += fprintf(fd, "\"");
+			for (auto c : opnd.as_byte_string().bytes) {
+				if (c == '\n')
+					printed += fprintf(fd, "\\n");
+				else if (c == '\t')
+					printed += fprintf(fd, "\\t");
+				else if (c == '\r')
+					printed += fprintf(fd, "\\r");
+				else
+					printed += fprintf(fd, "%c", c);
+			}
+			printed += fprintf(fd, "\"");
+			return printed;
+		}
 	}
 	return 0;
 }
