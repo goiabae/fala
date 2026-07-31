@@ -24,7 +24,7 @@ TEST(TypecheckTest, function_application) {
 	EXPECT_TRUE(ty != nullptr);
 	const auto dty = get_datatype(ty);
 	EXPECT_TRUE(dty != nullptr);
-	const auto fty = std::dynamic_pointer_cast<Function>(dty);
+	const auto fty = std::dynamic_pointer_cast<Closure>(dty);
 	EXPECT_TRUE(fty != nullptr);
 	for (const auto& pty : fty->inputs) {
 		EXPECT_TRUE(pty != nullptr);

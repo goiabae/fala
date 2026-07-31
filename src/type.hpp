@@ -7,6 +7,7 @@
 #include <optional>
 #include <vector>
 
+#include "ast.hpp"
 #include "variable.hpp"
 
 #define M std::shared_ptr<Mode>
@@ -34,6 +35,7 @@ struct Integer;
 struct Nil;
 struct Void;
 struct Function;
+struct Closure;
 struct TypeVariable;
 struct Array;
 struct Toat;
@@ -58,8 +60,15 @@ struct Function final : DERIVE (
 	std::shared_ptr<Datatype> output;
 );
 
+struct Closure final : DERIVE (
+	std::vector<std::shared_ptr<Type>> inputs;
+	std::shared_ptr<Datatype> output;
+	std::map<Guid, D> captures;
+);
+
 struct TypeVariable final : DERIVE (
 	TypeVariable(std::size_t name) : unbound_name(name) {}
+
 	std::size_t unbound_name {};
 	std::shared_ptr<Datatype> bound_type {nullptr};
 	bool is_bound {false};
@@ -112,6 +121,7 @@ D make_datavar(std::size_t index);
 D make_integer(int bit_count, Integer::Sign sign);
 D make_array(D item);
 D make_function(std::vector<T> inputs, D output);
+D make_closure(std::vector<T> inputs, D output, std::map<Guid, D> captures);
 D make_bool();
 D make_general(std::vector<D> var, D body);
 D make_record(std::vector<std::pair<std::string, D>> field_tys);

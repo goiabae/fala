@@ -32,8 +32,15 @@ struct SignalHandlers {
 	bool has_return_handler {false};
 };
 
+struct ClosureInfo {
+	std::optional<Guid> function_name;
+	lir::Register object;
+	std::map<Guid, std::size_t> offsets;
+};
+
 struct Context {
 	SignalHandlers handlers;
+	std::optional<ClosureInfo> current_closure;
 };
 
 struct Compiler {

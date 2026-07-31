@@ -132,7 +132,8 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			auto& m = m_ast.at(id_idx);
 			m.type = NodeType::GUID;
 			m.guid = guid;
-			const auto inner_scope_idx = m_symtab.make_function_scope(scope_idx);
+			const auto inner_scope_idx =
+				m_symtab.make_function_scope(scope_idx, body_idx);
 			const auto& params_node = m_ast.at(params_idx);
 			for (const auto param_idx : params_node) {
 				const auto& param_node = m_ast.at(param_idx);

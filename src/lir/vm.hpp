@@ -123,6 +123,8 @@ struct VM {
 	std::stack<Value> stack {};
 
 	void run(const Chunk&);
+	std::size_t address_of_label(const Chunk&, lir::Label);
+	Value& deref(lir::Operand);
 };
 
 } // namespace lir

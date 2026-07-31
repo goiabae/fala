@@ -80,6 +80,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::NOP: return 0;
 		case Opcode::REPEAT: return 3;
 		case Opcode::INITA: return 2;
+		case Opcode::ENCLOSE: return 3;
 	}
 	assert(false);
 };
@@ -180,6 +181,7 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::NOP: return "nop";
 		case Opcode::REPEAT: return "repeat";
 		case Opcode::INITA: return "inita";
+		case Opcode::ENCLOSE: return "enclose";
 	}
 	assert(false);
 }
@@ -373,5 +375,9 @@ Chunk& Chunk::emit_clonea(Operand destination, Operand source) {
 }
 
 Chunk& Chunk::emit_nop() { return emit(Opcode::NOP); }
+
+Chunk& Chunk::emit_enclose(Operand result, Operand label, Operand closure) {
+	return emit(Opcode::ENCLOSE, result, label, closure);
+}
 
 } // namespace lir

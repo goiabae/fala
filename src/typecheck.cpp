@@ -1,11 +1,11 @@
 #include "typecheck.hpp"
 
 #include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include <algorithm>
 #include <concepts>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <ranges>
@@ -44,6 +44,7 @@ const auto TOAT_ = std::make_shared<Toat>();
 
 static bool cast_to(M, M);
 static bool cast_to(D, D);
+static bool cast_to(T from, T to);
 
 D Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
 
@@ -212,12 +213,50 @@ bool cast_to(D from, D to) {
 	if (is<Nil>(from) and is<Nil>(to)) return true;
 	if (is<Void>(from) and is<Void>(to)) return true;
 
+	if (auto cfrom = ::to<Closure>(from)) {
+		if (auto fto = ::to<Function>(to)) {
+			auto t1 = make_function(cfrom->inputs, cfrom->output);
+			return cast_to(t1, fto);
+		}
+	}
+
+	if (auto ffrom = ::to<Function>(from)) {
+		if (auto cto = ::to<Closure>(to)) {
+			auto t1 = make_function(cto->inputs, cto->output);
+			auto no_captures = cto->captures.size() == 0;
+			return no_captures and cast_to(ffrom, t1);
+		}
+	}
+
+	// a and b are functions of same arity.
+	// unify their inputs. unify their outputs
+	if (auto fa = ::to<Function>(from), fb = ::to<Function>(to); fa and fb) {
+		if (fa->inputs.size() != fb->inputs.size()) return false;
+		auto unified_inputs = std::ranges::all_of(
+			std::ranges::views::zip(fa->inputs, fb->inputs), [&](const auto& p) {
+				const auto& [a, b] = p;
+				// FIXME: might be wrong
+				return cast_to(a, b);
+			}
+		);
+		return unified_inputs and cast_to(fa->output, fb->output);
+	}
+
+	if (auto cfrom = ::to<Closure>(from)) {
+		if (auto cto = ::to<Closure>(to)) {
+			auto same_captures = cfrom->captures == cto->captures;
+			auto ffrom = make_function(cfrom->inputs, cfrom->output);
+			auto fto = make_function(cto->inputs, cto->output);
+			return same_captures and cast_to(ffrom, fto);
+		}
+	}
+
 	return false;
 }
 
-bool Typechecker::cast_to(T from, T to) {
-	return ::cast_to(from->mode, to->mode)
-	   and ::cast_to(from->datatype, to->datatype);
+bool cast_to(T from, T to) {
+	return cast_to(from->mode, to->mode)
+	   and cast_to(from->datatype, to->datatype);
 }
 
 void Typechecker::mismatch_error(
@@ -249,7 +288,7 @@ bool Typechecker::typecheck() {
 	auto int64_to_int64_arr_typ =
 		make_function({make_type(VAL_, int64_typ)}, int64_arr_typ);
 
-	const auto guids = symtab.symbols_in(symtab.builtin_scope);
+	const auto guids = symtab.symbols_declared_in(symtab.builtin_scope);
 	for (const auto guid : guids) {
 		const auto name = std::string_view(pool.find(symtab.name_of(guid).value()));
 		if (name == "read_char") {
@@ -512,7 +551,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				make_type(make_modevar(), make_function(inputs, outdata));
 			auto func_type = typecheck(func_idx);
 
-			if (not unify(func_type, expected_func_type)) {
+			if (not cast_to(func_type, expected_func_type)) {
 				mismatch_error(
 					node.loc,
 					"Function and arguments don't match",
@@ -531,7 +570,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				LogLevel::INFO, node.loc, "func: {}, args: {}", a.str(), oss.str()
 			);
 
-			return ASSOC_TYPE(node_idx, make_type(VAL_, outdata));
+			const auto t1 = make_type(VAL_, outdata);
+			return ASSOC_TYPE(node_idx, t1);
 		}
 			// |
 			// +------
@@ -636,21 +676,23 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			                ? make_type(VAL_, int64_typ)
 			                : typecheck(step_idx);
 
-			if (not unify(var_typ, to_typ)) {
+			const auto t1 = make_type(VAL_, int64_typ);
+
+			if (not cast_to(var_typ, t1)) {
 				mismatch_error(
-					node.loc,
-					"For loop declaration and bound types don't match",
-					var_typ,
-					to_typ
+					node.loc, "Cannot cast loop variable type into integer", var_typ, t1
 				);
 			}
 
-			if (not unify(to_typ, step_typ)) {
+			if (not cast_to(to_typ, t1)) {
 				mismatch_error(
-					node.loc,
-					"For loop bound and step types don't match",
-					to_typ,
-					step_typ
+					node.loc, "Cannot cast loop bound type into integer", to_typ, t1
+				);
+			}
+
+			if (not cast_to(step_typ, t1)) {
+				mismatch_error(
+					node.loc, "Cannot cast loop step type into integer", step_typ, t1
 				);
 			}
 
@@ -992,7 +1034,19 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					return body_type->datatype;
 				}();
 
-				typ = make_type(VAL_, make_function(param_types, output));
+				const auto captures = [&]() {
+					auto mf = symtab.function_of(body_idx);
+					assert(mf.has_value());
+					auto f = mf.value();
+					auto free_symbols = symtab.free_symbols_in(f);
+					std::map<Guid, D> captures {};
+					for (auto symbol : free_symbols) {
+						captures[symbol] = variables.at(symbol)->datatype;
+					}
+					return captures;
+				}();
+
+				typ = make_type(VAL_, make_closure(param_types, output, captures));
 			}
 
 			variables[id_node.guid] = typ;

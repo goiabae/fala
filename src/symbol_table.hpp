@@ -23,14 +23,19 @@ class SymbolTable {
 	Guid define(StrID, ScopeIndex, NodeIndex);
 	Guid use_of(StrID, ScopeIndex, NodeIndex);
 	ScopeIndex make_child_scope(ScopeIndex);
-	ScopeIndex make_function_scope(ScopeIndex);
+	ScopeIndex make_function_scope(ScopeIndex, NodeIndex);
 	std::optional<RelativeScope> relative_scope_of(Guid, NodeIndex) const;
+	RelativeScope relative_scope_of(Guid, FunctionIndex) const;
 	std::optional<StrID> name_of(Guid) const;
 	std::optional<ScopeIndex> declaration_scope_of(Guid) const;
-	std::vector<Guid> symbols_in(ScopeIndex) const;
+	std::vector<Guid> symbols_declared_in(ScopeIndex) const;
 	Guid define_builtin(StrID);
 	std::vector<Guid> all_symbols() const;
 	std::vector<Guid> symbols_with_name(StrID) const;
+	std::optional<FunctionIndex> function_of(ScopeIndex) const;
+	std::optional<FunctionIndex> function_of(NodeIndex) const;
+	std::vector<Guid> symbols_used_in(ScopeIndex) const;
+	std::vector<Guid> free_symbols_in(FunctionIndex) const;
 
  public:
 	static constexpr ScopeIndex builtin_scope {.index = 0};
@@ -69,6 +74,8 @@ class SymbolTable {
 		}
 	};
 	std::map<NodeIndex, ScopeIndex> m_node_scopes {};
+	std::map<ScopeIndex, std::vector<Guid>> m_symbols_in_scope {};
+	std::map<NodeIndex, FunctionIndex> m_body_function {};
 	std::size_t m_next_function_index {0};
 };
 

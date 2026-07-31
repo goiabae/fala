@@ -38,7 +38,6 @@ struct Typechecker {
 	bool unify(D, D);
 	bool unify(T, T);
 	void mismatch_error(Location, const char*, T, T);
-	bool cast_to(T, T);
 	D make_datavar();
 	M make_modevar();
 	T deref(T);

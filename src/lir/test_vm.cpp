@@ -148,6 +148,9 @@ TEST(VMTest, function_call) {
 	auto r2 = make_integer_register(2);
 	auto r3 = make_integer_register(3);
 	auto r4 = make_integer_register(4);
+	auto r5 = make_integer_register(5);
+	auto r6 = make_integer_register(6);
+	auto r7 = make_integer_register(7);
 
 	lir::Chunk chunk {};
 
@@ -156,14 +159,17 @@ TEST(VMTest, function_call) {
 
 	chunk.add_label(l1);
 	chunk.emit(lir::Opcode::FUNC);
+	chunk.emit(lir::Opcode::POP, r7);
 	chunk.emit(lir::Opcode::POP, r2);
 	chunk.emit(lir::Opcode::ADD, r3, r2, imm_one);
 	chunk.emit(lir::Opcode::PUSH, r3);
 	chunk.emit(lir::Opcode::RET);
 
 	chunk.add_label(l0);
+	chunk.emit_alloca(r5, lir::Immediate(0));
+	chunk.emit_enclose(r6, l1, r5);
 	chunk.emit(lir::Opcode::PUSH, imm_three);
-	chunk.emit(lir::Opcode::CALL, l1);
+	chunk.emit(lir::Opcode::CALL, r6);
 	chunk.emit(lir::Opcode::POP, r4);
 
 	std::istringstream input {""};
@@ -233,6 +239,9 @@ TEST(VMTest, function_integer_out_parameter) {
 	auto r9 = make_integer_register(9);
 	auto r10 = make_integer_register(10);
 	auto r11 = make_integer_register(11);
+	auto r12 = make_integer_register(12);
+	auto r13 = make_integer_register(13);
+	auto r14 = make_integer_register(14);
 
 	lir::Chunk chunk {};
 
@@ -241,6 +250,7 @@ TEST(VMTest, function_integer_out_parameter) {
 
 	chunk.add_label(l1);
 	chunk.emit(lir::Opcode::FUNC);
+	chunk.emit(lir::Opcode::POP, r14);
 	chunk.emit(lir::Opcode::POP, r7);
 	chunk.emit(lir::Opcode::MOV, r8, imm_zero);
 	chunk.emit(lir::Opcode::LOADA, r9, r8, r7);
@@ -257,7 +267,9 @@ TEST(VMTest, function_integer_out_parameter) {
 	chunk.emit(lir::Opcode::MOV, r4, imm_three);
 	chunk.emit(lir::Opcode::STOREA, r4, r3, r2);
 	chunk.emit(lir::Opcode::PUSH, r2);
-	chunk.emit(lir::Opcode::CALL, l1);
+	chunk.emit_alloca(r12, lir::Immediate(0));
+	chunk.emit_enclose(r13, l1, r12);
+	chunk.emit(lir::Opcode::CALL, r13);
 	chunk.emit(lir::Opcode::POP, r5);
 	chunk.emit(lir::Opcode::LOADA, r6, r3, r2);
 
@@ -339,6 +351,9 @@ TEST(VMTest, function_integer_array_out_parameter) {
 	auto r13 = make_integer_register(13);
 	auto r14 = make_integer_register(14);
 	auto r15 = make_integer_register(15);
+	auto r16 = make_integer_register(16);
+	auto r17 = make_integer_register(17);
+	auto r18 = make_integer_register(18);
 
 	lir::Chunk chunk {};
 
@@ -347,6 +362,7 @@ TEST(VMTest, function_integer_array_out_parameter) {
 
 	chunk.add_label(l1);
 	chunk.emit(lir::Opcode::FUNC);
+	chunk.emit(lir::Opcode::POP, r18);
 	chunk.emit(lir::Opcode::POP, r9);
 	chunk.emit(lir::Opcode::MOV, r10, imm_svtn);
 	chunk.emit(lir::Opcode::SHIFTA, r11, r10, r9);
@@ -367,7 +383,9 @@ TEST(VMTest, function_integer_array_out_parameter) {
 	chunk.emit(lir::Opcode::MOV, r6, imm_zero);
 	chunk.emit(lir::Opcode::STOREA, r5, r6, r4);
 	chunk.emit(lir::Opcode::PUSH, r2);
-	chunk.emit(lir::Opcode::CALL, l1);
+	chunk.emit_alloca(r16, lir::Immediate(0));
+	chunk.emit_enclose(r17, l1, r16);
+	chunk.emit(lir::Opcode::CALL, r17);
 	chunk.emit(lir::Opcode::POP, r7);
 	chunk.emit(lir::Opcode::LOADA, r8, r6, r4);
 

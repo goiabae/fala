@@ -56,18 +56,22 @@ void err(const char* msg) {
 	exit(1);
 }
 
+std::size_t VM::address_of_label(const Chunk& code, lir::Label label) {
+	return code.label_indexes.at(label.id) - 1;
+}
+
+auto VM::deref(Operand opnd) -> Value& {
+	if (opnd.type == Operand::Type::REGISTER) {
+		return cells[opnd.as_register().index];
+	} else {
+		fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
+		exit(1);
+	}
+};
+
 void VM::run(const lir::Chunk& code) {
 	// cells.fill(Value(0));
 	size_t return_address = 0;
-
-	auto deref = [&](Operand opnd) -> Value& {
-		if (opnd.type == Operand::Type::REGISTER) {
-			return cells[opnd.as_register().index];
-		} else {
-			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
-			exit(1);
-		}
-	};
 
 	auto fetch = [&](Operand opnd) -> Value {
 		if (opnd.type == Operand::Type::REGISTER) {
@@ -195,10 +199,20 @@ void VM::run(const lir::Chunk& code) {
 				stack.pop();
 				break;
 			}
-			case Opcode::CALL:
+			case Opcode::CALL: {
+				//
+				// r0 : *---> [cls *, fn $]
+				//                 |
+				//                 +---> ...
+				auto closure_pointer = fetch(inst.operands[0]).as_pointer();
+				auto env_pointer = *(&closure_pointer[0]);
+				stack.push(env_pointer);
 				stack.push(Value((int64_t)pc));
-				pc = code.label_indexes.at(inst.operands[0].as_label().id) - 1;
+				auto function_address =
+					static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
+				pc = function_address;
 				break;
+			}
 			case Opcode::RET: pc = return_address; break;
 			case Opcode::FUNC:
 				return_address = (size_t)stack.top().as_integer();
@@ -216,10 +230,14 @@ void VM::run(const lir::Chunk& code) {
 				if (not a.is_integer())
 					throw std::runtime_error("alloca size was not an integer");
 				auto size_integer = fetch(size_register).as_integer();
-				assert(size_integer > 0);
+				assert(size_integer >= 0);
 				auto register_index = result_register.as_register().index;
 				auto& cell = cells[register_index];
-				cell = Value(new Value[(size_t)size_integer], (size_t)size_integer);
+				if (size_integer == 0) {
+					cell = Value(nullptr, 0);
+				} else {
+					cell = Value(new Value[(size_t)size_integer], (size_t)size_integer);
+				}
 				if (not cell.is_pointer())
 					throw std::runtime_error("allocated value was not a pointer");
 				break;
@@ -342,6 +360,18 @@ void VM::run(const lir::Chunk& code) {
 					*(&t1[i]) = byte;
 					i++;
 				}
+				break;
+			}
+			case Opcode::ENCLOSE: {
+				auto& result = deref(inst.operands[0]);
+				auto label = Value(
+					static_cast<int64_t>(
+						address_of_label(code, inst.operands[1].as_label())
+					)
+				);
+				auto closure = fetch(inst.operands[2]);
+				auto object = Value(new Value[2] {closure, label}, 2);
+				result = object;
 				break;
 			}
 		}

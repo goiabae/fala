@@ -1,5 +1,6 @@
 #include "type.hpp"
 
+#include <sstream>
 #include <variant>
 
 #include "utils.hpp"
@@ -67,6 +68,8 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
 		throw std::runtime_error("row set is not a concrete record");
 	} else if (auto t2 = std::dynamic_pointer_cast<Record>(t)) {
 		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Closure>(t)) {
+		return t2;
 	} else {
 		assert(false && "no more variants of type!!!");
 	}
@@ -89,7 +92,23 @@ std::ostream& Function::print(std::ostream& st) const {
 	return st;
 }
 
-size_t Function::size_of() { return 1; }
+size_t Function::size_of() { assert(false && "not implemented yet"); }
+
+std::ostream& Closure::print(std::ostream& st) const {
+	st << '[';
+	std::vector<std::string> as {};
+	for (const auto& [k, v] : captures) {
+		std::ostringstream ss {};
+		ss << *v;
+		as.push_back(ss.str());
+	}
+	st << SeparatedPrinter(as, ", ");
+	st << ']';
+	st << "(" << SeparatedPrinter(inputs, ", ") << ") -> " << *output;
+	return st;
+}
+
+size_t Closure::size_of() { assert(false && "not implemented yet"); }
 
 size_t Void::size_of() { return 0; }
 
@@ -230,6 +249,14 @@ D make_function(std::vector<T> inputs, D output) {
 	auto x = std::make_shared<Function>();
 	x->inputs = inputs;
 	x->output = output;
+	return x;
+}
+
+D make_closure(std::vector<T> inputs, D output, std::map<Guid, D> captures) {
+	auto x = std::make_shared<Closure>();
+	x->inputs = inputs;
+	x->output = output;
+	x->captures = captures;
 	return x;
 }
 

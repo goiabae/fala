@@ -147,7 +147,10 @@ lir::Chunk Compiler::compile() {
 
 	const auto main = make_label();
 	const SignalHandlers handlers {};
-	const Context ctx {.handlers = handlers};
+	const Context ctx {
+		.handlers = handlers,
+		.current_closure = {},
+	};
 	const auto c0 = compile(ast.root_index, ctx);
 
 	lir::Chunk chunk {};
@@ -182,7 +185,8 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 
 Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
-	const auto& func_node = ast.at(node[0]);
+	const auto func_idx = node[0];
+	const auto& func_node = ast.at(func_idx);
 	const auto& args_node = ast.at(node[1]);
 
 	assert(func_node.type == NodeType::GUID);
@@ -216,11 +220,10 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			throw std::runtime_error("unknown builtin");
 		}
 	} else {
-		const auto func_opnd = variables.at(func_node.guid);
-
 		const auto ty = tpc.variables.at(func_node.guid);
 		const auto dty = get_datatype(ty);
-		const auto fty = std::dynamic_pointer_cast<Function>(dty);
+		const auto fty = std::dynamic_pointer_cast<Closure>(dty);
+		assert(fty != nullptr);
 		for (const auto& [i, arg] :
 		     std::ranges::views::enumerate(std::ranges::reverse_view(args))) {
 			const auto param_mode =
@@ -244,7 +247,9 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			}
 		}
 
-		chunk.emit(Opcode::CALL, func_opnd);
+		const auto func = compile(func_idx, ctx);
+		chunk += func.code;
+		chunk.emit(Opcode::CALL, func.opnd);
 		const auto res = make_register();
 		chunk.emit(Opcode::POP, res);
 		chunk.result_opnd = res;
@@ -308,6 +313,7 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	Context header_ctx {ctx};
 	Context body_ctx {
 		.handlers = new_handlers,
+		.current_closure = ctx.current_closure,
 	};
 
 	const auto c0 = [&]() -> Result {
@@ -381,6 +387,7 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 
 	Context body_ctx {
 		.handlers = new_handlers,
+		.current_closure = ctx.current_closure,
 	};
 
 	const auto r0 = compile(node[0], ctx);
@@ -470,8 +477,48 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::INSTANCE: assert(false);
 		case NodeType::METALIST: assert(false);
 		case NodeType::GUID: {
-			assert(variables.contains(node.guid));
-			return {{}, variables.at(node.guid)};
+			const auto maybe_rel = symtab.relative_scope_of(node.guid, node_idx);
+			assert(maybe_rel.has_value());
+			const auto rel = maybe_rel.value();
+			if (rel == RelativeScope::FREE) {
+				assert(ctx.current_closure.has_value());
+				const auto& clinfo = ctx.current_closure.value();
+				lir::Chunk chunk {};
+				const auto t1 = make_register();
+				if (not clinfo.offsets.contains(node.guid)) {
+					const auto name =
+						std::string_view(pool.find(symtab.name_of(node.guid).value()));
+					std::string s {};
+					s += "[";
+					for (const auto& [a, b] : clinfo.offsets) {
+						s += std::string_view(pool.find(symtab.name_of(a).value()));
+						s += " ";
+					}
+					s += "]";
+					const auto function_name = std::string_view(
+						pool.find(symtab.name_of(clinfo.function_name.value()).value())
+					);
+					throw std::runtime_error(
+						std::format(
+							"{}: symbol for variable \"{}\" not in closure info {} of "
+							"function \"{}\"",
+							node.loc.begin.line + 1,
+							name,
+							s,
+							function_name
+						)
+					);
+				}
+				chunk.emit_shifta(
+					t1,
+					lir::Immediate(static_cast<int>(clinfo.offsets.at(node.guid))),
+					clinfo.object
+				);
+				return {chunk, t1};
+			} else {
+				assert(variables.contains(node.guid));
+				return {{}, variables.at(node.guid)};
+			}
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
@@ -540,15 +587,7 @@ void Compiler::allocate_variables() {
 	for (const auto& sym : syms) {
 		const auto scope = symtab.declaration_scope_of(sym).value();
 		if (scope != symtab.builtin_scope) {
-			const auto ty = tpc.variables.at(sym);
-			const auto dty = get_datatype(ty);
-			const auto is_function =
-				std::dynamic_pointer_cast<Function>(dty) != nullptr;
-			if (is_function) {
-				variables[sym] = make_label();
-			} else {
-				variables[sym] = make_register();
-			}
+			variables[sym] = make_register();
 		}
 	}
 }
@@ -561,16 +600,53 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto& id_node = ast.at(id_idx);
 	const auto& params_node = ast.at(params_idx);
 	assert(id_node.type == NodeType::GUID);
-	const auto func_name = variables.at(id_node.guid);
-	Context body_ctx {
-		.handlers = ctx.handlers,
+
+	const auto func_name = make_label();
+	const auto t2 = variables.at(id_node.guid);
+	const auto t3 = make_register();
+
+	const auto ty = tpc.variables.at(id_node.guid);
+	const auto dty = ty->datatype;
+	const auto cty = std::dynamic_pointer_cast<Closure>(dty);
+	assert(cty != nullptr);
+
+	lir::Chunk chunk {};
+	const auto t1 = make_register();
+	chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(cty->captures.size())));
+	ClosureInfo clinfo {
+		.function_name = id_node.guid,
+		.object = t3.as_register(),
+		.offsets = {},
 	};
+	{
+		auto i = 0ul;
+		for (const auto& [a, b] : cty->captures) {
+			const auto ti = make_register();
+			const auto ti2 = make_register();
+			chunk.emit_loada(ti2, lir::Immediate(0), variables.at(a));
+			chunk.emit_clonea(ti, ti2);
+			chunk.emit_storea(ti, lir::Immediate(static_cast<int>(i)), t1);
+			clinfo.offsets[a] = i;
+			i++;
+		}
+	}
+	const auto t4 = make_register();
+	chunk.emit_enclose(t4, func_name, t1);
+	chunk.emit_alloca(t2, lir::Immediate(1));
+	chunk.emit_storea(t4, lir::Immediate(0), t2);
+
+	const Context body_ctx {
+		.handlers = ctx.handlers,
+		.current_closure = clinfo,
+	};
+
 	const auto r0 = compile(body_idx, body_ctx);
 
 	{
 		lir::Chunk func {};
 		func.add_label(func_name);
 		func.emit(Opcode::FUNC);
+		func.emit(Opcode::POP, t3);
 		for (auto param_idx : params_node) {
 			const auto& param_node = ast.at(param_idx);
 			assert(param_node.type == NodeType::PARAM);
@@ -585,7 +661,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 		functions.push_back(func);
 	}
 
-	return {{}, func_name};
+	return {chunk, t2};
 }
 
 Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
@@ -668,6 +744,7 @@ Result Compiler::compile_block(NodeIndex node_idx, Context ctx) {
 	lir::Operand opnd;
 	const Context inner_ctx {
 		.handlers = ctx.handlers,
+		.current_closure = ctx.current_closure,
 	};
 	for (const auto stmt_idx : node) {
 		const auto ri = compile(stmt_idx, inner_ctx);
