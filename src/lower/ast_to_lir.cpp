@@ -740,8 +740,42 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		return {chunk, res};                       \
 	}
 
-		case NodeType::OR: BINARY_ARITH(Opcode::OR);
-		case NodeType::AND: BINARY_ARITH(Opcode::AND);
+		case NodeType::OR: {
+			const auto left_node = node[0];
+			const auto right_node = node[1];
+			const auto r0 = compile(left_node, ctx);
+			const auto r1 = compile(right_node, ctx);
+			const auto res = make_register();
+			const auto l1 = make_label();
+
+			lir::Chunk chunk {};
+			chunk += r0.code;
+			chunk.emit_mov(res, r0.opnd);
+			chunk.emit(Opcode::JMP_TRUE, res, l1);
+			chunk += r1.code;
+			chunk.emit_mov(res, r1.opnd);
+			chunk.add_label(l1);
+			chunk.result_opnd = res;
+			return {chunk, res};
+		}
+		case NodeType::AND: {
+			const auto left_node = node[0];
+			const auto right_node = node[1];
+			const auto r0 = compile(left_node, ctx);
+			const auto r1 = compile(right_node, ctx);
+			const auto res = make_register();
+			const auto l1 = make_label();
+
+			lir::Chunk chunk {};
+			chunk += r0.code;
+			chunk.emit_mov(res, r0.opnd);
+			chunk.emit(Opcode::JMP_FALSE, res, l1);
+			chunk += r1.code;
+			chunk.emit_mov(res, r1.opnd);
+			chunk.add_label(l1);
+			chunk.result_opnd = res;
+			return {chunk, res};
+		}
 		case NodeType::GTN: BINARY_ARITH(Opcode::GREATER);
 		case NodeType::LTN: BINARY_ARITH(Opcode::LESS);
 		case NodeType::GTE: BINARY_ARITH(Opcode::GREATER_EQ);
