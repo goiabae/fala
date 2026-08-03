@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <vector>
 
 #include "ast.hpp"
@@ -143,10 +144,27 @@ std::shared_ptr<DataScheme> make_scheme(
 	std::vector<std::shared_ptr<TypeVariable>>, D
 );
 
+#define DEFFMT(T)                                                 \
+	template<>                                                      \
+	struct std::formatter<T> : std::formatter<std::string> {        \
+		auto format(const T& p, std::format_context& ctx) const {     \
+			std::ostringstream oss {};                                  \
+			oss << p;                                                   \
+			return std::formatter<std::string>::format(oss.str(), ctx); \
+		}                                                             \
+	};
+
+DEFFMT(Type);
+DEFFMT(Datatype);
+DEFFMT(Mode);
+DEFFMT(Mode::Concrete);
+DEFFMT(PolyType);
+DEFFMT(DataScheme);
+
 #undef M
 #undef D
 #undef T
-
+#undef DEFFMT
 #undef DERIVE
 
 #endif
