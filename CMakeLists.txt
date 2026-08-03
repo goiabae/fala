@@ -126,6 +126,8 @@ test_example(array_mutation)
 test_example(array_reassignment)
 test_example(function_call)
 test_example(concat_arrays)
+test_example(generic_map_array)
+test_example(simple_closure)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)

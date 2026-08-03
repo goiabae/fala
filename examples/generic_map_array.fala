@@ -1,0 +1,13 @@
+let fun map xs d f =
+  let var ys = d .. #xs in do
+    for var i = 0 to #xs then
+      ys[i] = f(xs[i])
+    ys
+  end
+in
+let fun inc x = x + 7 in
+let val zs = map([1;2;3], 0, inc) in
+do
+  write_int(zs[2])
+  write_str("\n")
+end
