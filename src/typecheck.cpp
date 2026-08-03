@@ -532,7 +532,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 			const auto& args_node = ast.at(args_idx);
 
-			vector<T> inputs {};
+			std::vector<T> inputs {};
 			for (auto arg_idx : args_node) {
 				auto arg_typ = typecheck(arg_idx);
 				inputs.push_back(arg_typ);
@@ -974,25 +974,20 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// type, if provided)
 			//   [t1, ..., tn] -> t
 			auto typ = [&]() {
-				vector<T> inputs {};
+				std::vector<T> inputs {};
 				for ([[maybe_unused]] auto param_idx : params_node) {
 					inputs.push_back(make_type(make_modevar(), make_datavar()));
 				}
 
-				// if no return type is provided, must be infered
-				D output = nullptr;
-				if (opt_type_node.type == NodeType::EMPTY)
-					output = make_datavar();
-				else
-					output = eval(opt_type_idx);
+				const auto output = (opt_type_node.type == NodeType::EMPTY)
+				                    ? make_datavar()
+				                    : eval(opt_type_idx);
 
-				return ASSOC_TYPE(
-					node_idx, make_type(VAL_, make_function(inputs, output))
-				);
+				return make_type(VAL_, make_function(inputs, output));
 			}();
 
 			{
-				vector<T> param_types {};
+				std::vector<T> param_types {};
 
 				for (auto param_idx : params_node) {
 					const auto& param = ast.at(param_idx);
@@ -1004,7 +999,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 						param_mode.type == NodeType::MODE
 						|| param_mode.type == NodeType::EMPTY
 					);
-					const auto modety = [&]() {
+					const auto mode = [&]() {
 						if (param_mode.type == NodeType::EMPTY)
 							return make_modevar();
 						else if (param_mode.mode == ModeLiteral::VAL)
@@ -1016,28 +1011,28 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 						else
 							assert(false);
 					}();
-					auto var = make_type(modety, make_datavar());
+					auto var = make_type(mode, make_datavar());
 					param_types.push_back(var);
 					variables[param_name.guid] = var;
 				}
 
 				auto output = [&]() {
-					auto body_type = typecheck(body_idx);
 					if (opt_type_node.type != NodeType::EMPTY) {
-						auto opt_type = eval(opt_type_idx);
-						auto t1 = make_type(VAL_, opt_type);
-						if (!unify(body_type, t1))
-							mismatch_error(
-								node.loc,
-								"Function annotation output type and infered type don't "
-								"match",
-								body_type,
-								t1
-							);
-						return opt_type;
+						return eval(opt_type_idx);
+					} else {
+						return make_datavar();
 					}
-					return body_type->datatype;
 				}();
+
+				auto body_type = typecheck(body_idx);
+				if (!unify(body_type->datatype, output))
+					mismatch_error(
+						node.loc,
+						"Function annotation output type and infered type don't "
+						"match",
+						body_type,
+						make_type(VAL_, output)
+					);
 
 				const auto captures = [&]() {
 					auto mf = symtab.function_of(body_idx);
