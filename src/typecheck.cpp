@@ -130,6 +130,8 @@ bool cast_to(M from_, M to_) {
 }
 
 bool cast_to(D from, D to) {
+	if (from == to) return true;
+
 	// a is bound to 'a. unify a' and b
 	if (auto va = ::to<TypeVariable>(from); va and va->is_bound)
 		return cast_to(va->bound_type, to);
@@ -302,6 +304,8 @@ bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
 }
 
 bool Typechecker::unify(D a, D b) {
+	if (a == b) return true;
+
 	// a is bound to 'a. unify a' and b
 	if (auto va = to<TypeVariable>(a); va and va->is_bound)
 		return unify(va->bound_type, b);
