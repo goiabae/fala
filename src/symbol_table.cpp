@@ -245,3 +245,16 @@ RelativeScope SymbolTable::relative_scope_of(
 		return RelativeScope::GLOBAL;
 	}
 }
+
+std::unordered_set<Guid> SymbolTable::symbols_reachable_from(
+	ScopeIndex s
+) const {
+	std::unordered_set<Guid> reachable_symbols {};
+	auto current_symbols = symbols_declared_in(s);
+	for (auto y : current_symbols) reachable_symbols.insert(y);
+	auto p = parent_of(s);
+	if (p.has_value()) {
+		reachable_symbols.merge(symbols_reachable_from(p.value()));
+	}
+	return reachable_symbols;
+}

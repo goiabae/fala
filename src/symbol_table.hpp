@@ -3,6 +3,7 @@
 
 #include <map>
 #include <optional>
+#include <unordered_set>
 
 #include "ast.hpp"
 #include "index.hpp"
@@ -37,6 +38,7 @@ class SymbolTable {
 	std::vector<Guid> symbols_used_in(ScopeIndex) const;
 	std::vector<Guid> free_symbols_in(FunctionIndex) const;
 	ScopeIndex scope_at(NodeIndex) const;
+	std::unordered_set<Guid> symbols_reachable_from(ScopeIndex) const;
 	std::optional<ScopeIndex> parent_of(ScopeIndex) const;
 
  public:
