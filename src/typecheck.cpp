@@ -1228,7 +1228,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					node.loc, "array expansion second argument must be an integer"
 				);
 			}
-			const auto t3 = make_type(VAL_, make_array(t1->datatype));
+			const auto t3 = make_type(VAL_, make_array(t0->datatype));
 			return ASSOC_TYPE(node_idx, t3);
 		}
 		case NodeType::LEN: {
