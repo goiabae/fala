@@ -4,10 +4,10 @@
 #include <stdio.h>
 
 #include <map>
+#include <unordered_set>
 #include <vector>
 
 #include "ast.hpp"
-#include "env.hpp"
 #include "logger.hpp"
 #include "str_pool.h"
 #include "symbol_table.hpp"
@@ -41,6 +41,13 @@ struct Typechecker {
 	M make_modevar();
 	T deref(T);
 	bool submode(M sub, M sup);
+	P generalize(T, ScopeIndex);
+	P generalize(T, std::unordered_set<V>);
+	P dont_generalize(T, ScopeIndex);
+	std::unordered_set<V> free_type_variables(ScopeIndex);
+	std::unordered_set<V> free_type_variables(D);
+	T instantiate(P);
+	D substitute(const std::map<std::size_t, V>&, D);
 
 	AST& ast;
 	StringPool& pool;
@@ -48,10 +55,12 @@ struct Typechecker {
 
 	size_t next_var_id {0};
 	size_t next_modevar_id {0};
-	std::map<Guid, T> variables;
-	std::map<NodeIndex, Env<T>::ScopeID> node_to_scope_id {};
+	std::map<Guid, P> variables;
 	std::map<NodeIndex, T> node_to_type {};
 	Logger logger;
+
+ private:
+	D instantiate(const std::map<V, V>&, D);
 };
 
 #undef T

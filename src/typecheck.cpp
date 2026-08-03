@@ -271,15 +271,16 @@ bool Typechecker::typecheck() {
 	for (const auto guid : guids) {
 		const auto name = std::string_view(pool.find(symtab.name_of(guid).value()));
 		if (name == "read_char") {
-			variables[guid] = make_type(VAL_, nil_to_uint8_typ);
+			variables[guid] = make_polytype(VAL_, make_scheme({}, nil_to_uint8_typ));
 		} else if (name == "read_int") {
-			variables[guid] = make_type(VAL_, nil_to_int64_typ);
+			variables[guid] = make_polytype(VAL_, make_scheme({}, nil_to_int64_typ));
 		} else if (name == "write_char") {
-			variables[guid] = make_type(VAL_, uint8_to_nil_typ);
+			variables[guid] = make_polytype(VAL_, make_scheme({}, uint8_to_nil_typ));
 		} else if (name == "write_int") {
-			variables[guid] = make_type(VAL_, int64_to_nil_typ);
+			variables[guid] = make_polytype(VAL_, make_scheme({}, int64_to_nil_typ));
 		} else if (name == "write_str") {
-			variables[guid] = make_type(VAL_, uint8_arr_to_nil_typ);
+			variables[guid] =
+				make_polytype(VAL_, make_scheme({}, uint8_arr_to_nil_typ));
 		} else {
 			std::cerr << std::format("unexpected builtin function {}", name) << '\n';
 			assert(false);
@@ -955,8 +956,10 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			}();
 
 			auto t1 = make_type(m1, exp->datatype);
-			assert(id_node.type == NodeType::GUID);
-			variables[id_node.guid] = t1;
+			const auto s = symtab.declaration_scope_of(id_node.guid).value();
+			const auto p1 = generalize(t1, s);
+			variables[id_node.guid] = p1;
+			logger.log(LogLevel::INFO, "Declared \"{}\" as ({})", name, *p1);
 			return exp;
 		}
 			// FIXME: add typing rules
@@ -969,6 +972,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& opt_type_node = ast.at(opt_type_idx);
 
 			assert(id_node.type == NodeType::GUID);
+
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
 
 			// Start with parameters and output types and variables (or concrete
 			// type, if provided)
@@ -985,6 +991,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 				return make_type(VAL_, make_function(inputs, output));
 			}();
+
+			variables[id_node.guid] = dont_generalize(typ, {});
 
 			{
 				std::vector<T> param_types {};
@@ -1013,7 +1021,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					}();
 					auto var = make_type(mode, make_datavar());
 					param_types.push_back(var);
-					variables[param_name.guid] = var;
+					const auto p1 = dont_generalize(var, {});
+					variables[param_name.guid] = p1;
 				}
 
 				auto output = [&]() {
@@ -1023,6 +1032,12 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 						return make_datavar();
 					}
 				}();
+
+				auto p2 = dont_generalize(
+					make_type(VAL_, make_function(param_types, output)), {}
+				);
+
+				variables[id_node.guid] = p2;
 
 				auto body_type = typecheck(body_idx);
 				if (!unify(body_type->datatype, output))
@@ -1041,7 +1056,10 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					auto free_symbols = symtab.free_symbols_in(f);
 					std::map<Guid, D> captures {};
 					for (auto symbol : free_symbols) {
-						captures[symbol] = variables.at(symbol)->datatype;
+						// FIXME: dont know if this is the proper way. should captures be
+						// instantiated or not?
+						auto t1 = instantiate(variables.at(symbol));
+						captures[symbol] = t1->datatype;
 					}
 					return captures;
 				}();
@@ -1049,7 +1067,11 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				typ = make_type(VAL_, make_closure(param_types, output, captures));
 			}
 
-			variables[id_node.guid] = typ;
+			const auto s = symtab.declaration_scope_of(ast.at(node[0]).guid).value();
+			const auto p1 = generalize(typ, s);
+			variables[id_node.guid] = p1;
+
+			logger.log(LogLevel::INFO, "Function \"{}\" declare as ({})", name, *p1);
 
 			auto typ_ = typ;
 			return ASSOC_TYPE(node_idx, typ_);
@@ -1123,7 +1145,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			assert(variables.contains(node.guid));
 			auto found_typ = variables.at(node.guid);
 			assert(found_typ != nullptr);
-			return ASSOC_TYPE(node_idx, found_typ);
+			const auto t1 = instantiate(found_typ);
+			return ASSOC_TYPE(node_idx, t1);
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
@@ -1280,4 +1303,197 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 		}
 		default: assert(false);
 	}
+}
+
+D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
+	return visit(
+		*data,
+		overloaded {
+			[&](Integer&&) -> D { return data; },
+			[&](Nil&&) -> D { return data; },
+			[&](Void&&) -> D { return data; },
+			[&](Function&& f) -> D {
+				std::vector<T> inputs {};
+				for (auto& input : f.inputs)
+					inputs.push_back(
+						make_type(input->mode, substitute(subst, input->datatype))
+					);
+				auto output = substitute(subst, f.output);
+				return make_function(inputs, output);
+			},
+			[&](Closure&& c) -> D {
+				std::vector<T> inputs {};
+				for (auto& input : c.inputs)
+					inputs.push_back(
+						make_type(input->mode, substitute(subst, input->datatype))
+					);
+				auto output = substitute(subst, c.output);
+				std::map<Guid, D> captures {};
+				for (auto& [guid, capture] : c.captures)
+					captures[guid] = substitute(subst, capture);
+				return make_closure(inputs, output, captures);
+			},
+			[&](Record&& r) -> D {
+				decltype(r.fields) fields {};
+				for (const auto& [name, data] : r.fields)
+					fields.push_back(std::make_pair(name, substitute(subst, data)));
+				return make_record(fields);
+			},
+			[&](RowSet&& rs) -> D {
+				decltype(rs.rows) rows {};
+				for (const auto& [name, data] : rs.rows)
+					rows[name] = substitute(subst, data);
+				return make_row_set(rows);
+			},
+			[&](Array&& a) -> D {
+				return make_array(substitute(subst, a.item_type));
+			},
+			[&](TypeVariable&& a) -> D {
+				if (a.is_bound
+		        and subst.contains(
+							std::dynamic_pointer_cast<TypeVariable>(data)->name
+						))
+					assert(false);
+				if (a.is_bound) return substitute(subst, a.bound_type);
+				auto t = std::dynamic_pointer_cast<TypeVariable>(data);
+				if (subst.contains(a.name))
+					return subst.at(a.name);
+				else
+					return t;
+			},
+		}
+	);
+}
+
+template<class T, class Hash = std::hash<T>, class Eq = std::equal_to<T>>
+std::unordered_set<T, Hash, Eq> set_difference(
+	const std::unordered_set<T, Hash, Eq>& a,
+	const std::unordered_set<T, Hash, Eq>& b
+) {
+	std::unordered_set<T, Hash, Eq> result;
+
+	for (const auto& x : a)
+		if (!b.contains(x)) result.insert(x);
+
+	return result;
+}
+
+P Typechecker::generalize(T ty, ScopeIndex scope) {
+	const auto type_free = free_type_variables(ty->datatype);
+	const auto context_free = symtab.parent_of(scope)
+	                            .and_then([&](const auto& x) {
+																return std::optional(free_type_variables(x));
+															})
+	                            .value_or(std::unordered_set<V> {});
+	const auto to_bind = set_difference(type_free, context_free);
+	return generalize(ty, to_bind);
+}
+
+P Typechecker::generalize(T ty, std::unordered_set<V> to_bind) {
+	std::map<std::size_t, V> subst {};
+	std::vector<V> binders {};
+	for (auto x : to_bind) {
+		const auto g = std::dynamic_pointer_cast<TypeVariable>(make_genvar());
+		subst[x->name] = g;
+		binders.push_back(g);
+	}
+
+	std::ostringstream ss {};
+	ss << '[';
+	for (const auto& [i, x] : std::ranges::views::enumerate(to_bind)) {
+		ss << *x;
+		if (static_cast<std::size_t>(i) != (to_bind.size() - 1)) ss << ';';
+	}
+	ss << ']';
+
+	logger.log(LogLevel::INFO, "Free {}", ss.str());
+	logger.log(LogLevel::INFO, "Before {}", *ty->datatype);
+	const auto s = make_scheme(binders, substitute(subst, ty->datatype));
+	logger.log(LogLevel::INFO, "After {}", *ty->datatype);
+	const auto p = make_polytype(ty->mode, s);
+
+	logger.log(
+		LogLevel::INFO,
+		"Generalizing monotype ({}) into polytype ({}). free variables {}",
+		*ty,
+		*p,
+		ss.str()
+	);
+	return p;
+}
+
+std::unordered_set<V> Typechecker::free_type_variables(ScopeIndex s) {
+	auto symbols = symtab.symbols_reachable_from(s);
+	std::unordered_set<V> free_variables {};
+	for (auto symbol : symbols) {
+		const auto name =
+			std::string_view(pool.find(symtab.name_of(symbol).value()));
+		logger.log(LogLevel::INFO, "Extracting free variables of \"{}\"", name);
+		auto ty = variables.at(symbol);
+		auto free = free_type_variables(ty->scheme->body);
+		free_variables.merge(free);
+	}
+	return free_variables;
+}
+
+T Typechecker::instantiate(P pty) {
+	std::map<std::size_t, V> xm {};
+	for (auto x : pty->scheme->quantified)
+		xm[x->name] = std::dynamic_pointer_cast<TypeVariable>(make_datavar());
+	auto t = make_type(pty->mode, substitute(xm, pty->scheme->body));
+	logger.log(LogLevel::INFO, "Instantiated ({}) into ({})", *pty, *t);
+	return t;
+}
+
+std::unordered_set<V> Typechecker::free_type_variables(D data) {
+	return visit(
+		*data,
+		overloaded {
+			[](Integer&&) -> std::unordered_set<V> { return {}; },
+			[](Nil&&) -> std::unordered_set<V> { return {}; },
+			[](Void&&) -> std::unordered_set<V> { return {}; },
+			[&](Function&& f) -> std::unordered_set<V> {
+				std::unordered_set<V> set {};
+				for (const auto& input : f.inputs)
+					set.merge(free_type_variables(input->datatype));
+				set.merge(free_type_variables(f.output));
+				return set;
+			},
+			[&](Closure&& c) -> std::unordered_set<V> {
+				std::unordered_set<V> set {};
+				for (const auto& input : c.inputs)
+					set.merge(free_type_variables(input->datatype));
+				set.merge(free_type_variables(c.output));
+				for (const auto& [name, data] : c.captures)
+					set.merge(free_type_variables(data));
+				return set;
+			},
+			[&](Record&& r) -> std::unordered_set<V> {
+				std::unordered_set<V> set {};
+				for (const auto& [name, data] : r.fields)
+					set.merge(free_type_variables(data));
+				return set;
+			},
+			[&](RowSet&& rs) -> std::unordered_set<V> {
+				std::unordered_set<V> set {};
+				for (const auto& [name, data] : rs.rows)
+					set.merge(free_type_variables(data));
+				return set;
+			},
+			[&](Array&& a) -> std::unordered_set<V> {
+				return free_type_variables(a.item_type);
+			},
+			[&](TypeVariable&& a) -> std::unordered_set<V> {
+				if (a.is_generalized) return {};
+				if (a.is_bound) return free_type_variables(a.bound_type);
+				std::unordered_set<V> set {};
+				set.insert(std::dynamic_pointer_cast<TypeVariable>(data));
+				return set;
+			},
+		}
+	);
+}
+
+P Typechecker::dont_generalize(T ty, ScopeIndex) {
+	return make_polytype(ty->mode, make_scheme({}, ty->datatype));
 }

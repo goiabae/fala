@@ -220,12 +220,12 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			throw std::runtime_error("unknown builtin");
 		}
 	} else {
-		const auto ty = tpc.variables.at(func_node.guid);
+		const auto ty = tpc.node_to_type.at(func_idx);
 		const auto name =
 			std::string_view(pool.find(symtab.name_of(func_node.guid).value()));
 		logger.log(LogLevel::INFO, node.loc, "Applying {}", name);
 		const auto dty = get_datatype(ty);
-		const auto fty = std::dynamic_pointer_cast<Closure>(dty);
+		const auto fty = erase_function_captures(dty);
 		assert(fty != nullptr);
 		for (const auto& [i, arg] :
 		     std::ranges::views::enumerate(std::ranges::reverse_view(args))) {
@@ -617,7 +617,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto t3 = make_register();
 
 	const auto ty = tpc.variables.at(id_node.guid);
-	const auto dty = ty->datatype;
+	const auto dty = ty->scheme->body;
 	const auto cty = std::dynamic_pointer_cast<Closure>(dty);
 	assert(cty != nullptr);
 

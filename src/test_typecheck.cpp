@@ -22,7 +22,7 @@ TEST(TypecheckTest, function_application) {
 	const auto sym = syms.at(0);
 	const auto ty = checker.variables.at(sym);
 	EXPECT_TRUE(ty != nullptr);
-	const auto dty = get_datatype(ty);
+	const auto dty = get_datatype(make_type(ty->mode, ty->scheme->body));
 	EXPECT_TRUE(dty != nullptr);
 	const auto fty = std::dynamic_pointer_cast<Closure>(dty);
 	EXPECT_TRUE(fty != nullptr);
