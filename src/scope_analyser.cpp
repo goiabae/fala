@@ -26,8 +26,14 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		}
 		case NodeType::NUM: return;
 		case NodeType::BLK: {
-			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
-			for (const auto exp_idx : node) analyse(exp_idx, inner_scope_idx);
+			ScopeIndex scope = scope_idx;
+			for (const auto exp_idx : node) {
+				const auto& exp_node = m_ast.at(exp_idx);
+				if (exp_node.type == NodeType::VAR_DECL) {
+					scope = m_symtab.make_child_scope(scope);
+				}
+				analyse(exp_idx, scope);
+			}
 			return;
 		}
 		case NodeType::IF: {
