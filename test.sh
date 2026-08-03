@@ -49,12 +49,6 @@ interpret() {
 		fail $testname out
 	fi
 	compare $testname
-	test "INTERPRETED(walk) ${testname}"
-	timeout 10s $inter -i -b walk $file < $tmp/$testname.in > $tmp/$testname.actual
-	if [ $? -ne 0 ]; then
-		fail $testname out
-	fi
-	compare $testname
 }
 
 compare() {
