@@ -48,7 +48,11 @@ struct Compiler {
 		const AST& ast, const StringPool& pool, const Typechecker& tpc,
 		const SymbolTable& symtab
 	)
-	: ast(ast), pool(pool), tpc(tpc), symtab(symtab) {}
+	: ast(ast),
+		pool(pool),
+		tpc(tpc),
+		symtab(symtab),
+		logger("AST->LIR", ast.file_name, ast.lines) {}
 
 	lir::Chunk compile();
 	Result compile(NodeIndex node_idx, Context ctx);
@@ -83,6 +87,7 @@ struct Compiler {
 	const StringPool& pool;
 	const Typechecker& tpc;
 	const SymbolTable& symtab;
+	Logger logger;
 	std::size_t label_count {0};
 	std::size_t reg_count {0};
 	std::map<Guid, lir::Operand> variables;

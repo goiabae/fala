@@ -221,6 +221,9 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		}
 	} else {
 		const auto ty = tpc.variables.at(func_node.guid);
+		const auto name =
+			std::string_view(pool.find(symtab.name_of(func_node.guid).value()));
+		logger.log(LogLevel::INFO, node.loc, "Applying {}", name);
 		const auto dty = get_datatype(ty);
 		const auto fty = std::dynamic_pointer_cast<Closure>(dty);
 		assert(fty != nullptr);
@@ -564,7 +567,6 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 
 	const auto name =
 		std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
-	const auto comment = std::format("creating variable \"{}\"", name);
 
 	lir::Chunk chunk {};
 	const auto var = variables.at(id_node.guid);
@@ -579,6 +581,15 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		chunk.emit_alloca(var, lir::Immediate(1));
 		chunk.emit_storea(r0.opnd, lir::Immediate(0), var);
 	}
+
+	logger.log(
+		LogLevel::INFO,
+		node.loc,
+		"Variable \"{}\" compiled into register {}",
+		name,
+		var
+	);
+
 	return {chunk, var};
 }
 
@@ -660,6 +671,12 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 		func.emit(Opcode::RET);
 		functions.push_back(func);
 	}
+
+	const auto name =
+		std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+	logger.log(
+		LogLevel::INFO, node.loc, "Compiled {} into entry point {}", name, func_name
+	);
 
 	return {chunk, t2};
 }
