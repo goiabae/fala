@@ -12,6 +12,8 @@
 #include <span>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 #include "ast.hpp"
 #include "logger.hpp"
@@ -73,6 +75,32 @@ template<typename D>
 	requires std::derived_from<D, Datatype>
 std::shared_ptr<D> to(std::shared_ptr<Datatype> typ) {
 	return dynamic_pointer_cast<D>(typ);
+}
+
+template<class T, class F>
+	requires std::derived_from<typename std::remove_cvref<T>::type, Datatype>
+auto visit(T&& obj, F&& f) {
+	if (auto x = dynamic_cast<Integer*>(&obj)) {
+		return f(std::forward<Integer>(*x));
+	} else if (auto x = dynamic_cast<Nil*>(&obj)) {
+		return f(std::forward<Nil>(*x));
+	} else if (auto x = dynamic_cast<Void*>(&obj)) {
+		return f(std::forward<Void>(*x));
+	} else if (auto x = dynamic_cast<Function*>(&obj)) {
+		return f(std::forward<Function>(*x));
+	} else if (auto x = dynamic_cast<Closure*>(&obj)) {
+		return f(std::forward<Closure>(*x));
+	} else if (auto x = dynamic_cast<TypeVariable*>(&obj)) {
+		return f(std::forward<TypeVariable>(*x));
+	} else if (auto x = dynamic_cast<Array*>(&obj)) {
+		return f(std::forward<Array>(*x));
+	} else if (auto x = dynamic_cast<Record*>(&obj)) {
+		return f(std::forward<Record>(*x));
+	} else if (auto x = dynamic_cast<RowSet*>(&obj)) {
+		return f(std::forward<RowSet>(*x));
+	} else {
+		assert(false && "no more datatype subclasses!!!");
+	}
 }
 
 // m t !> ERROR
@@ -259,6 +287,12 @@ bool Typechecker::typecheck() {
 	}
 
 	typecheck(ast.root_index);
+
+	for (const auto& [guid, p] : variables) {
+		const auto name = pool.find(symtab.name_of(guid).value());
+		std::cerr << "TYPECHECK " << name << " : " << *p << '\n';
+	}
+
 	return true;
 }
 
@@ -520,13 +554,18 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			}
 
 			std::ostringstream oss {};
-			for (auto input_ty : inputs) {
-				oss << ", " << *input_ty;
+			oss << '[';
+			for (const auto& [i, input_ty] : std::ranges::views::enumerate(inputs)) {
+				oss << *input_ty;
+				if (static_cast<std::size_t>(i) != (inputs.size() - 1)) oss << ";";
 			}
-			std::ostringstream a {};
-			a << *func_type;
+			oss << ']';
 			logger.log(
-				LogLevel::INFO, node.loc, "func: {}, args: {}", a.str(), oss.str()
+				LogLevel::INFO,
+				node.loc,
+				"Applying function ({}) to arguments ({})",
+				*func_type,
+				oss.str()
 			);
 
 			const auto t1 = make_type(VAL_, outdata);
@@ -656,6 +695,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			}
 
 			auto then_typ = typecheck(then_idx);
+			logger.log(LogLevel::INFO, "For loop with type {}", *then_typ);
 			return ASSOC_TYPE(node_idx, then_typ);
 		}
 
@@ -710,9 +750,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto path = typecheck(node[0]);
 			auto val = typecheck(node[1]);
 			auto t1 = make_type(VAR_, make_datavar());
-			std::ostringstream ss {};
-			ss << *path << ", " << *t1;
-			logger.log(LogLevel::INFO, node.loc, "assignment: {}", ss.str());
+			logger.log(
+				LogLevel::INFO, node.loc, "assignment from {} to {}", *val, *path
+			);
 			if (not submode(path->mode, t1->mode))
 				logger.err(node.loc, "Left side of assignment must var or out");
 			if (not unify(path, t1))
@@ -881,6 +921,12 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& id_node = ast.at(id_idx);
 			const auto& opt_type_node = ast.at(opt_type_idx);
 			assert(mode_node.type == NodeType::MODE);
+			assert(id_node.type == NodeType::GUID);
+
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+
+			logger.log(LogLevel::INFO, "Declaring \"{}\"", name);
 
 			if (mode_node.mode == ModeLiteral::OUT) {
 				logger.err(node.loc, "Cannot defined variable as out");
