@@ -234,6 +234,9 @@ TEST(ASTToLIRTest, let_expression) {
 		const auto _7 = new_string_node(&ast, NodeType::ID, {}, pool, "x");
 		const auto _8 = new_node(&ast, NodeType::LET, {_6, _7});
 		ast.root_index = _8;
+		// FIXME: how to handle a ast with no source information?
+		ast.file_name = "";
+		ast.lines = {"blablabla"};
 	}
 	ScopeAnalyser scop {ast, pool};
 	const auto symtab = scop.analyse();
