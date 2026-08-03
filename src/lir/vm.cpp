@@ -213,8 +213,13 @@ void VM::run(const lir::Chunk& code) {
 				pc = function_address;
 				break;
 			}
-			case Opcode::RET: pc = return_address; break;
+			case Opcode::RET:
+				pc = return_address;
+				return_address = callstack.top();
+				callstack.pop();
+				break;
 			case Opcode::FUNC:
+				callstack.push(return_address);
 				return_address = (size_t)stack.top().as_integer();
 				stack.pop();
 				break;

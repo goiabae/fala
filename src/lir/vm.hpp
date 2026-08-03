@@ -121,6 +121,7 @@ struct VM {
 
 	std::array<Value, 2048> cells {};
 	std::stack<Value> stack {};
+	std::stack<std::size_t> callstack {};
 
 	void run(const Chunk&);
 	std::size_t address_of_label(const Chunk&, lir::Label);
