@@ -36,6 +36,8 @@ class SymbolTable {
 	std::optional<FunctionIndex> function_of(NodeIndex) const;
 	std::vector<Guid> symbols_used_in(ScopeIndex) const;
 	std::vector<Guid> free_symbols_in(FunctionIndex) const;
+	ScopeIndex scope_at(NodeIndex) const;
+	std::optional<ScopeIndex> parent_of(ScopeIndex) const;
 
  public:
 	static constexpr ScopeIndex builtin_scope {.index = 0};
@@ -54,10 +56,8 @@ class SymbolTable {
 
  private:
 	std::optional<Symbol> resolve(Guid) const;
-	ScopeIndex scope_at(NodeIndex) const;
 	bool is_child_of(ScopeIndex, ScopeIndex) const;
 	bool is_parent_of(ScopeIndex, ScopeIndex) const;
-	std::optional<ScopeIndex> parent_of(ScopeIndex) const;
 	Scope get_scope(ScopeIndex) const;
 	std::vector<ScopeIndex> function_scopes(FunctionIndex) const;
 

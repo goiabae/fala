@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <variant>
 #include <vector>
@@ -162,6 +163,8 @@ void print_chunk(FILE*, const Chunk&);
 int print_inst(FILE*, const Instruction& inst);
 
 std::ostream& operator<<(std::ostream&, const Chunk&);
+std::ostream& operator<<(std::ostream& st, const Instruction& inst);
+std::ostream& operator<<(std::ostream& st, const Operand& opnd);
 
 Chunk operator+(Chunk x, Chunk y);
 Chunk& operator+=(Chunk& x, Chunk y);
@@ -169,5 +172,20 @@ Chunk& operator+=(Chunk& x, Chunk y);
 const char* operand_type_repr(Operand::Type type);
 
 } // namespace lir
+
+#define DEFFMT(T)                                                 \
+	template<>                                                      \
+	struct std::formatter<T> : std::formatter<std::string> {        \
+		auto format(const T& p, std::format_context& ctx) const {     \
+			std::ostringstream oss {};                                  \
+			oss << p;                                                   \
+			return std::formatter<std::string>::format(oss.str(), ctx); \
+		}                                                             \
+	};
+
+DEFFMT(lir::Operand);
+DEFFMT(lir::Label);
+
+#undef DEFFMT
 
 #endif

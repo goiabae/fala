@@ -6,8 +6,6 @@
 
 namespace lir {
 
-static std::ostream& operator<<(std::ostream& st, const Instruction& inst);
-static std::ostream& operator<<(std::ostream& st, const Operand& opnd);
 static std::ostream& operator<<(std::ostream&, const ByteString&);
 static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd);
 static int print_operand(FILE* fd, Operand opnd);
