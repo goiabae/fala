@@ -122,10 +122,13 @@ size_t TypeVariable::size_of() {
 
 std::ostream& TypeVariable::print(std::ostream& st) const {
 	if (is_bound) {
-		st << "(" << "t" << name << " := " << *bound_type << ")";
+		assert(not is_generalized);
+		// st << "(" << "t" << name << " := " << *bound_type << ")";
+		st << *bound_type;
+	} else if (is_generalized) {
+		st << "'g" << name;
 	} else {
 		st << "'t" << name;
-	}
 	}
 	return st;
 }
