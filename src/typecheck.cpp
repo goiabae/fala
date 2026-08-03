@@ -583,9 +583,11 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 		}
 			// FIXME: add typing rules
 		case NodeType::BLK: {
-			for (auto exp_idx : std::span(node.begin(), node.end() - 1))
-				typecheck(exp_idx);
-			return ASSOC_TYPE(node_idx, typecheck(node[node.size() - 1]));
+			T ty = nullptr;
+			for (auto exp_idx : node) {
+				ty = typecheck(exp_idx);
+			}
+			return ASSOC_TYPE(node_idx, ty);
 		}
 
 			// | E |- e1 : Bool
