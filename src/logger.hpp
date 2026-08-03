@@ -110,6 +110,16 @@ struct Logger {
 	}
 
 	template<typename... Args>
+	void log(LogLevel level, std::format_string<Args...> format, Args&&... args) {
+		constexpr auto header = ANSI_STYLE_BOLD "{}: {}{} {}" ANSI_COLOR_RESET ": ";
+		std::cerr << std::format(
+			header, file_name, color_of(level), domain, name_of(level)
+		) << std::format(format, std::forward<Args>(args)...)
+							<< '\n';
+		if (level == ERROR) std::exit(1);
+	}
+
+	template<typename... Args>
 	void err(Location loc, std::format_string<Args...> format, Args&&... args) {
 		log(ERROR, loc, format, std::forward<Args>(args)...);
 	}
