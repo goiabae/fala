@@ -56,10 +56,6 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
 		return t;
 	} else if (auto t2 = std::dynamic_pointer_cast<Function>(t)) {
 		return t;
-	} else if (auto t2 = std::dynamic_pointer_cast<Toat>(t)) {
-		throw std::runtime_error("The type of all types is not a data type");
-	} else if (auto t2 = std::dynamic_pointer_cast<General>(t)) {
-		throw std::runtime_error("Generalized type is not a concrete data type");
 	} else if (auto t2 = std::dynamic_pointer_cast<TypeVariable>(t)) {
 		if (not t2->is_bound)
 			throw std::runtime_error("type variable was not bound");
@@ -150,18 +146,6 @@ std::ostream& Integer::print(std::ostream& st) const {
 
 size_t Integer::size_of() { return 1; }
 
-size_t Toat::size_of() { assert(false); }
-
-std::ostream& Toat::print(std::ostream&) const {
-	throw std::domain_error("can't print toat");
-}
-
-size_t General::size_of() { assert(false); }
-
-std::ostream& General::print(std::ostream&) const {
-	throw std::domain_error("can't print general type");
-}
-
 size_t Record::size_of() { assert(false); }
 
 std::ostream& Record::print(std::ostream& st) const {
@@ -213,13 +197,6 @@ D make_record(std::vector<std::pair<std::string, D>> field_tys) {
 	Record r;
 	r.fields = field_tys;
 	return std::make_shared<Record>(r);
-}
-
-D make_general(std::vector<D> vars, D body) {
-	General g {};
-	g.vars = vars;
-	g.body = body;
-	return std::make_shared<General>(g);
 }
 
 D make_bool() { return make_integer(1, Integer::Sign::UNSIGNED); }

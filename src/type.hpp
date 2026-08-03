@@ -38,8 +38,6 @@ struct Function;
 struct Closure;
 struct TypeVariable;
 struct Array;
-struct Toat;
-struct General;
 struct Record;
 struct RowSet;
 
@@ -53,7 +51,6 @@ struct Integer final : DERIVE (
 
 struct Nil final : DERIVE();
 struct Void final : DERIVE();
-struct Toat final : DERIVE(); // top type
 
 struct Function final : DERIVE (
 	std::vector<std::shared_ptr<Type>> inputs;
@@ -77,11 +74,6 @@ struct TypeVariable final : DERIVE (
 
 struct Array final : DERIVE (
 	std::shared_ptr<Datatype> item_type;
-);
-
-struct General final : DERIVE (
-	std::vector<std::shared_ptr<Datatype>> vars;
-	std::shared_ptr<Datatype> body;
 );
 
 struct Record final : DERIVE (
@@ -123,7 +115,6 @@ D make_array(D item);
 D make_function(std::vector<T> inputs, D output);
 D make_closure(std::vector<T> inputs, D output, std::map<Guid, D> captures);
 D make_bool();
-D make_general(std::vector<D> var, D body);
 D make_record(std::vector<std::pair<std::string, D>> field_tys);
 D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
 T make_type(M mode, D datatype);

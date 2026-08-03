@@ -40,7 +40,6 @@ const auto OUT_ = std::make_shared<Mode>(Mode::Concrete::OUT);
 
 const auto NIL_ = std::make_shared<Nil>();
 const auto VOID_ = std::make_shared<Void>();
-const auto TOAT_ = std::make_shared<Toat>();
 
 static bool cast_to(M, M);
 static bool cast_to(D, D);
@@ -91,68 +90,6 @@ std::shared_ptr<Type> Typechecker::deref(std::shared_ptr<Type> typ) {
 			"cannot dereference type because mode variable has not been instatiated "
 			"into a concrete mode"
 		);
-	}
-}
-
-D Typechecker::substitute(D gen, std::vector<D> args) {
-	auto general = to<General>(gen);
-	std::vector<std::shared_ptr<TypeVariable>> vars;
-	std::ranges::transform(args, vars.begin(), to<TypeVariable>);
-	auto body = general->body;
-	return substitute_aux(body, vars, args);
-}
-
-D Typechecker::substitute_aux(
-	D body, std::vector<std::shared_ptr<TypeVariable>> vars, std::vector<D> args
-) {
-	if (is<Nil>(body)) {
-		return body;
-	} else if (is<Void>(body)) {
-		return body;
-	} else if (is<Toat>(body)) {
-		return body;
-	} else if (is<Integer>(body)) {
-		// Should be handled separately as an intrinsic type
-		assert(false);
-	} else if (is<Array>(body)) {
-		auto arr_typ = to<Array>(body);
-		return make_array(substitute_aux(arr_typ->item_type, vars, args));
-	} else if (is<Function>(body)) {
-		auto func_typ = to<Function>(body);
-		std::vector<std::shared_ptr<Type>> inputs;
-		for (auto typ : func_typ->inputs)
-			inputs.push_back(
-				make_type(typ->mode, substitute_aux(typ->datatype, vars, args))
-			);
-		return make_function(inputs, substitute_aux(func_typ->output, vars, args));
-	} else if (is<TypeVariable>(body)) {
-		auto var = to<TypeVariable>(body);
-		if (var->is_bound) {
-			return substitute_aux(var->bound_type, vars, args);
-		} else {
-			for (const auto& [a, v] : std::ranges::views::zip(args, vars))
-				if (var->unbound_name == v->unbound_name) return a;
-			return var;
-		}
-	} else if (is<General>(body)) {
-		auto gen = to<General>(body);
-		std::vector<std::shared_ptr<TypeVariable>> not_overriden;
-		std::vector<D> new_args;
-		for (const auto& [a, v] : std::ranges::views::zip(args, vars)) {
-			auto overriden = std::ranges::any_of(gen->vars, [&](const auto& gen_var) {
-				auto var = to<TypeVariable>(gen_var);
-				return not var->is_bound and v->unbound_name == var->unbound_name;
-			});
-			if (not overriden) {
-				not_overriden.push_back(v);
-				new_args.push_back(a);
-			}
-		}
-		return make_general(
-			gen->vars, substitute_aux(gen->body, not_overriden, new_args)
-		);
-	} else {
-		assert(false);
 	}
 }
 
@@ -1226,7 +1163,6 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 	const auto& node = ast.at(node_idx);
-	node_to_type[node_idx] = make_type(VAL_, TOAT_);
 	switch (node.type) {
 		case NodeType::ID: {
 			if (node.str_id == pool.intern(strdup("Bool"))) {
@@ -1276,7 +1212,8 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 				arguments.push_back(eval(idx));
 			}
 
-			return substitute(general_typ->datatype, arguments);
+			// TODO
+			assert(false);
 		}
 		default: assert(false);
 	}

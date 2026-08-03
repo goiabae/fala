@@ -27,11 +27,6 @@ struct Typechecker {
 	bool typecheck();
 	T typecheck(NodeIndex node_idx);
 
-	D substitute(D gen, std::vector<D> args);
-	D substitute_aux(
-		D body, std::vector<std::shared_ptr<TypeVariable>> vars, std::vector<D> args
-	);
-
 	D eval(NodeIndex);
 
 	bool unify(M, M);
