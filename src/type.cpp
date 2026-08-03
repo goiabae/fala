@@ -271,3 +271,15 @@ std::ostream& operator<<(std::ostream& st, const DataScheme& s) {
 	st << *s.body;
 	return st;
 }
+
+std::shared_ptr<Function> erase_function_captures(D data) {
+	if (auto x = std::dynamic_pointer_cast<Function>(data)) {
+		return x;
+	} else if (auto x = std::dynamic_pointer_cast<Closure>(data)) {
+		return std::dynamic_pointer_cast<Function>(
+			make_function(x->inputs, x->output)
+		);
+	} else {
+		throw std::runtime_error("not a function");
+	}
+}

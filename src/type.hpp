@@ -144,6 +144,8 @@ std::shared_ptr<DataScheme> make_scheme(
 	std::vector<std::shared_ptr<TypeVariable>>, D
 );
 
+std::shared_ptr<Function> erase_function_captures(D);
+
 #define DEFFMT(T)                                                 \
 	template<>                                                      \
 	struct std::formatter<T> : std::formatter<std::string> {        \
