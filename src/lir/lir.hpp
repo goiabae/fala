@@ -46,6 +46,9 @@ enum class Opcode {
 	FUNC,
 	NOP,
 	ENCLOSE,
+	CATCH,
+	RESUME,
+	THROW,
 
 	// pointer operations
 	ALLOCA,
@@ -154,6 +157,8 @@ struct Chunk {
 	Chunk& emit_clonea(Operand destination, Operand source);
 	Chunk& emit_nop();
 	Chunk& emit_enclose(Operand result, Operand label, Operand closure);
+	Chunk& emit_catch(Operand tag, Operand outside_of);
+	Chunk& emit_resume(Operand continuation);
 };
 
 // return amount of operands of each opcode

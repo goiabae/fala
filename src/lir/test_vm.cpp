@@ -443,3 +443,78 @@ TEST(VMTest, io_operations) {
 
 	EXPECT_STREQ(output.str().c_str(), expected.c_str());
 }
+
+TEST(VMTest, control_operators) {
+	const auto r1 = lir::Operand(lir::Register(1));
+	const auto r2 = lir::Operand(lir::Register(2));
+	const auto r3 = lir::Operand(lir::Register(3));
+	const auto r4 = lir::Operand(lir::Register(4));
+	const auto r5 = lir::Operand(lir::Register(5));
+	const auto r6 = lir::Operand(lir::Register(6));
+	const auto r7 = lir::Operand(lir::Register(7));
+	const auto r8 = make_integer_register(8);
+	const auto r9 = make_integer_register(9);
+	const auto r10 = make_integer_register(10);
+	const auto r11 = make_integer_register(11);
+	const auto r12 = make_integer_register(12);
+	const auto r13 = make_integer_register(13);
+	const auto r14 = make_integer_register(14);
+
+	const auto l0 = lir::Label(0);
+	const auto l1 = lir::Label(1);
+	const auto l2 = lir::Label(2);
+	const auto l3 = lir::Label(3);
+
+	lir::Chunk chunk {};
+	chunk.emit_jmp(l0);
+
+	chunk.add_label(l1);
+	chunk.emit(lir::Opcode::FUNC);
+	chunk.emit(lir::Opcode::POP, r1);
+	chunk.emit(lir::Opcode::POP, r2);
+	chunk.emit(lir::Opcode::POP, r3);
+	chunk.emit_loada(r4, lir::Immediate(0), r2);
+	chunk.emit_loada(r5, lir::Immediate(0), r3);
+	chunk.emit(lir::Opcode::ADD, r6, r4, r5);
+	chunk.emit_alloca(r7, lir::Immediate(1));
+	chunk.emit_storea(r6, lir::Immediate(0), r7);
+	chunk.emit(lir::Opcode::PUSH, r7);
+	chunk.emit(lir::Opcode::THROW, lir::Immediate(0), lir::Immediate(1));
+	chunk.emit(lir::Opcode::PRINTV, lir::Immediate(9));
+	chunk.emit(lir::Opcode::PUSH, lir::Immediate(0));
+	chunk.emit(lir::Opcode::RET);
+
+	chunk.add_label(l0);
+	chunk.emit(lir::Opcode::CATCH, lir::Immediate(0), l2);
+	chunk.emit(lir::Opcode::POP, r14);
+	chunk.emit(lir::Opcode::POP, r8);
+	chunk.emit_loada(r9, lir::Immediate(0), r8);
+	chunk.emit(lir::Opcode::PRINTV, r9);
+	chunk.emit(lir::Opcode::RESUME, r14);
+	chunk.emit_jmp(l3);
+
+	chunk.add_label(l2);
+	chunk.emit_alloca(r10, lir::Immediate(1));
+	chunk.emit_storea(lir::Immediate(3), lir::Immediate(0), r10);
+	chunk.emit_alloca(r11, lir::Immediate(1));
+	chunk.emit_storea(lir::Immediate(4), lir::Immediate(0), r11);
+	chunk.emit(lir::Opcode::PUSH, r11);
+	chunk.emit(lir::Opcode::PUSH, r10);
+	chunk.emit_alloca(r11, lir::Immediate(0));
+	chunk.emit_enclose(r12, l1, r11);
+	chunk.emit(lir::Opcode::CALL, r12);
+	chunk.emit(lir::Opcode::POP, r13);
+	chunk.emit(lir::Opcode::PRINTV, r13);
+	chunk.add_label(l3);
+
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	lir::VM vm {input, output};
+	vm.should_print_result = false;
+	vm.run(chunk);
+
+	const auto expected = std::string("790");
+
+	EXPECT_STREQ(output.str().c_str(), expected.c_str());
+}

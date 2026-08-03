@@ -16,6 +16,8 @@
 
 namespace lir {
 
+struct Continuation;
+
 class Value {
  public:
 	class Integer {
@@ -61,6 +63,8 @@ class Value {
 	Value(Value* pointer, std::size_t size) : data(Pointer(pointer, size)) {}
 	Value(const Pointer& pointer) : data(pointer) {}
 	Value(const Integer& integer) : data(integer) {}
+	Value(const std::shared_ptr<Continuation>& continuation)
+	: data(continuation) {}
 	Value() : data(std::monostate {}) {}
 
  public:
@@ -94,8 +98,13 @@ class Value {
 		return const_cast<Pointer&>(std::as_const(*this).as_pointer());
 	}
 
+	std::shared_ptr<Continuation> as_continuation() const {
+		return std::get<std::shared_ptr<Continuation>>(data);
+	}
+
  private:
-	std::variant<Integer, Pointer, std::monostate> data;
+	std::variant<Integer, Pointer, std::shared_ptr<Continuation>, std::monostate>
+		data;
 };
 
 inline bool operator==(const Value::Integer& x, int y) {
@@ -110,6 +119,18 @@ inline bool operator==(const Value::Integer& x, const Value::Integer& y) {
 	return (int64_t)x == (int64_t)y;
 }
 
+static constexpr const auto register_count = 2048;
+
+struct Continuation {
+	std::array<Value, register_count> cells;
+	std::stack<Value> stack;
+	std::stack<std::size_t> callstack;
+	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
+		prompt_tags;
+	std::size_t program_counter;
+	std::size_t return_address;
+};
+
 struct VM {
 	VM(std::istream& input, std::ostream& output)
 	: input {input}, output {output} {}
@@ -119,13 +140,21 @@ struct VM {
 
 	bool should_print_result {true};
 
-	std::array<Value, 2048> cells {};
+	std::array<Value, register_count> cells {};
 	std::stack<Value> stack {};
 	std::stack<std::size_t> callstack {};
+	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
+		prompt_tags {};
+	size_t program_counter {0};
+	std::size_t return_address {0};
 
 	void run(const Chunk&);
 	std::size_t address_of_label(const Chunk&, lir::Label);
 	Value& deref(lir::Operand);
+	Value fetch(lir::Operand);
+	Continuation save_continuation();
+	void restore_continuation(const Continuation&);
+	std::optional<Continuation> find_handler(std::size_t tag);
 };
 
 } // namespace lir

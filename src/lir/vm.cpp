@@ -1,11 +1,14 @@
 #include "vm.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <format>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <ranges>
 #include <stdexcept>
 
 #include "lir/lir.hpp"
@@ -57,7 +60,7 @@ void err(const char* msg) {
 }
 
 std::size_t VM::address_of_label(const Chunk& code, lir::Label label) {
-	return code.label_indexes.at(label.id) - 1;
+	return code.label_indexes.at(label.id);
 }
 
 auto VM::deref(Operand opnd) -> Value& {
@@ -69,26 +72,22 @@ auto VM::deref(Operand opnd) -> Value& {
 	}
 };
 
+auto VM::fetch(Operand opnd) -> Value {
+	if (opnd.type == Operand::Type::REGISTER) {
+		return cells[opnd.as_register().index];
+	} else if (opnd.type == Operand::Type::IMMEDIATE) {
+		return opnd.as_immediate().number;
+	} else if (opnd.type == Operand::Type::NOTHING) {
+		return 0;
+	} else {
+		fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
+		exit(1);
+	}
+};
+
 void VM::run(const lir::Chunk& code) {
-	// cells.fill(Value(0));
-	size_t return_address = 0;
-
-	auto fetch = [&](Operand opnd) -> Value {
-		if (opnd.type == Operand::Type::REGISTER) {
-			return cells[opnd.as_register().index];
-		} else if (opnd.type == Operand::Type::IMMEDIATE) {
-			return opnd.as_immediate().number;
-		} else if (opnd.type == Operand::Type::NOTHING) {
-			return 0;
-		} else {
-			fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
-			exit(1);
-		}
-	};
-
-	size_t pc = 0;
-	while (pc < code.m_vec.size()) {
-		const auto& inst = code.m_vec[pc];
+	while (program_counter < code.m_vec.size()) {
+		const auto& inst = code.m_vec.at(program_counter);
 		switch (inst.opcode) {
 			case Opcode::PRINTF: {
 				auto t1 = inst.operands[0];
@@ -165,20 +164,21 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::NOT:
 				deref(inst.operands[0]) = !fetch(inst.operands[1]).as_integer();
 				break;
-			case Opcode::JMP:
-				pc = code.label_indexes.at(inst.operands[0].as_label().id);
+			case Opcode::JMP: {
+				program_counter = code.label_indexes.at(inst.operands[0].as_label().id);
 				goto dont_inc;
+			}
 			case Opcode::JMP_FALSE:
 				if (!fetch(inst.operands[0]).as_integer())
-					pc = code.label_indexes.at(inst.operands[1].as_label().id);
+					program_counter = address_of_label(code, inst.operands[1].as_label());
 				else
-					pc++;
+					program_counter++;
 				goto dont_inc;
 			case Opcode::JMP_TRUE:
 				if (fetch(inst.operands[0]).as_integer())
-					pc = code.label_indexes.at(inst.operands[1].as_label().id);
+					program_counter = address_of_label(code, inst.operands[1].as_label());
 				else
-					pc++;
+					program_counter++;
 				goto dont_inc;
 			case Opcode::PUSH: {
 				if (inst.operands[0].type == Operand::Type::IMMEDIATE) {
@@ -207,14 +207,14 @@ void VM::run(const lir::Chunk& code) {
 				auto closure_pointer = fetch(inst.operands[0]).as_pointer();
 				auto env_pointer = *(&closure_pointer[0]);
 				stack.push(env_pointer);
-				stack.push(Value((int64_t)pc));
+				stack.push(Value((int64_t)program_counter));
 				auto function_address =
 					static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
-				pc = function_address;
-				break;
+				program_counter = function_address;
+				goto dont_inc;
 			}
 			case Opcode::RET:
-				pc = return_address;
+				program_counter = return_address;
 				return_address = callstack.top();
 				callstack.pop();
 				break;
@@ -379,8 +379,48 @@ void VM::run(const lir::Chunk& code) {
 				result = object;
 				break;
 			}
+			case Opcode::CATCH: {
+				const auto tag =
+					static_cast<std::size_t>(fetch(inst.operands[0]).as_integer());
+				const auto npc = address_of_label(code, inst.operands[1].as_label());
+				const auto k = save_continuation();
+				prompt_tags.push_back(
+					std::make_pair(tag, std::make_shared<Continuation>(k))
+				);
+				program_counter = npc;
+				goto dont_inc;
+			}
+			case Opcode::RESUME: {
+				const auto k = fetch(inst.operands[0]).as_continuation();
+				restore_continuation(*k);
+				break;
+			}
+			case Opcode::THROW: {
+				const auto tag =
+					static_cast<std::size_t>(fetch(inst.operands[0]).as_integer());
+				const auto arg_count =
+					static_cast<std::size_t>(fetch(inst.operands[1]).as_integer());
+				const auto maybe_handler = find_handler(tag);
+				if (not maybe_handler.has_value()) {
+					throw std::runtime_error("Thrown value without an enclosing handler");
+				} else {
+					const auto current_cont = save_continuation();
+					const auto handler = maybe_handler.value();
+					std::vector<Value> args {};
+					for (auto i = 0ul; i < arg_count; i++) {
+						args.push_back(stack.top());
+						stack.pop();
+					}
+					restore_continuation(handler);
+					for (const auto& a : std::ranges::views::reverse(args)) {
+						stack.push(a);
+					}
+					stack.push(Value(std::make_shared<Continuation>(current_cont)));
+				}
+				break;
+			}
 		}
-		pc++;
+		program_counter++;
 	dont_inc:
 		(void)0;
 	}
@@ -424,6 +464,32 @@ Value::Pointer clone_pointer(Value::Pointer ptr) {
 	for (auto i = 0ul; i < ptr.m_size; i++) a[i] = clone(ptr.m_pointer[i]);
 	Value::Pointer ptr2(a, ptr.m_size);
 	return ptr2;
+}
+
+Continuation VM::save_continuation() {
+	return Continuation {
+		.cells = cells,
+		.stack = stack,
+		.callstack = callstack,
+		.prompt_tags = prompt_tags,
+		.program_counter = program_counter,
+		.return_address = return_address,
+	};
+}
+
+void VM::restore_continuation(const Continuation& k) {
+	cells = k.cells;
+	stack = k.stack;
+	callstack = k.callstack;
+	prompt_tags = k.prompt_tags;
+	program_counter = k.program_counter;
+	return_address = k.return_address;
+}
+
+std::optional<Continuation> VM::find_handler(std::size_t tag) {
+	for (const auto& [tag2, handler] : std::ranges::views::reverse(prompt_tags))
+		if (tag2 == tag) return *handler;
+	return std::nullopt;
 }
 
 } // namespace lir
