@@ -122,9 +122,10 @@ size_t TypeVariable::size_of() {
 
 std::ostream& TypeVariable::print(std::ostream& st) const {
 	if (is_bound) {
-		st << "(" << "t" << "vt->unbound_name" << " := " << *bound_type << ")";
+		st << "(" << "t" << name << " := " << *bound_type << ")";
 	} else {
-		st << "'t" << unbound_name;
+		st << "'t" << name;
+	}
 	}
 	return st;
 }
@@ -206,7 +207,7 @@ M make_modevar(std::size_t index) {
 }
 
 D make_datavar(std::size_t index) {
-	return std::make_shared<TypeVariable>(index);
+	return std::make_shared<TypeVariable>(index, false);
 }
 
 D make_integer(int bit_count, Integer::Sign sign) {
@@ -239,4 +240,31 @@ D make_closure(std::vector<T> inputs, D output, std::map<Guid, D> captures) {
 
 T make_type(M mode, D datatype) {
 	return std::make_shared<Type>(mode, datatype);
+}
+
+std::shared_ptr<DataScheme> make_scheme(
+	std::vector<std::shared_ptr<TypeVariable>> quantified, D body
+) {
+	return std::make_shared<DataScheme>(quantified, body);
+}
+
+std::shared_ptr<PolyType> make_polytype(
+	M mode, std::shared_ptr<DataScheme> scheme
+) {
+	return std::make_shared<PolyType>(mode, scheme);
+}
+
+std::ostream& operator<<(std::ostream& st, const PolyType& p) {
+	return st << *p.mode << ' ' << *p.scheme;
+}
+
+std::ostream& operator<<(std::ostream& st, const DataScheme& s) {
+	st << "∀";
+	for (auto x : s.quantified) {
+		st << *x << ' ';
+	}
+	st << '.';
+	st << ' ';
+	st << *s.body;
+	return st;
 }

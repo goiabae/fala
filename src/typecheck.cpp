@@ -33,6 +33,8 @@
 using M = std::shared_ptr<Mode>;
 using D = std::shared_ptr<Datatype>;
 using T = std::shared_ptr<Type>;
+using P = std::shared_ptr<PolyType>;
+using V = std::shared_ptr<TypeVariable>;
 
 const auto VAR_ = std::make_shared<Mode>(Mode::Concrete::VAR);
 const auto VAL_ = std::make_shared<Mode>(Mode::Concrete::VAL);
@@ -48,6 +50,12 @@ static bool cast_to(T from, T to);
 D Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
 
 M Typechecker::make_modevar() { return ::make_modevar(next_modevar_id++); }
+
+D Typechecker::make_genvar() {
+	auto x = std::dynamic_pointer_cast<TypeVariable>(make_datavar());
+	x->is_generalized = true;
+	return x;
+}
 
 template<typename D>
 	requires std::derived_from<D, Datatype>
@@ -131,12 +139,16 @@ bool cast_to(D from, D to) {
 		return cast_to(from, vb->bound_type);
 
 	// a is unbound. bind a to b
-	if (auto va = ::to<TypeVariable>(from))
+	if (auto va = ::to<TypeVariable>(from)) {
+		if (va->is_generalized) return true;
 		if (not va->is_bound) return va->bind_to(to), true;
+	}
 
 	// b is unbound typevar. bind b to a
-	if (auto vb = ::to<TypeVariable>(to))
+	if (auto vb = ::to<TypeVariable>(to)) {
+		if (vb->is_generalized) return true;
 		if (not vb->is_bound) return vb->bind_to(from), true;
+	}
 
 	// a and b are arrays. unify element types
 	if (auto aa = ::to<Array>(from), ab = ::to<Array>(to); aa and ab)
@@ -300,11 +312,17 @@ bool Typechecker::unify(D a, D b) {
 
 	// a is unbound. bind a to b
 	if (auto va = to<TypeVariable>(a))
-		if (not va->is_bound) return va->bind_to(b), true;
+		if (not va->is_bound) {
+			if (not va->is_generalized) va->bind_to(b);
+			return true;
+		}
 
 	// b is unbound typevar. bind b to a
 	if (auto vb = to<TypeVariable>(b))
-		if (not vb->is_bound) return vb->bind_to(a), true;
+		if (not vb->is_bound) {
+			if (not vb->is_generalized) vb->bind_to(a);
+			return true;
+		}
 
 	// a and b are functions of same arity.
 	// unify their inputs. unify their outputs

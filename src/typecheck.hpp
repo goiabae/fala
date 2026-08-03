@@ -16,6 +16,9 @@
 #define T std::shared_ptr<Type>
 #define D std::shared_ptr<Datatype>
 #define M std::shared_ptr<Mode>
+#define S std::shared_ptr<DataScheme>
+#define P std::shared_ptr<PolyType>
+#define V std::shared_ptr<TypeVariable>
 
 struct Typechecker {
 	Typechecker(AST& ast, StringPool& pool, const SymbolTable& symtab)
@@ -34,6 +37,7 @@ struct Typechecker {
 	bool unify(T, T);
 	void mismatch_error(Location, const char*, T, T);
 	D make_datavar();
+	D make_genvar();
 	M make_modevar();
 	T deref(T);
 	bool submode(M sub, M sup);
@@ -53,5 +57,8 @@ struct Typechecker {
 #undef T
 #undef D
 #undef M
+#undef S
+#undef P
+#undef V
 
 #endif

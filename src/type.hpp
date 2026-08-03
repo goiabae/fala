@@ -64,9 +64,11 @@ struct Closure final : DERIVE (
 );
 
 struct TypeVariable final : DERIVE (
-	TypeVariable(std::size_t name) : unbound_name(name) {}
+	TypeVariable(std::size_t name, bool is_generalized)
+	: name(name), is_generalized(is_generalized) {}
 
-	std::size_t unbound_name {};
+	std::size_t name;
+	bool is_generalized;
 	std::shared_ptr<Datatype> bound_type {nullptr};
 	bool is_bound {false};
 	void bind_to(std::shared_ptr<Datatype> t);
@@ -86,6 +88,17 @@ struct RowSet final : DERIVE (
 
 // clang-format on
 
+struct DataScheme {
+	DataScheme(
+		std::vector<std::shared_ptr<TypeVariable>> quantified,
+		std::shared_ptr<Datatype> body
+	)
+	: quantified(quantified), body(body) {}
+
+	std::vector<std::shared_ptr<TypeVariable>> quantified;
+	std::shared_ptr<Datatype> body;
+};
+
 struct Mode {
 	enum class Concrete { VAL, VAR, OUT };
 	std::variant<Concrete, Variable<Mode>> data;
@@ -95,6 +108,11 @@ struct Mode {
 struct Type {
 	std::shared_ptr<Mode> mode;
 	std::shared_ptr<Datatype> datatype;
+};
+
+struct PolyType {
+	std::shared_ptr<Mode> mode;
+	std::shared_ptr<DataScheme> scheme;
 };
 
 std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type>);
@@ -107,6 +125,8 @@ std::ostream& operator<<(std::ostream&, const Type&);
 std::ostream& operator<<(std::ostream&, const Datatype&);
 std::ostream& operator<<(std::ostream&, const Mode&);
 std::ostream& operator<<(std::ostream&, Mode::Concrete);
+std::ostream& operator<<(std::ostream&, const PolyType&);
+std::ostream& operator<<(std::ostream&, const DataScheme&);
 
 M make_modevar(std::size_t index);
 D make_datavar(std::size_t index);
@@ -118,6 +138,10 @@ D make_bool();
 D make_record(std::vector<std::pair<std::string, D>> field_tys);
 D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
 T make_type(M mode, D datatype);
+std::shared_ptr<PolyType> make_polytype(M mode, std::shared_ptr<DataScheme>);
+std::shared_ptr<DataScheme> make_scheme(
+	std::vector<std::shared_ptr<TypeVariable>>, D
+);
 
 #undef M
 #undef D
