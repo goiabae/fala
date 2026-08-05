@@ -147,7 +147,7 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 				const auto& param_id_node = m_ast.at(param_node[1]);
 				assert(param_id_node.type == NodeType::ID);
 				const auto guid =
-					m_symtab.define(param_id_node.str_id, inner_scope_idx, param_idx);
+					m_symtab.define(param_id_node.str_id, inner_scope_idx, param_node[1]);
 				auto& m = m_ast.at(param_node[1]);
 				m.type = NodeType::GUID;
 				m.guid = guid;
