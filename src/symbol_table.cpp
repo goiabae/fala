@@ -258,3 +258,58 @@ std::unordered_set<Guid> SymbolTable::symbols_reachable_from(
 	}
 	return reachable_symbols;
 }
+
+std::ostream& operator<<(std::ostream& st, const SymbolTable& symtab) {
+	st << '{' << '\n';
+	st << "\t";
+	st << "all symbols" << '\n';
+	for (const auto& [i, symbol] :
+	     std::ranges::views::enumerate(symtab.m_symbols)) {
+		st << "\t";
+		st << i << ' ' << '{';
+		st << " name = " << symbol.name.index;
+		st << ';' << ' ';
+		st << "decl = " << symbol.declaration_scope.index;
+		st << ' ' << '}';
+		st << '\n';
+	}
+	st << "\t";
+	st << "symbols declared in each scope" << '\n';
+	for (const auto& [scope, symbols] : symtab.m_symbols_in_scope) {
+		st << "\t";
+		st << scope.index;
+		st << '[' << ' ';
+		for (auto symbol : symbols) {
+			st << symbol.index << ' ';
+		}
+		st << ']';
+		st << '\n';
+	}
+	st << "\t";
+	st << "associated function body index with a function index" << '\n';
+	for (const auto& [body, func] : symtab.m_body_function) {
+		st << "\t";
+		st << body.index;
+		st << ' ' << '=' << ' ';
+		st << func.index;
+		st << '\n';
+	}
+	st << "\t";
+	st << "all scopes" << '\n';
+	for (const auto& [i, scope] :
+	     std::ranges::views::enumerate(symtab.m_scopes)) {
+		st << "\t";
+		st << i << ' ' << '{';
+		if (scope.function.has_value()) {
+			st << " function = " << scope.function.value().index;
+		}
+		if (scope.parent.has_value()) {
+			st << "; parent = ";
+			st << scope.parent.value().index;
+		}
+		st << '}';
+		st << '\n';
+	}
+	st << '}' << '\n';
+	return st;
+}

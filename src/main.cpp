@@ -12,6 +12,7 @@
 #include "options.hpp"
 #include "parser.hpp"
 #include "scope_analyser.hpp"
+#include "scoped_tree.hpp"
 #include "str_pool.h"
 #include "symbol_table.hpp"
 #include "typecheck.hpp"
@@ -65,13 +66,27 @@ int interpret(Options opts) {
 		AST ast = parse(fd, pool);
 		if (ast.is_empty()) break;
 
-		if (opts.verbosity >= 2) {
+		if (opts.verbosity >= 3) {
+			ast_print_detailed(&ast, pool);
+		} else if (opts.verbosity >= 2) {
 			ast_print(&ast, pool);
 			printf("\n");
 		}
 
+		print_phase(opts, "analysing scopes");
 		ScopeAnalyser scop {ast, pool};
 		const auto symtab = scop.analyse();
+
+		if (opts.verbosity >= 3) {
+			std::cerr << symtab;
+		}
+
+		if (opts.verbosity >= 3) {
+			ast_print_scoped(&ast, pool, symtab);
+		} else if (opts.verbosity >= 2) {
+			ast_print(&ast, pool);
+			printf("\n");
+		}
 
 		print_phase(opts, "type checking");
 		Typechecker checker {ast, pool, symtab};
@@ -130,8 +145,20 @@ int compile(Options opts) {
 		printf("\n");
 	}
 
+	print_phase(opts, "analysing scopes");
 	ScopeAnalyser scop {ast, pool};
 	const auto symtab = scop.analyse();
+
+	if (opts.verbosity >= 3) {
+		std::cerr << symtab;
+	}
+
+	if (opts.verbosity >= 3) {
+		ast_print_scoped(&ast, pool, symtab);
+	} else if (opts.verbosity >= 2) {
+		ast_print(&ast, pool);
+		printf("\n");
+	}
 
 	print_phase(opts, "type checking");
 	Typechecker checker {ast, pool, symtab};

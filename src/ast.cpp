@@ -21,14 +21,12 @@ struct NodeRef {
 	const Node& operator()() const { return ast.at(index); }
 };
 
-static bool is_branch_node(NodeType type);
-static const char* node_type_repr(enum NodeType type);
 static bool node_has_fixed_repr(enum NodeType type);
 static const char* node_repr(enum NodeType type);
 static bool operator==(const NodeRef& a, const NodeRef& b);
 static void node_deinit(AST* ast, NodeIndex node_idx);
 
-static const char* mode_repr(ModeLiteral m) {
+const char* mode_repr(ModeLiteral m) {
 	switch (m) {
 		case ModeLiteral::VAR: return "VAR";
 		case ModeLiteral::VAL: return "VAL";

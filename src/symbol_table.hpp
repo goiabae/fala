@@ -3,6 +3,7 @@
 
 #include <map>
 #include <optional>
+#include <ostream>
 #include <unordered_set>
 
 #include "ast.hpp"
@@ -79,6 +80,10 @@ class SymbolTable {
 	std::map<ScopeIndex, std::vector<Guid>> m_symbols_in_scope {};
 	std::map<NodeIndex, FunctionIndex> m_body_function {};
 	std::size_t m_next_function_index {0};
+
+	friend std::ostream& operator<<(std::ostream&, const SymbolTable&);
 };
+
+std::ostream& operator<<(std::ostream&, const SymbolTable&);
 
 #endif

@@ -91,6 +91,9 @@ enum class ModeLiteral {
 void ast_print(AST* ast, const StringPool& pool);
 void ast_print_detailed(AST* ast, const StringPool& pool);
 void ast_set_root(AST* ast, NodeIndex node_idx);
+const char* node_type_repr(enum NodeType type);
+const char* mode_repr(ModeLiteral);
+bool is_branch_node(NodeType type);
 
 // nodes
 NodeIndex new_node(AST* ast, NodeType type, std::vector<NodeIndex> children);
