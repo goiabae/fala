@@ -1284,6 +1284,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			}
 			return make_type(VAL_, std::make_shared<Void>());
 		}
+		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
+		case NodeType::RECORD_TYPE_LITERAL: assert(false);
+		case NodeType::FIELD_TYPE: assert(false);
 	}
 	assert(false && "unreachable");
 }
@@ -1341,6 +1344,23 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 
 			// TODO
 			assert(false);
+		}
+
+		case NodeType::ARRAY_TYPE_LITERAL: {
+			return make_array(eval(node[0]));
+		}
+		case NodeType::RECORD_TYPE_LITERAL: {
+			const auto d = std::dynamic_pointer_cast<Record>(make_record({}));
+			for (const auto field_dty_idx : node) {
+				const auto& field_dty = ast.at(field_dty_idx);
+				assert(field_dty.type == NodeType::FIELD_TYPE);
+				const auto& field_name_node = ast.at(field_dty[0]);
+				assert(field_name_node.type == NodeType::ID);
+				const auto field_name = std::string(pool.find(field_name_node.str_id));
+				const auto dty = eval(field_dty[1]);
+				d->fields.push_back(std::make_pair(field_name, dty));
+			}
+			return d;
 		}
 		default: assert(false);
 	}

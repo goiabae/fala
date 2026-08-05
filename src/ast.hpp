@@ -65,6 +65,9 @@ enum class NodeType {
 	REPEAT,
 	LEN,
 	MODULE_BODY,
+	ARRAY_TYPE_LITERAL,
+	RECORD_TYPE_LITERAL,
+	FIELD_TYPE,
 };
 
 enum class BinaryOperator {

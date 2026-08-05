@@ -1,0 +1,18 @@
+-- ===> "3\n4\n"
+
+fun f _ : [Int<64>] = 3..10
+
+fun write_intln x = do
+	write_int(x)
+	write_str("\n")
+end
+
+fun g _ : { x: Int<64>; y: Int<64>; } =
+	{ y = 4; x = 3; }
+
+fun main _ =
+	let var xs = f(nil) in
+	let val _ = write_intln(xs[0]) in
+	let var r = g(nil) in
+	let val _ = write_intln(r.y) in
+	nil

@@ -84,8 +84,10 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> op op0 opa op1 op2 op3 op4 op5 op6 op7 op9 op10 op11 op12 op13 op14 op15 op16
 
 %type <node> term id int
-%type <node> type_expression type_argument_list type_argument
+%type <node> type_expression type_argument_list type_argument type_instantiation
 %type <node> record_literal field_list field
+%type <node> record_type_literal field_type_list field_type
+%type <node> array_type_literal
 %type <node> array_literal element_list
 %type <node> module_body declaration_list
 %type <node> program
@@ -178,9 +180,10 @@ decls : decl           { $$ = new_list_node(ast, NodeType::METALIST); $$ = list_
       ;
 
 /* Declarations */
-decl : mode id opt_type "=" nls exp        { $$ = NODE(NodeType::VAR_DECL, $1, $2, $3, $exp); }
-     | FUN id params opt_type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
-     ;
+decl
+	: mode id opt_type "=" nls exp       { $$ = NODE(NodeType::VAR_DECL, $1, $2, $3, $exp); }
+	| FUN id params opt_type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
+	;
 
 opt_type : %empty { $$ = new_empty_node(ast); }
          | ":" type_expression { $$ = $2; }
@@ -305,10 +308,16 @@ id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
 
 type_expression
-  : id "<" type_argument_list ">"
-  { $$ = NODE(NodeType::INSTANCE, $1, $3); }
-  | id
-  ;
+	: type_instantiation
+	| record_type_literal
+	| array_type_literal
+	| id
+	;
+
+type_instantiation
+	: id "<" type_argument_list ">"
+	{ $$ = NODE(NodeType::INSTANCE, $1, $3); }
+	;
 
 type_argument_list
   : type_argument {
@@ -322,6 +331,30 @@ type_argument_list
 type_argument
   : type_expression
   | int
+  ;
+
+record_type_literal
+  : "{" field_type_list opt_field_sep "}" { $$ = $2; }
+  ;
+
+field_type_list
+  : field_type {
+    $$ = new_list_node(ast, NodeType::RECORD_TYPE_LITERAL);
+    $$ = list_append_node(ast, $$, $1);
+  }
+  | field_type_list[prefix] field_sep field_type[postfix] {
+    $$ = list_append_node(ast, $prefix, $postfix);
+  }
+  ;
+
+field_type
+  : id ":" type_expression {
+    $$ = NODE(NodeType::FIELD_TYPE, $1, $3);
+  }
+  ;
+
+array_type_literal
+  : "[" type_expression "]" { $$ = NODE(NodeType::ARRAY_TYPE_LITERAL, $2); }
   ;
 
 %%

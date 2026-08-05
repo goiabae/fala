@@ -204,5 +204,8 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			for (auto decl : decl_list) analyse(decl, scope_idx);
 			return;
 		}
+		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
+		case NodeType::RECORD_TYPE_LITERAL: assert(false);
+		case NodeType::FIELD_TYPE: assert(false);
 	}
 }
