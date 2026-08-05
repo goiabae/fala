@@ -160,6 +160,16 @@ int compile(Options opts) {
 		printf("\n");
 	}
 
+	if (opts.verbosity >= 3) {
+		auto all_syms = symtab.all_symbols();
+		for (auto sym : all_syms) {
+			const auto name = pool.find(symtab.name_of(sym).value());
+			std::cerr << std::format(
+				"SCOPE_ANALYSER: \"{}\" (guid={})", name, sym.index
+			) << '\n';
+		}
+	}
+
 	print_phase(opts, "type checking");
 	Typechecker checker {ast, pool, symtab};
 	checker.typecheck();
