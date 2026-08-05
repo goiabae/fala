@@ -1,9 +1,10 @@
-let
-	var max = read_int(nil),
-	var fs = 0..max
-in do
-	do write_int((fs [0] = 0)); write_str("\n") end;
-	do write_int((fs [1] = 1)); write_str("\n") end;
-	for var i = 2 to max-1 then
-		do write_int((fs[i] = fs[i-1] + fs[i-2])); write_str("\n") end;
-end
+fun main _ =
+	let
+		var max = read_int(nil),
+		var fs = 0..max
+	in do
+		do write_int((fs [0] = 0)); write_str("\n") end;
+		do write_int((fs [1] = 1)); write_str("\n") end;
+		for var i = 2 to max-1 then
+			do write_int((fs[i] = fs[i-1] + fs[i-2])); write_str("\n") end;
+	end

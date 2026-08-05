@@ -163,6 +163,7 @@ struct Chunk {
 
 // return amount of operands of each opcode
 size_t opcode_opnd_count(Opcode op);
+const char* opcode_repr(Opcode op);
 
 void print_chunk(FILE*, const Chunk&);
 int print_inst(FILE*, const Instruction& inst);

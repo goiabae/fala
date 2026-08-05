@@ -199,5 +199,10 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse(node[0], scope_idx);
 			return;
 		}
+		case NodeType::MODULE_BODY: {
+			const auto& decl_list = m_ast.at(node[0]);
+			for (auto decl : decl_list) analyse(decl, scope_idx);
+			return;
+		}
 	}
 }

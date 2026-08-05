@@ -557,6 +557,7 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 			auto a = std::get<Array>(*v);
 			return std::make_shared<Value>(static_cast<int>(a.size));
 		}
+		case NodeType::MODULE_BODY: assert(false);
 	}
 	assert(false);
 }

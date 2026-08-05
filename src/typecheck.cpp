@@ -103,6 +103,16 @@ auto visit(T&& obj, F&& f) {
 	}
 }
 
+static NodeIndex decl_name(const Node& node) {
+	if (node.type == NodeType::VAR_DECL) {
+		return node[1];
+	} else if (node.type == NodeType::FUN_DECL) {
+		return node[0];
+	} else {
+		assert(false);
+	}
+}
+
 // m t !> ERROR
 // out t -> val t
 // var t -> val t
@@ -1056,10 +1066,24 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					assert(mf.has_value());
 					auto f = mf.value();
 					auto free_symbols = symtab.free_symbols_in(f);
+					logger.log(
+						LogLevel::INFO,
+						"Function index {} with {} free symbols",
+						f.index,
+						free_symbols.size()
+					);
 					std::map<Guid, D> captures {};
 					for (auto symbol : free_symbols) {
 						// FIXME: dont know if this is the proper way. should captures be
 						// instantiated or not?
+						const auto capture_name =
+							std::string_view(pool.find(symtab.name_of(symbol).value()));
+						logger.log(
+							LogLevel::INFO,
+							"Variable \"{}\" free in definition of \"{}\"",
+							capture_name,
+							name
+						);
 						auto t1 = instantiate(variables.at(symbol));
 						captures[symbol] = t1->datatype;
 					}
@@ -1244,6 +1268,21 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto t2 =
 				make_type(VAL_, make_integer(64, Integer::Sign::UNSIGNED));
 			return ASSOC_TYPE(node_idx, t2);
+		}
+		case NodeType::MODULE_BODY: {
+			const auto& decl_list = ast.at(node[0]);
+			assert(decl_list.type == NodeType::METALIST);
+			for (auto decl : decl_list) {
+				const auto& decl_node = ast.at(decl);
+				const auto& name = ast.at(decl_name(decl_node));
+				// FIXME: wrong!!!
+				const auto p = make_polytype(VAL_, make_scheme({}, make_datavar()));
+				variables[name.guid] = p;
+			}
+			for (auto decl : decl_list) {
+				typecheck(decl);
+			}
+			return make_type(VAL_, std::make_shared<Void>());
 		}
 	}
 	assert(false && "unreachable");

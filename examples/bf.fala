@@ -1,73 +1,74 @@
 -- brainfuck in fala
 
-let
-	var GREAT = 0, -- >
-	var LESS  = 1, -- <
-	var PLUS  = 2, -- +
-	var MINUS = 3, -- -
-	var DOT   = 4, -- .
-	var COMMA = 5, -- ,
-	var OPEN  = 6, -- [
-	var CLOSE = 7 -- ]
-in let
-	var data = 0..256,
-	var inst = 0..512,
-	var dp = 0,
-	var ip = 0,
-	var op = 0,
-in do
-	-- clear inst and data tapes
-	for var i = 0 to 512 then
-		inst[i] = 0-69;
-	for var i = 0 to 256 then
-		data[i] = 0;
+fun main _ =
+	let
+		var GREAT = 0, -- >
+		var LESS  = 1, -- <
+		var PLUS  = 2, -- +
+		var MINUS = 3, -- -
+		var DOT   = 4, -- .
+		var COMMA = 5, -- ,
+		var OPEN  = 6, -- [
+		var CLOSE = 7 -- ]
+	in let
+		var data = 0..256,
+		var inst = 0..512,
+		var dp = 0,
+		var ip = 0,
+		var op = 0,
+	in do
+		-- clear inst and data tapes
+		for var i = 0 to 512 then
+			inst[i] = 0-69;
+		for var i = 0 to 256 then
+			data[i] = 0;
 
-	-- read instructions
-	var len = 0;
-	op = read_int(nil);
-  while op >= 0 and op <= 7 then do
-		inst [len] = op;
-		len = len + 1;
+		-- read instructions
+		var len = 0;
 		op = read_int(nil);
-	end;
+	  while op >= 0 and op <= 7 then do
+			inst [len] = op;
+			len = len + 1;
+			op = read_int(nil);
+		end;
 
-	write_str("brainfuck program:\n  ");
-	for var i = 0 to len then
-		write_int(inst[i]);
-	write_str("\n");
+		write_str("brainfuck program:\n  ");
+		for var i = 0 to len then
+			write_int(inst[i]);
+		write_str("\n");
 
-	-- run program
-	let fun is_inst op =
-		op >= 0 and op <= 7
-	in
-	while is_inst((op = inst[ip])) then
-	let var next = (ip + 1) % 256 in do
-		if op == GREAT then
-			do dp = dp + 1; nil end
-		else if op == LESS then
-			do dp = dp - 1; nil end
-		else if op == PLUS then
-			do data [dp] = data [dp] + 1; nil end
-		else if op == MINUS then
-			do data [dp] = data [dp] - 1; nil end
-		else if op == DOT then
-			do write_int(data[dp]); write_str("\n") end
-		else if op == COMMA then
-			do write_int((data [dp] = read_int(nil))); write_str("\n") end
-		else if op == OPEN then
-			when data [dp] == 0 then do
-				while not (inst[next] == CLOSE) then
+		-- run program
+		let fun is_inst op =
+			op >= 0 and op <= 7
+		in
+		while is_inst((op = inst[ip])) then
+		let var next = (ip + 1) % 256 in do
+			if op == GREAT then
+				do dp = dp + 1; nil end
+			else if op == LESS then
+				do dp = dp - 1; nil end
+			else if op == PLUS then
+				do data [dp] = data [dp] + 1; nil end
+			else if op == MINUS then
+				do data [dp] = data [dp] - 1; nil end
+			else if op == DOT then
+				do write_int(data[dp]); write_str("\n") end
+			else if op == COMMA then
+				do write_int((data [dp] = read_int(nil))); write_str("\n") end
+			else if op == OPEN then
+				when data [dp] == 0 then do
+					while not (inst[next] == CLOSE) then
+						next = (next + 1) % 256;
 					next = (next + 1) % 256;
-				next = (next + 1) % 256;
-			end
-		else if op == CLOSE then
-			when not (data[dp] == 0) then do
-				while not (inst[next] == OPEN) then
-					next = (next - 1) % 256;
-				next = (next + 1) % 256;
-			end
-		else nil;
-		ip = next;
-	end;
-	0;
-end
+				end
+			else if op == CLOSE then
+				when not (data[dp] == 0) then do
+					while not (inst[next] == OPEN) then
+						next = (next - 1) % 256;
+					next = (next + 1) % 256;
+				end
+			else nil;
+			ip = next;
+		end;
+		0;
+	end

@@ -1,23 +1,24 @@
-let
-	var xs = 0..100
-in do
-	for var i = 0 to 100 then
-		xs[i] = read_int(nil);
-
-	-- insertion sort xs
-	-- impl took from https://pt.wikipedia.org/wiki/Insertion_sort
-
-	for var i = 1 to 100 then
-	let var key = xs[i],
-			var j = i - 1
+fun main _ =
+	let
+		var xs = 0..100
 	in do
-		while j >= 0 and xs[j] > key then do
-			xs[j+1] = xs[j];
-			j = j - 1;
-		end;
-		xs[j+1] = key;
-	end;
+		for var i = 0 to 100 then
+			xs[i] = read_int(nil);
 
-	for var i = 0 to 100 then
-		do write_int(xs[i]); write_str("\n") end;
-end
+		-- insertion sort xs
+		-- impl took from https://pt.wikipedia.org/wiki/Insertion_sort
+
+		for var i = 1 to 100 then
+		let var key = xs[i],
+				var j = i - 1
+		in do
+			while j >= 0 and xs[j] > key then do
+				xs[j+1] = xs[j];
+				j = j - 1;
+			end;
+			xs[j+1] = key;
+		end;
+
+		for var i = 0 to 100 then
+			do write_int(xs[i]); write_str("\n") end;
+	end

@@ -1,0 +1,10 @@
+
+fun main _ =
+	let var op = 0 in
+	let fun is_inst op =
+		op >= 0 and op <= 7
+	in
+	if is_inst((op - 1)) then
+		write_str("incorrect behaviour!!\n")
+	else
+		write_str("correct behaviour!!\n")

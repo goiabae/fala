@@ -63,7 +63,7 @@ int interpret(Options opts) {
 
 	while (!fd->at_eof()) {
 		print_phase(opts, "parsing");
-		AST ast = parse(fd, pool);
+		AST ast = parse(fd, pool, opts.from_stdin);
 		if (ast.is_empty()) break;
 
 		if (opts.verbosity >= 3) {
@@ -135,7 +135,7 @@ int compile(Options opts) {
 
 	StringPool pool;
 	print_phase(opts, "parsing");
-	AST ast = parse(input, pool);
+	AST ast = parse(input, pool, opts.from_stdin);
 	if (ast.is_empty()) return 1;
 
 	if (opts.verbosity >= 3) {

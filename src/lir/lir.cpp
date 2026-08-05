@@ -9,7 +9,6 @@ namespace lir {
 static std::ostream& operator<<(std::ostream&, const ByteString&);
 static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd);
 static int print_operand(FILE* fd, Operand opnd);
-static const char* opcode_repr(Opcode op);
 static int print_operand_indirect(FILE* fd, Operand opnd);
 static int print_inst_indirect(FILE* fd, const Instruction& inst);
 static std::ostream& print_inst_indirect(

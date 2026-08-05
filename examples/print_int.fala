@@ -1,1 +1,2 @@
-write_int((1 + 2))
+fun main _ =
+	write_int((1 + 2))

@@ -200,6 +200,14 @@ int Lexer::lex() {
 	loc->begin.line = loc->end.line;
 	loc->begin.column = loc->end.column;
 
+	if (not has_sent_start) {
+		has_sent_start = true;
+		if (is_repl)
+			return tk::START_REPL;
+		else
+			return tk::START_MODULE;
+	}
+
 	char c = advance();
 	if (c < 0) {
 		lines.push_back(current_line);
@@ -306,7 +314,11 @@ int Lexer::lex() {
 
 bool is_interactive(Lexer* lexer) { return lexer->file->is_interactive(); }
 
-Lexer::Lexer(Reader* file)
-: file {file}, ring {ring_init()}, loc {nullptr}, value {nullptr} {}
+Lexer::Lexer(Reader* file, bool is_repl)
+: file {file},
+	ring {ring_init()},
+	loc {nullptr},
+	value {nullptr},
+	is_repl {is_repl} {}
 
 Lexer::~Lexer() { ring_deinit(&ring); }

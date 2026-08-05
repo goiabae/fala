@@ -195,6 +195,8 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::POP: {
 				assert(inst.operands[0].type == Operand::Type::REGISTER);
 				auto& cell = cells[inst.operands[0].as_register().index];
+				if (stack.size() == 0)
+					throw std::runtime_error("can't pop value. stack was empty");
 				cell = stack.top();
 				stack.pop();
 				break;

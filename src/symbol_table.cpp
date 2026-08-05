@@ -74,26 +74,31 @@ Guid SymbolTable::define_builtin(StrID name) {
 
 Guid SymbolTable::use_of(StrID name, ScopeIndex scope, NodeIndex node) {
 	m_node_scopes[node] = scope;
-	for (const auto& [i, s] : std::ranges::views::enumerate(m_symbols)) {
-		if (name == s.name
-		    and (is_child_of(scope, s.declaration_scope) or scope == s.declaration_scope)) {
-			const auto guid = Guid {.index = static_cast<Guid::index_type>(i)};
-			if (not m_symbols_in_scope.contains(scope)) {
-				m_symbols_in_scope[scope] = {guid};
-			} else if (std::ranges::find(m_symbols_in_scope.at(scope), guid)
-			           == m_symbols_in_scope.at(scope).end()) {
-				m_symbols_in_scope.at(scope).push_back(guid);
+	auto cur = scope;
+	while (true) {
+		auto syms = symbols_declared_in(cur);
+		for (const auto s : syms) {
+			const auto s_name = name_of(s).value();
+			if (name == s_name) {
+				if (not m_symbols_in_scope.contains(scope)) {
+					m_symbols_in_scope[scope] = {s};
+				} else if (std::ranges::find(m_symbols_in_scope.at(scope), s)
+				           == m_symbols_in_scope.at(scope).end()) {
+					m_symbols_in_scope.at(scope).push_back(s);
+				}
+				return s;
 			}
-			return guid;
 		}
+		auto parent = parent_of(cur);
+		if (not parent.has_value()) throw std::runtime_error("undefined symbol");
+		cur = parent.value();
 	}
-	throw std::runtime_error("undefined symbol");
 }
 
 ScopeIndex SymbolTable::make_child_scope(ScopeIndex s) {
 	Scope child {
 		.parent = s,
-		.function = get_scope(s).function,
+		.function = function_of(s),
 	};
 	m_scopes.push_back(child);
 	return ScopeIndex {

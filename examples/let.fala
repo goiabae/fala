@@ -1,4 +1,5 @@
-let var x = 69 in do
-  write_int(x)
-  write_str("\n")
-end
+fun main _ =
+	let var x = 69 in do
+		write_int(x)
+		write_str("\n")
+	end

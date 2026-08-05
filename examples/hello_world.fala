@@ -1,1 +1,2 @@
-write_str("Hello, world!\n")
+fun main _ =
+	write_str("Hello, world!\n")

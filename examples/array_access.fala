@@ -1,5 +1,4 @@
--- ERROR: undefined result
-let
-  var xs = 0..10
-in
-  xs[3]
+-- ===> 0
+fun main _ =
+	let var xs = 0..10 in
+	xs[3]

@@ -1,0 +1,12 @@
+val CONST = 69
+
+fun write_hello_worlds n = do
+	for var i = 0 to n then
+		write_str("Hello, world!\n")
+end
+
+fun main _ = do
+	write_hello_worlds(10)
+	write_int(CONST)
+	write_str("\n")
+end

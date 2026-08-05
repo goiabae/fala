@@ -32,6 +32,16 @@ void err(const char* msg) {
 	exit(1);
 }
 
+static NodeIndex decl_name(const Node& node) {
+	if (node.type == NodeType::VAR_DECL) {
+		return node[1];
+	} else if (node.type == NodeType::FUN_DECL) {
+		return node[0];
+	} else {
+		assert(false);
+	}
+}
+
 namespace builtin {
 static Result read_int(Compiler& comp, vector<lir::Operand> args);
 static Result read_char(Compiler& comp, vector<lir::Operand> args);
@@ -145,21 +155,47 @@ static PassingConvention passing_convention_for(
 lir::Chunk Compiler::compile() {
 	allocate_variables();
 
-	const auto main = make_label();
-	const SignalHandlers handlers {};
-	const Context ctx {
-		.handlers = handlers,
-		.current_closure = {},
-	};
-	const auto c0 = compile(ast.root_index, ctx);
+	const auto& root = ast.at(ast.root_index);
+	if (root.type == NodeType::MODULE_BODY) {
+		const SignalHandlers handlers {};
+		const Context ctx {
+			.handlers = handlers,
+			.current_closure = {},
+		};
+		const auto start = make_label();
+		lir::Chunk chunk {};
+		chunk.emit(Opcode::JMP, start);
+		const auto module = compile(ast.root_index, ctx);
+		for (const auto& f : functions) chunk += f;
+		chunk.add_label(start);
+		chunk += module.code;
+		const auto main = module.opnd;
+		const auto r1 = make_register();
+		const auto r2 = make_register();
+		const auto r3 = make_register();
+		chunk.emit_loada(r2, lir::Immediate(0), main);
+		chunk.emit_alloca(r3, lir::Immediate(1));
+		chunk.emit_storea(lir::Immediate(0), lir::Immediate(0), r3);
+		chunk.emit(Opcode::PUSH, r3);
+		chunk.emit(Opcode::CALL, r2);
+		chunk.emit(Opcode::POP, r1);
+		return chunk;
+	} else {
+		const auto main = make_label();
+		const SignalHandlers handlers {};
+		const Context ctx {
+			.handlers = handlers,
+			.current_closure = {},
+		};
+		const auto c0 = compile(ast.root_index, ctx);
 
-	lir::Chunk chunk {};
-	chunk.emit(Opcode::JMP, main);
-	for (const auto& f : functions) chunk += f;
-	chunk.add_label(main);
-	chunk += c0.code;
-
-	return chunk;
+		lir::Chunk chunk {};
+		chunk.emit(Opcode::JMP, main);
+		for (const auto& f : functions) chunk += f;
+		chunk.add_label(main);
+		chunk += c0.code;
+		return chunk;
+	}
 }
 
 lir::Operand Compiler::make_register() {
@@ -483,14 +519,14 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			const auto maybe_rel = symtab.relative_scope_of(node.guid, node_idx);
 			assert(maybe_rel.has_value());
 			const auto rel = maybe_rel.value();
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(node.guid).value()));
 			if (rel == RelativeScope::FREE) {
 				assert(ctx.current_closure.has_value());
 				const auto& clinfo = ctx.current_closure.value();
 				lir::Chunk chunk {};
 				const auto t1 = make_register();
 				if (not clinfo.offsets.contains(node.guid)) {
-					const auto name =
-						std::string_view(pool.find(symtab.name_of(node.guid).value()));
 					std::string s {};
 					s += "[";
 					for (const auto& [a, b] : clinfo.offsets) {
@@ -503,7 +539,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 					);
 					throw std::runtime_error(
 						std::format(
-							"{}: symbol for variable \"{}\" not in closure info {} of "
+							"{}: symbol for free variable \"{}\" not in closure info {} of "
 							"function \"{}\"",
 							node.loc.begin.line + 1,
 							name,
@@ -512,6 +548,12 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 						)
 					);
 				}
+				logger.log(
+					LogLevel::INFO,
+					"Variable \"{}\" (guid={}) is free",
+					name,
+					node.guid.index
+				);
 				chunk.emit_shifta(
 					t1,
 					lir::Immediate(static_cast<int>(clinfo.offsets.at(node.guid))),
@@ -519,6 +561,12 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 				);
 				return {chunk, t1};
 			} else {
+				logger.log(
+					LogLevel::INFO,
+					"Variable \"{}\" (guid={}) is not free",
+					name,
+					node.guid.index
+				);
 				assert(variables.contains(node.guid));
 				return {{}, variables.at(node.guid)};
 			}
@@ -552,6 +600,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::ARRAY_LITERAL: assert(false);
 		case NodeType::REPEAT: assert(false);
 		case NodeType::LEN: assert(false);
+		case NodeType::MODULE_BODY: assert(false);
 	}
 	assert(false);
 }
@@ -1015,6 +1064,23 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.result_opnd = t1;
 			return {chunk, t1};
 		}
+		case NodeType::MODULE_BODY: {
+			const auto& decl_list = ast.at(node[0]);
+			assert(decl_list.type == NodeType::METALIST);
+			lir::Chunk chunk {};
+			lir::Operand main {};
+			for (auto decl : decl_list) {
+				const auto& decl_node = ast.at(decl);
+				const auto& name = ast.at(decl_name(decl_node));
+				assert(name.type == NodeType::GUID);
+				const auto name2 =
+					std::string_view(pool.find(symtab.name_of(name.guid).value()));
+				auto ri = compile(decl, ctx);
+				chunk += ri.code;
+				if (name2 == "main") main = ri.opnd;
+			}
+			return {chunk, main};
+		};
 	}
 	assert(false);
 }

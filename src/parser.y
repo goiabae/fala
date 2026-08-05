@@ -26,7 +26,7 @@
 }
 
 %code provides {
-AST parse(Reader* reader, StringPool& pool);
+AST parse(Reader* reader, StringPool& pool, bool is_repl);
 }
 
 %{
@@ -68,6 +68,8 @@ AST parse(Reader* reader, StringPool& pool);
 %token POUND "#"
 %token NOT
 
+%token START_REPL START_MODULE
+
 /* non-terminals */
 %type <node> exp
 
@@ -85,10 +87,35 @@ AST parse(Reader* reader, StringPool& pool);
 %type <node> type_expression type_argument_list type_argument
 %type <node> record_literal field_list field
 %type <node> array_literal element_list
+%type <node> module_body declaration_list
+%type <node> program
 
 %%
 
-%start program ;
+%start start ;
+
+start
+  : START_REPL program
+  | START_MODULE module_body {
+    ast_set_root(ast, $module_body);
+  }
+  ;
+
+module_body
+  : nls declaration_list nls {
+    $$ = NODE(NodeType::MODULE_BODY, $2);
+  }
+  ;
+
+declaration_list
+  : decl {
+    $$ = new_list_node(ast, NodeType::METALIST);
+    $$ = list_append_node(ast, $$, $1);
+  }
+  | declaration_list[prefix] nls decl[postfix] {
+    $$ = list_append_node(ast, $prefix, $postfix);
+  }
+  ;
 
 program : %empty { if (is_interactive(lexer)) YYACCEPT; }
         | nls exp nls  { ast_set_root(ast, $2); if (is_interactive(lexer)) YYACCEPT; }
@@ -316,8 +343,8 @@ void yy::parser::error(const location_type& loc, const std::string& msg) {
 // TODO: not implemented
 std::ostream& operator<<(std::ostream& st, Location) { return st; }
 
-AST parse(Reader* reader, StringPool& pool) {
-	Lexer lexer {reader};
+AST parse(Reader* reader, StringPool& pool, bool is_repl) {
+	Lexer lexer {reader, is_repl};
 	AST ast {};
 	ast.file_name = lexer.file->get_path();
 	yy::parser parser {&lexer, &ast, pool};

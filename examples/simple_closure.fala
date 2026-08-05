@@ -1,9 +1,10 @@
-let fun f x =
-  let fun g y =
-    x + y
-  in g
-in
-let val h = f(3) in do
-  write_int((h(4)))
-  write_str("\n")
-end
+fun main _ =
+	let fun f x =
+		let fun g y =
+			x + y
+		in g
+	in
+	let val h = f(3) in do
+		write_int((h(4)))
+		write_str("\n")
+	end

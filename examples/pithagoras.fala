@@ -1,6 +1,7 @@
-let
-	var a = 3,
-	var b = 4,
-	var c = 5
-in
-	write_int(((a*a + b*b == c*c) as Int<64>))
+fun main _ =
+	let
+		var a = 3,
+		var b = 4,
+		var c = 5
+	in
+		write_int(((a*a + b*b == c*c) as Int<64>))

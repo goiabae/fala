@@ -11,7 +11,7 @@ namespace {
 
 std::vector<int> collect_tokens(std::string source) {
 	Reader* reader = new StringReader(source);
-	Lexer lexer {reader};
+	Lexer lexer {reader, true};
 	Location loc;
 	union TokenValue value;
 	lexer.loc = &loc;
@@ -30,7 +30,7 @@ std::vector<int> collect_tokens(std::string source) {
 TEST(LexerTest, empty_string) {
 	std::string source = "";
 	std::vector<int> actual = collect_tokens(source);
-	std::vector<int> expected {};
+	std::vector<int> expected {tk::START_REPL};
 	EXPECT_EQ(actual, expected);
 }
 
@@ -39,10 +39,11 @@ TEST(LexerTest, some_tokens) {
 		"let var x = 3 in let fun f (out y) = y = 4 in f x";
 	const std::vector<int> actual = collect_tokens(source);
 	const std::vector<int> expected {
-		tk::LET, tk::VAR,    tk::ID,          tk::EQ, tk::NUMBER,
-		tk::IN,  tk::LET,    tk::FUN,         tk::ID, tk::PAREN_OPEN,
-		tk::OUT, tk::ID,     tk::PAREN_CLOSE, tk::EQ, tk::ID,
-		tk::EQ,  tk::NUMBER, tk::IN,          tk::ID, tk::ID,
+		tk::START_REPL, tk::LET, tk::VAR,    tk::ID,          tk::EQ,
+		tk::NUMBER,     tk::IN,  tk::LET,    tk::FUN,         tk::ID,
+		tk::PAREN_OPEN, tk::OUT, tk::ID,     tk::PAREN_CLOSE, tk::EQ,
+		tk::ID,         tk::EQ,  tk::NUMBER, tk::IN,          tk::ID,
+		tk::ID,
 	};
 	EXPECT_EQ(actual, expected);
 }

@@ -1,22 +1,23 @@
-let fun write_arr xs = do
-	write_str("[")
-	for var i = 0 to #xs then do
-		write_int(xs[i])
-		when not (i == (#xs - 1)) then
-			write_str(";")
+fun main _ =
+	let fun write_arr xs = do
+		write_str("[")
+		for var i = 0 to #xs then do
+			write_int(xs[i])
+			when not (i == (#xs - 1)) then
+				write_str(";")
+		end
+		write_str("]")
+	end in
+	let fun concat xs ys = do
+		var zs = xs[0] .. (#xs + #ys)
+		for var i = 0 to #xs then
+			zs[i] = xs[i]
+		for var i = 0 to #ys then
+			zs[i+#xs] = ys[i]
+		zs
+	end in
+	do
+		var ws = concat([1;2;3], [4;5;6])
+		write_arr(ws)
+		write_str("\n")
 	end
-	write_str("]")
-end in
-let fun concat xs ys = do
-	var zs = xs[0] .. (#xs + #ys)
-	for var i = 0 to #xs then
-		zs[i] = xs[i]
-	for var i = 0 to #ys then
-		zs[i+#xs] = ys[i]
-	zs
-end in
-do
-	var ws = concat([1;2;3], [4;5;6])
-	write_arr(ws)
-	write_str("\n")
-end

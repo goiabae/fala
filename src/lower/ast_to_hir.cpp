@@ -665,6 +665,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::ARRAY_LITERAL: assert(false);
 		case NodeType::REPEAT: assert(false);
 		case NodeType::LEN: assert(false);
+		case NodeType::MODULE_BODY: assert(false);
 	}
 	assert(false);
 }
@@ -766,6 +767,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::ARRAY_LITERAL: assert(false);
 		case NodeType::REPEAT: assert(false);
 		case NodeType::LEN: assert(false);
+		case NodeType::MODULE_BODY: assert(false);
 	}
 	assert(false);
 }
