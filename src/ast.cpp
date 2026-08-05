@@ -28,6 +28,15 @@ static const char* node_repr(enum NodeType type);
 static bool operator==(const NodeRef& a, const NodeRef& b);
 static void node_deinit(AST* ast, NodeIndex node_idx);
 
+static const char* mode_repr(ModeLiteral m) {
+	switch (m) {
+		case ModeLiteral::VAR: return "VAR";
+		case ModeLiteral::VAL: return "VAL";
+		case ModeLiteral::OUT: return "OUT";
+	}
+	assert(false);
+}
+
 bool AST::is_empty() { return root_index.index == -1; }
 
 bool is_branch_node(NodeType type) {
@@ -342,6 +351,7 @@ static void ast_node_print_detailed(
 	if (node.type == NodeType::NUM) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "num = %d\n", node.num);
+	} else if (node.type == NodeType::NIL) {
 	} else if (node.type == NodeType::ID) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "id = %s\n", pool.find(node.str_id));
@@ -362,7 +372,21 @@ static void ast_node_print_detailed(
 		print_spaces(fd, space + 2);
 		fprintf(fd, "char = '%c'\n", node.character);
 	} else if (node.type == NodeType::EMPTY) {
+	} else if (node.type == NodeType::MODE) {
+		print_spaces(fd, space + 2);
+		fprintf(fd, "mode = %s\n", mode_repr(node.mode));
+	} else if (node.type == NodeType::METALIST) {
+		print_spaces(fd, space + 2);
+		fprintf(fd, "%zu [\n", node.branch.children_count);
+
+		for (auto idx : node) {
+			ast_node_print_detailed(ast, pool, idx, space + 2 + 2);
+		}
+
+		print_spaces(fd, space + 2);
+		fprintf(fd, "]\n");
 	} else {
+		assert(is_branch_node(node.type));
 		print_spaces(fd, space + 2);
 		fprintf(fd, "children = %zu [\n", node.branch.children_count);
 
