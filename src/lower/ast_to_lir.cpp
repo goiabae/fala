@@ -984,14 +984,30 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::RECORD_LITERAL: {
 			const auto field_count = node.size();
 			lir::Chunk chunk {};
+			const auto record_datatype = std::dynamic_pointer_cast<Record>(
+				tpc.node_to_type.at(node_idx)->datatype
+			);
 			const auto t1 = make_register();
 			chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(field_count)));
 			for (auto i = 0ul; i < field_count; i++) {
 				const auto& field_node = ast.at(node[i]);
 				assert(field_node.type == NodeType::FIELD);
+				const auto& field_name_node = ast.at(field_node[0]);
+				assert(field_name_node.type == NodeType::ID);
+				const auto field_name = std::string(pool.find(field_name_node.str_id));
+				const auto found = std::ranges::find(
+					record_datatype->fields, field_name, [](const auto& x) {
+						return x.first;
+					}
+				);
+				assert(found != record_datatype->fields.end());
+				const auto offset =
+					std::distance(record_datatype->fields.begin(), found);
 				const auto ri = compile(field_node[1], ctx);
 				chunk += ri.code;
-				chunk.emit_storea(ri.opnd, lir::Immediate(static_cast<int>(i)), t1);
+				chunk.emit_storea(
+					ri.opnd, lir::Immediate(static_cast<int>(offset)), t1
+				);
 			}
 			chunk.result_opnd = t1;
 			return {chunk, t1};
