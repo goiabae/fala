@@ -55,6 +55,7 @@ enum {
 	KW_UINT,
 	KW_BOOL,
 	KW_AS,
+	KW_TYPE,
 	KW_COUNT,
 };
 
@@ -89,6 +90,7 @@ const char* keyword_repr(size_t i) {
 		case KW_UINT: return "uint";
 		case KW_BOOL: return "bool";
 		case KW_AS: return "as";
+		case KW_TYPE: return "type";
 	}
 	assert(false);
 }
@@ -125,6 +127,7 @@ int keyword_to_bison(size_t i) {
 		case KW_AS: return tk::AS;
 		case KW_VAL: return tk::VAL;
 		case KW_OUT: return tk::OUT;
+		case KW_TYPE: return tk::TYPE;
 	}
 	assert(false);
 }

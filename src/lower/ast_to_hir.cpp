@@ -669,6 +669,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: assert(false);
 	}
 	assert(false);
 }
@@ -774,6 +775,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: assert(false);
 	}
 	assert(false);
 }

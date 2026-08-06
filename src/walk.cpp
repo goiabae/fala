@@ -561,6 +561,7 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: assert(false);
 	}
 	assert(false);
 }

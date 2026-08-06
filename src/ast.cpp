@@ -90,6 +90,7 @@ bool is_branch_node(NodeType type) {
 		case NodeType::ARRAY_TYPE_LITERAL: return true;
 		case NodeType::RECORD_TYPE_LITERAL: return true;
 		case NodeType::FIELD_TYPE: return true;
+		case NodeType::TYPE_DECL: return true;
 	}
 	assert(false);
 }
@@ -147,6 +148,7 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::ARRAY_TYPE_LITERAL: return "NodeType::ARRAY_TYPE_LITERAL";
 		case NodeType::RECORD_TYPE_LITERAL: return "NodeType::RECORD_TYPE_LITERAL";
 		case NodeType::FIELD_TYPE: return "NodeType::FIELD_TYPE";
+		case NodeType::TYPE_DECL: return "NodeType::TYPE_DECL";
 	}
 	assert(false);
 }
@@ -223,6 +225,7 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::ARRAY_TYPE_LITERAL: return "array_type_literal";
 		case NodeType::RECORD_TYPE_LITERAL: return "record_type_literal";
 		case NodeType::FIELD_TYPE: return "field_type";
+		case NodeType::TYPE_DECL: return "type_decl";
 	}
 	assert(false);
 }

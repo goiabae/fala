@@ -109,6 +109,7 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse_type(node[1], scope_idx);
 			return;
 		}
+		case NodeType::TYPE_DECL: assert(false);
 	}
 }
 
@@ -325,5 +326,18 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: {
+			const auto id_idx = node[0];
+			analyse_type(node[1], scope_idx);
+			const auto& id_node = m_ast.at(id_idx);
+			assert(id_node.type == NodeType::ID);
+			const auto guid = m_symtab.define(
+				id_node.str_id, scope_idx, id_idx, m_symtab.type_namespace
+			);
+			auto& m = m_ast.at(id_idx);
+			m.type = NodeType::GUID;
+			m.guid = guid;
+			return;
+		}
 	}
 }

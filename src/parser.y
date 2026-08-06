@@ -47,7 +47,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 
 /* keywords and constants */
 %token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS
-%token NIL TRUE FALSE
+%token NIL TRUE FALSE TYPE
 
 /* pontuation */
 %token PAREN_OPEN "(" PAREN_CLOSE ")"
@@ -91,6 +91,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> array_literal element_list
 %type <node> module_body declaration_list
 %type <node> program
+%type <node> type_declaration
 
 %%
 
@@ -183,6 +184,7 @@ decls : decl           { $$ = new_list_node(ast, NodeType::METALIST); $$ = list_
 decl
 	: mode id opt_type "=" nls exp       { $$ = NODE(NodeType::VAR_DECL, $1, $2, $3, $exp); }
 	| FUN id params opt_type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
+	| type_declaration
 	;
 
 opt_type : %empty { $$ = new_empty_node(ast); }
@@ -306,6 +308,12 @@ opt_field_sep : %empty | field_sep ;
 id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 
 int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
+
+type_declaration
+	: TYPE id "=" type_expression {
+		$$ = NODE(NodeType::TYPE_DECL, $2, $4);
+	}
+	;
 
 type_expression
 	: type_instantiation

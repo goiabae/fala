@@ -37,6 +37,8 @@ static NodeIndex decl_name(const Node& node) {
 		return node[1];
 	} else if (node.type == NodeType::FUN_DECL) {
 		return node[0];
+	} else if (node.type == NodeType::TYPE_DECL) {
+		return node[0];
 	} else {
 		assert(false);
 	}
@@ -604,6 +606,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: assert(false);
 	}
 	assert(false);
 }
@@ -1090,19 +1093,22 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			lir::Operand main {};
 			for (auto decl : decl_list) {
 				const auto& decl_node = ast.at(decl);
-				const auto& name = ast.at(decl_name(decl_node));
-				assert(name.type == NodeType::GUID);
-				const auto name2 =
-					std::string_view(pool.find(symtab.name_of(name.guid).value()));
-				auto ri = compile(decl, ctx);
-				chunk += ri.code;
-				if (name2 == "main") main = ri.opnd;
+				if (decl_node.type != NodeType::TYPE_DECL) {
+					const auto& name = ast.at(decl_name(decl_node));
+					assert(name.type == NodeType::GUID);
+					const auto name2 =
+						std::string_view(pool.find(symtab.name_of(name.guid).value()));
+					auto ri = compile(decl, ctx);
+					chunk += ri.code;
+					if (name2 == "main") main = ri.opnd;
+				}
 			}
 			return {chunk, main};
 		};
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: assert(false);
 	}
 	assert(false);
 }

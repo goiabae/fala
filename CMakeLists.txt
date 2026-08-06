@@ -129,6 +129,7 @@ test_example(concat_arrays)
 test_example(generic_map_array)
 test_example(simple_closure)
 test_example(type_expressions)
+test_example(type_declarations)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)

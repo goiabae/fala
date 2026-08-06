@@ -108,6 +108,8 @@ static NodeIndex decl_name(const Node& node) {
 		return node[1];
 	} else if (node.type == NodeType::FUN_DECL) {
 		return node[0];
+	} else if (node.type == NodeType::TYPE_DECL) {
+		return node[0];
 	} else {
 		assert(false);
 	}
@@ -1302,8 +1304,11 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				const auto& decl_node = ast.at(decl);
 				const auto& name = ast.at(decl_name(decl_node));
 				// FIXME: wrong!!!
-				const auto p = make_polytype(VAL_, make_scheme({}, make_datavar()));
-				variables[name.guid] = p;
+				if (decl_node.type == NodeType::TYPE_DECL) {
+				} else {
+					const auto p = make_polytype(VAL_, make_scheme({}, make_datavar()));
+					variables[name.guid] = p;
+				}
 			}
 			for (auto decl : decl_list) {
 				typecheck(decl);
@@ -1313,6 +1318,14 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: {
+			const auto& id_node = ast.at(node[0]);
+			assert(id_node.type == NodeType::GUID);
+			const auto data = eval(node[1]);
+			assert(not type_names.contains(id_node.guid));
+			type_names[id_node.guid] = data;
+			return make_type(VAL_, VOID_);
+		}
 	}
 	assert(false && "unreachable");
 }
