@@ -193,9 +193,9 @@ params : %empty    { $$ = new_list_node(ast, NodeType::METALIST); }
        | params param { $$ = list_append_node(ast, $$, $2);}
        ;
 
-param : id { $$ = NODE(NodeType::PARAM, new_empty_node(ast), $1); }
-      | "(" mode id ")" { $$ = NODE(NodeType::PARAM, $2, $3); }
-			;
+param : id { $$ = NODE(NodeType::PARAM, new_empty_node(ast), $1, new_empty_node(ast)); }
+      | "(" mode id opt_type ")" { $$ = NODE(NodeType::PARAM, $2, $3, $4); }
+      ;
 
 mode : VAR { $$ = new_mode_node(ast, @$, ModeLiteral::VAR); }
      | VAL { $$ = new_mode_node(ast, @$, ModeLiteral::VAL); }

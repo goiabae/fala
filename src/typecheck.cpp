@@ -1037,6 +1037,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 						param_mode.type == NodeType::MODE
 						|| param_mode.type == NodeType::EMPTY
 					);
+					const auto& param_type_node = ast.at(param[2]);
 					const auto mode = [&]() {
 						if (param_mode.type == NodeType::EMPTY)
 							return make_modevar();
@@ -1049,7 +1050,10 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 						else
 							assert(false);
 					}();
-					auto var = make_type(mode, make_datavar());
+					auto param_datatype = (param_type_node.type == NodeType::EMPTY)
+					                      ? make_datavar()
+					                      : eval(param[2]);
+					auto var = make_type(mode, param_datatype);
 					param_types.push_back(var);
 					const auto p1 = dont_generalize(var, {});
 					variables[param_name.guid] = p1;
