@@ -14,6 +14,9 @@ class ScopeAnalyser {
 
  private:
 	void analyse(NodeIndex, ScopeIndex);
+	void analyse_type(NodeIndex, ScopeIndex);
+	void define_builtin(const char*);
+	void define_builtin_type(const char*);
 
  private:
 	AST& m_ast;

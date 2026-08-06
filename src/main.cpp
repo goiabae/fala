@@ -161,7 +161,7 @@ int compile(Options opts) {
 	}
 
 	if (opts.verbosity >= 3) {
-		auto all_syms = symtab.all_symbols();
+		auto all_syms = symtab.all_symbols(symtab.value_namespace);
 		for (auto sym : all_syms) {
 			const auto name = pool.find(symtab.name_of(sym).value());
 			std::cerr << std::format(

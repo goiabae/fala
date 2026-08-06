@@ -19,11 +19,12 @@ enum class RelativeScope {
 
 using ScopeIndex = Index<5>;
 using FunctionIndex = Index<6>;
+using Namespace = Index<8>;
 
 class SymbolTable {
  public:
-	Guid define(StrID, ScopeIndex, NodeIndex);
-	Guid use_of(StrID, ScopeIndex, NodeIndex);
+	Guid define(StrID, ScopeIndex, NodeIndex, Namespace);
+	Guid use_of(StrID, ScopeIndex, NodeIndex, Namespace);
 	ScopeIndex make_child_scope(ScopeIndex);
 	ScopeIndex make_function_scope(ScopeIndex, NodeIndex);
 	std::optional<RelativeScope> relative_scope_of(Guid, NodeIndex) const;
@@ -31,25 +32,30 @@ class SymbolTable {
 	std::optional<StrID> name_of(Guid) const;
 	std::optional<ScopeIndex> declaration_scope_of(Guid) const;
 	std::vector<Guid> symbols_declared_in(ScopeIndex) const;
-	Guid define_builtin(StrID);
-	std::vector<Guid> all_symbols() const;
-	std::vector<Guid> symbols_with_name(StrID) const;
+	Guid define_builtin(StrID, Namespace);
+	std::vector<Guid> all_symbols(Namespace) const;
+	std::vector<Guid> symbols_with_name(StrID, Namespace) const;
 	std::optional<FunctionIndex> function_of(ScopeIndex) const;
 	std::optional<FunctionIndex> function_of(NodeIndex) const;
-	std::vector<Guid> symbols_used_in(ScopeIndex) const;
-	std::vector<Guid> free_symbols_in(FunctionIndex) const;
+	std::vector<Guid> symbols_used_in(ScopeIndex, Namespace) const;
+	std::vector<Guid> free_symbols_in(FunctionIndex, Namespace) const;
 	ScopeIndex scope_at(NodeIndex) const;
-	std::unordered_set<Guid> symbols_reachable_from(ScopeIndex) const;
+	std::unordered_set<Guid> symbols_reachable_from(ScopeIndex, Namespace) const;
 	std::optional<ScopeIndex> parent_of(ScopeIndex) const;
+	Namespace namespace_of(Guid) const;
 
  public:
 	static constexpr ScopeIndex builtin_scope {.index = 0};
 	static constexpr ScopeIndex root_scope {.index = 1};
 
+	static constexpr Namespace value_namespace {.index = 0};
+	static constexpr Namespace type_namespace {.index = 1};
+
  private:
 	struct Symbol {
 		ScopeIndex declaration_scope;
 		StrID name;
+		Namespace space;
 	};
 
 	struct Scope {

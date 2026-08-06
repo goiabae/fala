@@ -47,8 +47,15 @@ SymbolTable::Scope SymbolTable::get_scope(ScopeIndex i) const {
 		return m_scopes.at(i.index);
 }
 
-Guid SymbolTable::define(StrID name, ScopeIndex scope, NodeIndex node) {
-	m_symbols.emplace_back(scope, name);
+Guid SymbolTable::define(
+	StrID name, ScopeIndex scope, NodeIndex node, Namespace space
+) {
+	const Symbol sym {
+		.declaration_scope = scope,
+		.name = name,
+		.space = space,
+	};
+	m_symbols.push_back(sym);
 	m_node_scopes[node] = scope;
 	auto guid =
 		Guid {.index = static_cast<Guid::index_type>(m_symbols.size() - 1)};
@@ -60,8 +67,13 @@ Guid SymbolTable::define(StrID name, ScopeIndex scope, NodeIndex node) {
 	return guid;
 }
 
-Guid SymbolTable::define_builtin(StrID name) {
-	m_symbols.emplace_back(builtin_scope, name);
+Guid SymbolTable::define_builtin(StrID name, Namespace space) {
+	const Symbol sym {
+		.declaration_scope = builtin_scope,
+		.name = name,
+		.space = space,
+	};
+	m_symbols.push_back(sym);
 	auto guid =
 		Guid {.index = static_cast<Guid::index_type>(m_symbols.size() - 1)};
 	if (not m_symbols_in_scope.contains(builtin_scope)) {
@@ -72,14 +84,17 @@ Guid SymbolTable::define_builtin(StrID name) {
 	return guid;
 }
 
-Guid SymbolTable::use_of(StrID name, ScopeIndex scope, NodeIndex node) {
+Guid SymbolTable::use_of(
+	StrID name, ScopeIndex scope, NodeIndex node, Namespace space
+) {
 	m_node_scopes[node] = scope;
 	auto cur = scope;
 	while (true) {
 		auto syms = symbols_declared_in(cur);
 		for (const auto s : syms) {
 			const auto s_name = name_of(s).value();
-			if (name == s_name) {
+			const auto s_space = namespace_of(s);
+			if (name == s_name and s_space == space) {
 				if (not m_symbols_in_scope.contains(scope)) {
 					m_symbols_in_scope[scope] = {s};
 				} else if (std::ranges::find(m_symbols_in_scope.at(scope), s)
@@ -179,16 +194,21 @@ std::vector<ScopeIndex> SymbolTable::function_scopes(
 	return result;
 }
 
-std::vector<Guid> SymbolTable::all_symbols() const {
+std::vector<Guid> SymbolTable::all_symbols(Namespace space) const {
 	std::vector<Guid> syms {};
 	for (auto i = 0ul; i < m_symbols.size(); i++) {
-		syms.push_back(Guid {.index = static_cast<Guid::index_type>(i)});
+		const auto guid = Guid {.index = static_cast<Guid::index_type>(i)};
+		const auto ns = namespace_of(guid);
+		if (ns == space)
+			syms.push_back(Guid {.index = static_cast<Guid::index_type>(i)});
 	}
 	return syms;
 }
 
-std::vector<Guid> SymbolTable::symbols_with_name(StrID name) const {
-	const std::vector<Guid> syms = all_symbols();
+std::vector<Guid> SymbolTable::symbols_with_name(
+	StrID name, Namespace space
+) const {
+	const std::vector<Guid> syms = all_symbols(space);
 	std::vector<Guid> with_name {};
 	for (auto sym : syms) {
 		const auto name_ = name_of(sym).value();
@@ -211,11 +231,13 @@ std::optional<FunctionIndex> SymbolTable::function_of(NodeIndex node) const {
 		return std::nullopt;
 }
 
-std::vector<Guid> SymbolTable::free_symbols_in(FunctionIndex func) const {
+std::vector<Guid> SymbolTable::free_symbols_in(
+	FunctionIndex func, Namespace space
+) const {
 	std::vector<Guid> free_symbols {};
 	auto scopes = function_scopes(func);
 	for (auto scope : scopes) {
-		auto symbols = symbols_used_in(scope);
+		auto symbols = symbols_used_in(scope, space);
 		for (auto symbol : symbols) {
 			auto rel = relative_scope_of(symbol, func);
 			if (rel == RelativeScope::FREE) {
@@ -229,8 +251,15 @@ std::vector<Guid> SymbolTable::free_symbols_in(FunctionIndex func) const {
 	return free_symbols;
 }
 
-std::vector<Guid> SymbolTable::symbols_used_in(ScopeIndex scope) const {
-	return m_symbols_in_scope.at(scope);
+std::vector<Guid> SymbolTable::symbols_used_in(
+	ScopeIndex scope, Namespace space
+) const {
+	std::vector<Guid> syms {};
+	for (auto sym : m_symbols_in_scope.at(scope)) {
+		const auto ns = namespace_of(sym);
+		if (ns == space) syms.push_back(sym);
+	}
+	return syms;
 }
 
 RelativeScope SymbolTable::relative_scope_of(
@@ -252,14 +281,17 @@ RelativeScope SymbolTable::relative_scope_of(
 }
 
 std::unordered_set<Guid> SymbolTable::symbols_reachable_from(
-	ScopeIndex s
+	ScopeIndex s, Namespace space
 ) const {
 	std::unordered_set<Guid> reachable_symbols {};
 	auto current_symbols = symbols_declared_in(s);
-	for (auto y : current_symbols) reachable_symbols.insert(y);
+	for (auto y : current_symbols) {
+		const auto ns = namespace_of(y);
+		if (ns == space) reachable_symbols.insert(y);
+	}
 	auto p = parent_of(s);
 	if (p.has_value()) {
-		reachable_symbols.merge(symbols_reachable_from(p.value()));
+		reachable_symbols.merge(symbols_reachable_from(p.value(), space));
 	}
 	return reachable_symbols;
 }
@@ -279,7 +311,7 @@ std::ostream& operator<<(std::ostream& st, const SymbolTable& symtab) {
 		st << '\n';
 	}
 	st << "\t";
-	st << "symbols declared in each scope" << '\n';
+	st << "symbols declared/used in each scope" << '\n';
 	for (const auto& [scope, symbols] : symtab.m_symbols_in_scope) {
 		st << "\t";
 		st << scope.index;
@@ -317,4 +349,8 @@ std::ostream& operator<<(std::ostream& st, const SymbolTable& symtab) {
 	}
 	st << '}' << '\n';
 	return st;
+}
+
+Namespace SymbolTable::namespace_of(Guid guid) const {
+	return resolve(guid).value().space;
 }

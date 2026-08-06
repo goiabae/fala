@@ -646,7 +646,7 @@ Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 }
 
 void Compiler::allocate_variables() {
-	const auto syms = symtab.all_symbols();
+	const auto syms = symtab.all_symbols(symtab.value_namespace);
 	for (const auto& sym : syms) {
 		const auto scope = symtab.declaration_scope_of(sym).value();
 		if (scope != symtab.builtin_scope) {

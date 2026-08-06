@@ -280,20 +280,38 @@ bool Typechecker::typecheck() {
 	const auto guids = symtab.symbols_declared_in(symtab.builtin_scope);
 	for (const auto guid : guids) {
 		const auto name = std::string_view(pool.find(symtab.name_of(guid).value()));
-		if (name == "read_char") {
-			variables[guid] = make_polytype(VAL_, make_scheme({}, nil_to_uint8_typ));
-		} else if (name == "read_int") {
-			variables[guid] = make_polytype(VAL_, make_scheme({}, nil_to_int64_typ));
-		} else if (name == "write_char") {
-			variables[guid] = make_polytype(VAL_, make_scheme({}, uint8_to_nil_typ));
-		} else if (name == "write_int") {
-			variables[guid] = make_polytype(VAL_, make_scheme({}, int64_to_nil_typ));
-		} else if (name == "write_str") {
-			variables[guid] =
-				make_polytype(VAL_, make_scheme({}, uint8_arr_to_nil_typ));
-		} else {
-			std::cerr << std::format("unexpected builtin function {}", name) << '\n';
-			assert(false);
+		const auto ns = symtab.namespace_of(guid);
+		if (ns == symtab.value_namespace) {
+			if (name == "read_char") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, nil_to_uint8_typ));
+			} else if (name == "read_int") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, nil_to_int64_typ));
+			} else if (name == "write_char") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, uint8_to_nil_typ));
+			} else if (name == "write_int") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, int64_to_nil_typ));
+			} else if (name == "write_str") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, uint8_arr_to_nil_typ));
+			} else {
+				std::cerr << std::format("unexpected builtin function {}", name)
+									<< '\n';
+				assert(false);
+			}
+		} else if (ns == symtab.type_namespace) {
+			if (name == "Nil") {
+				type_names[guid] = NIL_;
+			} else if (name == "Int" || name == "Uint") {
+				// TODO: need to be able to have polymorphic types as type names
+			} else {
+				std::cerr << std::format("unexpected builtin type name {}", name)
+									<< '\n';
+				assert(false);
+			}
 		}
 	}
 
@@ -1065,7 +1083,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					auto mf = symtab.function_of(body_idx);
 					assert(mf.has_value());
 					auto f = mf.value();
-					auto free_symbols = symtab.free_symbols_in(f);
+					auto free_symbols = symtab.free_symbols_in(f, symtab.value_namespace);
 					logger.log(
 						LogLevel::INFO,
 						"Function index {} with {} free symbols",
@@ -1168,6 +1186,10 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// | E |- m x : t
 			//
 		case NodeType::GUID: {
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(node.guid).value()));
+			logger.log(LogLevel::INFO, "Retrieving type for \"{}\"", name);
+			assert(symtab.namespace_of(node.guid) == symtab.value_namespace);
 			assert(variables.contains(node.guid));
 			auto found_typ = variables.at(node.guid);
 			assert(found_typ != nullptr);
@@ -1318,31 +1340,36 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 			auto name_idx = node[0];
 			auto args_idx = node[1];
 
-			auto name_node = ast.at(name_idx);
-			auto args_node = ast.at(args_idx);
+			const auto& name_node = ast.at(name_idx);
+			assert(name_node.type == NodeType::GUID);
+			const auto& args_node = ast.at(args_idx);
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(name_node.guid).value()));
 
-			if (name_node.str_id == pool.intern(strdup("Array"))) {
+			if (name == "Array") {
 				auto elt_typ = eval(args_node[0]);
 				return make_array(elt_typ);
 			}
 
-			if (name_node.str_id == pool.intern(strdup("Int"))) {
+			if (name == "Int") {
 				auto bit_count = ast.at(args_node[0]).num;
 				return make_integer(bit_count, Integer::Sign::SIGNED);
 			}
 
-			if (name_node.str_id == pool.intern(strdup("Uint"))) {
+			if (name == "Uint") {
 				auto bit_count = ast.at(args_node[0]).num;
 				return make_integer(bit_count, Integer::Sign::UNSIGNED);
 			}
 
-			auto general_typ = typecheck(name_idx);
+			// TODO
+			assert(false);
+
+			auto general_typ = eval(name_idx);
 			std::vector<D> arguments;
 			for (auto idx : ast.at(args_idx)) {
 				arguments.push_back(eval(idx));
 			}
 
-			// TODO
 			assert(false);
 		}
 
@@ -1361,6 +1388,9 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 				d->fields.push_back(std::make_pair(field_name, dty));
 			}
 			return d;
+		}
+		case NodeType::GUID: {
+			return type_names.at(node.guid);
 		}
 		default: assert(false);
 	}
@@ -1484,7 +1514,7 @@ P Typechecker::generalize(T ty, std::unordered_set<V> to_bind) {
 }
 
 std::unordered_set<V> Typechecker::free_type_variables(ScopeIndex s) {
-	auto symbols = symtab.symbols_reachable_from(s);
+	auto symbols = symtab.symbols_reachable_from(s, symtab.value_namespace);
 	std::unordered_set<V> free_variables {};
 	for (auto symbol : symbols) {
 		const auto name =

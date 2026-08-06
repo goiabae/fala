@@ -17,7 +17,8 @@ TEST(TypecheckTest, function_application) {
 	const auto symtab = scop.analyse();
 	Typechecker checker {ast, pool, symtab};
 	checker.typecheck();
-	const auto syms = symtab.symbols_with_name(pool.intern("is_inst"));
+	const auto syms =
+		symtab.symbols_with_name(pool.intern("is_inst"), symtab.value_namespace);
 	EXPECT_TRUE(syms.size() >= 1);
 	const auto sym = syms.at(0);
 	const auto ty = checker.variables.at(sym);

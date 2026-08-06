@@ -57,6 +57,7 @@ struct Typechecker {
 	size_t next_modevar_id {0};
 	std::map<Guid, P> variables;
 	std::map<NodeIndex, T> node_to_type {};
+	std::map<Guid, D> type_names {};
 	Logger logger;
 
  private:
