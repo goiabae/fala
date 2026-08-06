@@ -2,6 +2,7 @@
 #define FALA_STR_POOL_HPP
 
 #include <cstddef>
+#include <ostream>
 
 #include "index.hpp"
 
@@ -21,10 +22,14 @@ struct StringPool {
 	StrID intern(const char* str);
 	const char* find(StrID id) const;
 
+	friend std::ostream& operator<<(std::ostream&, const StringPool&);
+
  private:
 	size_t m_len;
 	size_t m_cap;
 	char** m_arr;
 };
+
+std::ostream& operator<<(std::ostream&, const StringPool&);
 
 #endif

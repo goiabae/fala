@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <ranges>
 
 constexpr size_t default_pool_size = 256;
 
@@ -28,4 +29,15 @@ StrID StringPool::intern(const char* str) {
 const char* StringPool::find(StrID id) const {
 	assert((unsigned int)id < m_cap);
 	return m_arr[(unsigned int)id];
+}
+
+std::ostream& operator<<(std::ostream& st, const StringPool& pool) {
+	st << '{';
+	for (const auto& [i, contents] :
+	     std::ranges::views::enumerate(std::span(pool.m_arr, pool.m_len))) {
+		st << '\t' << i << " = " << '\"' << std::string_view(contents) << '\"'
+			 << '\n';
+	}
+	st << '}';
+	return st;
 }

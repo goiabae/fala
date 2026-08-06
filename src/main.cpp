@@ -78,6 +78,7 @@ int interpret(Options opts) {
 		const auto symtab = scop.analyse();
 
 		if (opts.verbosity >= 3) {
+			std::cerr << "POOL\n" << pool << '\n';
 			std::cerr << symtab;
 		}
 
@@ -150,6 +151,7 @@ int compile(Options opts) {
 	const auto symtab = scop.analyse();
 
 	if (opts.verbosity >= 3) {
+		std::cerr << "POOL\n" << pool << '\n';
 		std::cerr << symtab;
 	}
 
