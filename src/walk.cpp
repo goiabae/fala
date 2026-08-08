@@ -562,6 +562,9 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
 		case NodeType::TYPE_DECL: assert(false);
+		case NodeType::EFF_DECL: assert(false);
+		case NodeType::EFF_ALIAS: assert(false);
+		case NodeType::EFF_UNION: assert(false);
 	}
 	assert(false);
 }

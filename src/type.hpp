@@ -14,6 +14,7 @@
 #define M std::shared_ptr<Mode>
 #define D std::shared_ptr<Datatype>
 #define T std::shared_ptr<Type>
+#define E std::shared_ptr<EffectSet>
 
 #define DERIVE(...)                                        \
 	Datatype {                                               \
@@ -42,6 +43,8 @@ struct Array;
 struct Record;
 struct RowSet;
 
+struct EffectSet;
+
 // clang-format off
 
 struct Integer final : DERIVE (
@@ -56,11 +59,13 @@ struct Void final : DERIVE();
 struct Function final : DERIVE (
 	std::vector<std::shared_ptr<Type>> inputs;
 	std::shared_ptr<Datatype> output;
+	std::shared_ptr<EffectSet> effects;
 );
 
 struct Closure final : DERIVE (
 	std::vector<std::shared_ptr<Type>> inputs;
 	std::shared_ptr<Datatype> output;
+	std::shared_ptr<EffectSet> effects;
 	std::map<Guid, D> captures;
 );
 
@@ -116,6 +121,26 @@ struct PolyType {
 	std::shared_ptr<DataScheme> scheme;
 };
 
+struct Effect {
+	std::string name;
+	std::vector<std::shared_ptr<Type>> inputs;
+	std::shared_ptr<Datatype> output;
+};
+
+struct EffectSet {
+	EffectSet(std::size_t index)
+	: concrete {}, variable(std::make_shared<Variable<EffectSet>>(index)) {}
+	EffectSet(std::vector<std::shared_ptr<Effect>> concrete)
+	: concrete(concrete), variable(nullptr) {}
+	EffectSet(
+		std::vector<std::shared_ptr<Effect>> concrete,
+		std::shared_ptr<Variable<EffectSet>> variable
+	)
+	: concrete(concrete), variable(variable) {}
+	std::vector<std::shared_ptr<Effect>> concrete;
+	std::shared_ptr<Variable<EffectSet>> variable;
+};
+
 std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type>);
 
 inline bool mode_is_assignable(Mode::Concrete m) {
@@ -128,13 +153,16 @@ std::ostream& operator<<(std::ostream&, const Mode&);
 std::ostream& operator<<(std::ostream&, Mode::Concrete);
 std::ostream& operator<<(std::ostream&, const PolyType&);
 std::ostream& operator<<(std::ostream&, const DataScheme&);
+std::ostream& operator<<(std::ostream& st, const EffectSet& set);
 
 M make_modevar(std::size_t index);
 D make_datavar(std::size_t index);
 D make_integer(int bit_count, Integer::Sign sign);
 D make_array(D item);
-D make_function(std::vector<T> inputs, D output);
-D make_closure(std::vector<T> inputs, D output, std::map<Guid, D> captures);
+D make_function(std::vector<T> inputs, D output, E effects);
+D make_closure(
+	std::vector<T> inputs, D output, E effects, std::map<Guid, D> captures
+);
 D make_bool();
 D make_record(std::vector<std::pair<std::string, D>> field_tys);
 D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
@@ -143,6 +171,7 @@ std::shared_ptr<PolyType> make_polytype(M mode, std::shared_ptr<DataScheme>);
 std::shared_ptr<DataScheme> make_scheme(
 	std::vector<std::shared_ptr<TypeVariable>>, D
 );
+E make_effsetvar(std::size_t index);
 
 std::shared_ptr<Function> erase_function_captures(D);
 
@@ -162,10 +191,12 @@ DEFFMT(Mode);
 DEFFMT(Mode::Concrete);
 DEFFMT(PolyType);
 DEFFMT(DataScheme);
+DEFFMT(EffectSet);
 
 #undef M
 #undef D
 #undef T
+#undef E
 #undef DEFFMT
 #undef DERIVE
 

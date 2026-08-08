@@ -1,5 +1,5 @@
 -- reads a integer n followed by n integers. outputs max
-fun main _ =
+fun main _ !io =
 	do
 		var max = 0;
 		for var i = 1 to read_int(nil) then

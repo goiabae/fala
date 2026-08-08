@@ -91,6 +91,9 @@ bool is_branch_node(NodeType type) {
 		case NodeType::RECORD_TYPE_LITERAL: return true;
 		case NodeType::FIELD_TYPE: return true;
 		case NodeType::TYPE_DECL: return true;
+		case NodeType::EFF_DECL: return true;
+		case NodeType::EFF_ALIAS: return true;
+		case NodeType::EFF_UNION: return true;
 	}
 	assert(false);
 }
@@ -149,6 +152,9 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::RECORD_TYPE_LITERAL: return "NodeType::RECORD_TYPE_LITERAL";
 		case NodeType::FIELD_TYPE: return "NodeType::FIELD_TYPE";
 		case NodeType::TYPE_DECL: return "NodeType::TYPE_DECL";
+		case NodeType::EFF_DECL: return "NodeType::EFF_DECL";
+		case NodeType::EFF_ALIAS: return "NodeType::EFF_ALIAS";
+		case NodeType::EFF_UNION: return "NodeType::EFF_UNION";
 	}
 	assert(false);
 }
@@ -226,6 +232,9 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::RECORD_TYPE_LITERAL: return "record_type_literal";
 		case NodeType::FIELD_TYPE: return "field_type";
 		case NodeType::TYPE_DECL: return "type_decl";
+		case NodeType::EFF_DECL: return "eff_decl";
+		case NodeType::EFF_ALIAS: return "eff_alias";
+		case NodeType::EFF_UNION: return "eff_union";
 	}
 	assert(false);
 }

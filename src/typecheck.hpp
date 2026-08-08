@@ -19,6 +19,8 @@
 #define S std::shared_ptr<DataScheme>
 #define P std::shared_ptr<PolyType>
 #define V std::shared_ptr<TypeVariable>
+#define E std::shared_ptr<EffectSet>
+#define TE std::pair<T, E>
 
 struct Typechecker {
 	Typechecker(AST& ast, StringPool& pool, const SymbolTable& symtab)
@@ -28,10 +30,9 @@ struct Typechecker {
 		logger("TYPECHECKER", ast.file_name, ast.lines) {}
 
 	bool typecheck();
-	T typecheck(NodeIndex node_idx);
-
+	TE typecheck(NodeIndex node_idx);
 	D eval(NodeIndex);
-
+	E eval_effset(NodeIndex);
 	bool unify(M, M);
 	bool unify(D, D);
 	bool unify(T, T);
@@ -39,6 +40,7 @@ struct Typechecker {
 	D make_datavar();
 	D make_genvar();
 	M make_modevar();
+	E make_effsetvar();
 	T deref(T);
 	bool submode(M sub, M sup);
 	P generalize(T, ScopeIndex);
@@ -55,9 +57,11 @@ struct Typechecker {
 
 	size_t next_var_id {0};
 	size_t next_modevar_id {0};
+	size_t next_effsetvar_id {0};
 	std::map<Guid, P> variables;
 	std::map<NodeIndex, T> node_to_type {};
 	std::map<Guid, D> type_names {};
+	std::map<Guid, E> effset_names {};
 	Logger logger;
 
  private:
@@ -70,5 +74,6 @@ struct Typechecker {
 #undef S
 #undef P
 #undef V
+#undef E
 
 #endif

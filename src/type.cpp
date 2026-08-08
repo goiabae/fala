@@ -1,5 +1,6 @@
 #include "type.hpp"
 
+#include <ostream>
 #include <sstream>
 #include <variant>
 
@@ -8,6 +9,7 @@
 using M = std::shared_ptr<Mode>;
 using D = std::shared_ptr<Datatype>;
 using T = std::shared_ptr<Type>;
+using E = std::shared_ptr<EffectSet>;
 
 std::ostream& operator<<(std::ostream& st, Mode::Concrete cm) {
 	switch (cm) {
@@ -83,8 +85,27 @@ std::optional<Mode::Concrete> Mode::to_concrete() {
 	}
 }
 
+static std::ostream& operator<<(std::ostream& st, const Effect& eff) {
+	return st << eff.name;
+}
+
+std::ostream& operator<<(std::ostream& st, const EffectSet& set) {
+	for (auto eff : set.concrete) {
+		st << " !" << *eff;
+	}
+	if (set.variable != nullptr) {
+		if (set.variable->is_bound()) {
+			st << *set.variable->get_bound();
+		} else {
+			st << " !e" << set.variable->get_index();
+		}
+	}
+	return st;
+}
+
 std::ostream& Function::print(std::ostream& st) const {
 	st << "(" << SeparatedPrinter(inputs, ", ") << ") -> " << *output;
+	st << *effects;
 	return st;
 }
 
@@ -101,6 +122,7 @@ std::ostream& Closure::print(std::ostream& st) const {
 	st << SeparatedPrinter(as, ", ");
 	st << ']';
 	st << "(" << SeparatedPrinter(inputs, ", ") << ") -> " << *output;
+	st << *effects;
 	return st;
 }
 
@@ -226,17 +248,21 @@ D make_array(D item_type) {
 	return std::make_shared<Array>(a);
 }
 
-D make_function(std::vector<T> inputs, D output) {
+D make_function(std::vector<T> inputs, D output, E effects) {
 	auto x = std::make_shared<Function>();
 	x->inputs = inputs;
 	x->output = output;
+	x->effects = effects;
 	return x;
 }
 
-D make_closure(std::vector<T> inputs, D output, std::map<Guid, D> captures) {
+D make_closure(
+	std::vector<T> inputs, D output, E effects, std::map<Guid, D> captures
+) {
 	auto x = std::make_shared<Closure>();
 	x->inputs = inputs;
 	x->output = output;
+	x->effects = effects;
 	x->captures = captures;
 	return x;
 }
@@ -277,9 +303,13 @@ std::shared_ptr<Function> erase_function_captures(D data) {
 		return x;
 	} else if (auto x = std::dynamic_pointer_cast<Closure>(data)) {
 		return std::dynamic_pointer_cast<Function>(
-			make_function(x->inputs, x->output)
+			make_function(x->inputs, x->output, x->effects)
 		);
 	} else {
 		throw std::runtime_error("not a function");
 	}
+}
+
+E make_effsetvar(std::size_t index) {
+	return std::make_shared<EffectSet>(index);
 }

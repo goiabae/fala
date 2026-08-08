@@ -1,5 +1,5 @@
-fun main _ =
-	let fun write_arr xs = do
+fun main _ !io =
+	let fun write_arr xs !io = do
 		write_str("[")
 		for var i = 0 to #xs then do
 			write_int(xs[i])

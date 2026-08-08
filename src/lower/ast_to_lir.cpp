@@ -39,6 +39,10 @@ static NodeIndex decl_name(const Node& node) {
 		return node[0];
 	} else if (node.type == NodeType::TYPE_DECL) {
 		return node[0];
+	} else if (node.type == NodeType::EFF_DECL) {
+		return node[0];
+	} else if (node.type == NodeType::EFF_ALIAS) {
+		return node[0];
 	} else {
 		assert(false);
 	}
@@ -607,6 +611,9 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
 		case NodeType::TYPE_DECL: assert(false);
+		case NodeType::EFF_DECL: assert(false);
+		case NodeType::EFF_ALIAS: assert(false);
+		case NodeType::EFF_UNION: assert(false);
 	}
 	assert(false);
 }
@@ -662,7 +669,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto id_idx = node[0];
 	const auto params_idx = node[1];
-	const auto body_idx = node[3];
+	const auto body_idx = node[4];
 	const auto& id_node = ast.at(id_idx);
 	const auto& params_node = ast.at(params_idx);
 	assert(id_node.type == NodeType::GUID);
@@ -1093,7 +1100,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			lir::Operand main {};
 			for (auto decl : decl_list) {
 				const auto& decl_node = ast.at(decl);
-				if (decl_node.type != NodeType::TYPE_DECL) {
+				if (decl_node.type != NodeType::TYPE_DECL
+				    and decl_node.type != NodeType::EFF_DECL
+				    and decl_node.type != NodeType::EFF_ALIAS) {
 					const auto& name = ast.at(decl_name(decl_node));
 					assert(name.type == NodeType::GUID);
 					const auto name2 =
@@ -1109,6 +1118,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
 		case NodeType::FIELD_TYPE: assert(false);
 		case NodeType::TYPE_DECL: assert(false);
+		case NodeType::EFF_DECL: assert(false);
+		case NodeType::EFF_ALIAS: assert(false);
+		case NodeType::EFF_UNION: assert(false);
 	}
 	assert(false);
 }

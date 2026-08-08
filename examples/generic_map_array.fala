@@ -1,4 +1,4 @@
-fun main _ =
+fun main _ !io =
 	let fun map xs d f =
 		let var ys = d .. #xs in do
 			for var i = 0 to #xs then

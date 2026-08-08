@@ -50,6 +50,7 @@ class SymbolTable {
 
 	static constexpr Namespace value_namespace {.index = 0};
 	static constexpr Namespace type_namespace {.index = 1};
+	static constexpr Namespace effset_namespace {.index = 2};
 
  private:
 	struct Symbol {

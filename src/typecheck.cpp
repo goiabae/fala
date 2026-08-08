@@ -7,6 +7,7 @@
 #include <concepts>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <ranges>
 #include <span>
@@ -37,6 +38,7 @@ using D = std::shared_ptr<Datatype>;
 using T = std::shared_ptr<Type>;
 using P = std::shared_ptr<PolyType>;
 using V = std::shared_ptr<TypeVariable>;
+using E = std::shared_ptr<EffectSet>;
 
 const auto VAR_ = std::make_shared<Mode>(Mode::Concrete::VAR);
 const auto VAL_ = std::make_shared<Mode>(Mode::Concrete::VAL);
@@ -44,6 +46,11 @@ const auto OUT_ = std::make_shared<Mode>(Mode::Concrete::OUT);
 
 const auto NIL_ = std::make_shared<Nil>();
 const auto VOID_ = std::make_shared<Void>();
+
+const auto EMPTY_EFFSET = []() {
+	std::vector<std::shared_ptr<Effect>> effs {};
+	return std::make_shared<EffectSet>(effs);
+}();
 
 static bool cast_to(M, M);
 static bool cast_to(D, D);
@@ -57,6 +64,14 @@ D Typechecker::make_genvar() {
 	auto x = std::dynamic_pointer_cast<TypeVariable>(make_datavar());
 	x->is_generalized = true;
 	return x;
+}
+
+E Typechecker::make_effsetvar() {
+	return ::make_effsetvar(next_effsetvar_id++);
+}
+
+static bool operator==(const Effect& a, const Effect& b) {
+	return a.name == b.name;
 }
 
 template<typename D>
@@ -110,6 +125,10 @@ static NodeIndex decl_name(const Node& node) {
 		return node[0];
 	} else if (node.type == NodeType::TYPE_DECL) {
 		return node[0];
+	} else if (node.type == NodeType::EFF_DECL) {
+		return node[0];
+	} else if (node.type == NodeType::EFF_ALIAS) {
+		return node[0];
 	} else {
 		assert(false);
 	}
@@ -135,7 +154,8 @@ std::shared_ptr<Type> Typechecker::deref(std::shared_ptr<Type> typ) {
 		}
 	} else {
 		throw std::runtime_error(
-			"cannot dereference type because mode variable has not been instatiated "
+			"cannot dereference type because mode variable has not been "
+			"instatiated "
 			"into a concrete mode"
 		);
 	}
@@ -167,6 +187,184 @@ bool cast_to(M from_, M to_) {
 		from_->data,
 		to_->data
 	);
+}
+
+static bool contains(
+	std::vector<std::shared_ptr<Effect>> set, std::shared_ptr<Effect> eff
+) {
+	for (auto x : set) {
+		if (*x == *eff) return true;
+	}
+	return false;
+}
+
+static bool contained_in(
+	std::vector<std::shared_ptr<Effect>> sub,
+	std::vector<std::shared_ptr<Effect>> sup
+) {
+	for (auto eff : sub) {
+		if (not contains(sup, eff)) return false;
+	}
+	return true;
+}
+
+static bool set_equal(
+	std::vector<std::shared_ptr<Effect>> a, std::vector<std::shared_ptr<Effect>> b
+) {
+	return contained_in(a, b) and contained_in(b, a);
+}
+
+static std::vector<std::shared_ptr<Effect>> difference(
+	std::vector<std::shared_ptr<Effect>> sup,
+	std::vector<std::shared_ptr<Effect>> sub
+) {
+	if (not contained_in(sub, sup)) throw std::runtime_error("");
+	std::vector<std::shared_ptr<Effect>> diff {};
+	for (auto eff : sup) {
+		if (not contains(sub, eff)) {
+			diff.push_back(eff);
+		}
+	}
+	return diff;
+}
+
+static std::vector<std::shared_ptr<Effect>> difference2(
+	std::vector<std::shared_ptr<Effect>> sup,
+	std::vector<std::shared_ptr<Effect>> sub
+) {
+	std::vector<std::shared_ptr<Effect>> diff {};
+	for (auto eff : sup) {
+		if (not contains(sub, eff)) {
+			diff.push_back(eff);
+		}
+	}
+	return diff;
+}
+
+static std::vector<std::shared_ptr<Effect>> union_of(
+	std::vector<std::shared_ptr<Effect>> sup,
+	std::vector<std::shared_ptr<Effect>> sub
+) {
+	std::vector<std::shared_ptr<Effect>> res {};
+	for (auto eff : sup) res.push_back(eff);
+	for (auto eff : sub) {
+		if (not contains(res, eff)) res.push_back(eff);
+	}
+	return res;
+}
+
+static E normalize(E set) {
+	if (set->variable == nullptr) return set;
+	if (set->variable->is_bound()) {
+		auto x = normalize(set->variable->get_bound());
+		auto y = union_of(set->concrete, x->concrete);
+		return std::make_shared<EffectSet>(y, x->variable);
+	} else {
+		return set;
+	}
+}
+
+static bool unify(E a, E b) {
+	if (a->variable == nullptr and b->variable == nullptr) {
+		return set_equal(a->concrete, b->concrete);
+	}
+
+	if (a->variable == nullptr) {
+		auto c = difference2(a->concrete, b->concrete);
+		b->variable->bind_to(std::make_shared<EffectSet>(c));
+		return true;
+	}
+
+	if (b->variable == nullptr) {
+		auto c = difference2(b->concrete, a->concrete);
+		a->variable->bind_to(std::make_shared<EffectSet>(c));
+		return true;
+	}
+
+	if (a->variable->is_bound()) {
+		return unify(normalize(a), b);
+	}
+
+	if (b->variable->is_bound()) {
+		return unify(a, normalize(b));
+	}
+
+	if (not b->variable->is_bound() and not a->variable->is_bound()) {
+		if (contained_in(a->concrete, b->concrete)) {
+			auto c = difference(b->concrete, a->concrete);
+			a->variable->bind_to(std::make_shared<EffectSet>(c, b->variable));
+			return true;
+		} else {
+			auto c = difference(a->concrete, b->concrete);
+			b->variable->bind_to(std::make_shared<EffectSet>(c, a->variable));
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool cast_to(E from, E to) {
+	if (from->variable == nullptr and to->variable == nullptr) {
+		return contained_in(from->concrete, to->concrete);
+	}
+
+	if (from->variable == nullptr) {
+		auto c = difference2(from->concrete, to->concrete);
+		to->variable->bind_to(std::make_shared<EffectSet>(c));
+		return true;
+	}
+
+	if (to->variable == nullptr) {
+		auto c = difference2(to->concrete, from->concrete);
+		from->variable->bind_to(std::make_shared<EffectSet>(c));
+		return true;
+	}
+
+	if (from->variable->is_bound()) {
+		return unify(normalize(from), to);
+	}
+
+	if (to->variable->is_bound()) {
+		return unify(from, normalize(to));
+	}
+
+	if (not to->variable->is_bound() and not from->variable->is_bound()) {
+		if (contained_in(from->concrete, to->concrete)) {
+			auto c = difference(to->concrete, from->concrete);
+			from->variable->bind_to(std::make_shared<EffectSet>(c, to->variable));
+			return true;
+		} else {
+			auto c = difference(from->concrete, to->concrete);
+			to->variable->bind_to(std::make_shared<EffectSet>(c, from->variable));
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static E union_of(E a, E b) {
+	auto x = normalize(a);
+	auto y = normalize(b);
+	auto z = union_of(x->concrete, y->concrete);
+	if (x->variable == nullptr) {
+		return std::make_shared<EffectSet>(z, y->variable);
+	}
+	if (y->variable == nullptr) {
+		return std::make_shared<EffectSet>(z, x->variable);
+	}
+	assert(not x->variable->is_bound());
+	assert(not y->variable->is_bound());
+	if (contained_in(x->concrete, y->concrete)) {
+		auto w = difference(y->concrete, x->concrete);
+		x->variable->bind_to(std::make_shared<EffectSet>(w, y->variable));
+		return std::make_shared<EffectSet>(z, y->variable);
+	} else {
+		auto w = difference(x->concrete, y->concrete);
+		y->variable->bind_to(std::make_shared<EffectSet>(w, x->variable));
+		return std::make_shared<EffectSet>(z, x->variable);
+	}
 }
 
 bool cast_to(D from, D to) {
@@ -206,14 +404,14 @@ bool cast_to(D from, D to) {
 
 	if (auto cfrom = ::to<Closure>(from)) {
 		if (auto fto = ::to<Function>(to)) {
-			auto t1 = make_function(cfrom->inputs, cfrom->output);
+			auto t1 = make_function(cfrom->inputs, cfrom->output, cfrom->effects);
 			return cast_to(t1, fto);
 		}
 	}
 
 	if (auto ffrom = ::to<Function>(from)) {
 		if (auto cto = ::to<Closure>(to)) {
-			auto t1 = make_function(cto->inputs, cto->output);
+			auto t1 = make_function(cto->inputs, cto->output, cto->effects);
 			auto no_captures = cto->captures.size() == 0;
 			return no_captures and cast_to(ffrom, t1);
 		}
@@ -230,14 +428,16 @@ bool cast_to(D from, D to) {
 				return cast_to(a, b);
 			}
 		);
-		return unified_inputs and cast_to(fa->output, fb->output);
+		auto unified_outputs = cast_to(fa->output, fb->output);
+		auto equal_effects = unify(fa->effects, fb->effects);
+		return unified_inputs and unified_outputs and equal_effects;
 	}
 
 	if (auto cfrom = ::to<Closure>(from)) {
 		if (auto cto = ::to<Closure>(to)) {
 			auto same_captures = cfrom->captures == cto->captures;
-			auto ffrom = make_function(cfrom->inputs, cfrom->output);
-			auto fto = make_function(cto->inputs, cto->output);
+			auto ffrom = make_function(cfrom->inputs, cfrom->output, cfrom->effects);
+			auto fto = make_function(cto->inputs, cto->output, cto->effects);
 			return same_captures and cast_to(ffrom, fto);
 		}
 	}
@@ -258,8 +458,8 @@ void Typechecker::mismatch_error(
 						<< "TYPECHECK ERROR:" ANSI_COLOR_RESET << ' ' << msg << '\n'
 						<< "\tExpected: " << *expected << '\n'
 						<< "\t     Got: " << *got << '\n';
+	std::exit(1);
 }
-
 #define BIND_FUNC(NAME, TYP) \
 	env.insert(scope_id, pool.intern(strdup(NAME)), TYP)
 
@@ -270,14 +470,26 @@ bool Typechecker::typecheck() {
 	auto uint8_arr_typ = make_array(uint8_typ);
 	auto int64_arr_typ = make_array(int64_typ);
 
-	auto nil_to_uint8_typ = make_function({make_type(VAL_, nil_typ)}, uint8_typ);
-	auto nil_to_int64_typ = make_function({make_type(VAL_, nil_typ)}, int64_typ);
-	auto uint8_to_nil_typ = make_function({make_type(VAL_, uint8_typ)}, nil_typ);
-	auto int64_to_nil_typ = make_function({make_type(VAL_, int64_typ)}, nil_typ);
+	std::vector<std::shared_ptr<Effect>> effs {std::make_shared<Effect>(Effect {
+		.name = "io",
+		// FIXME: what to put in these?
+		.inputs = {},
+		.output = {},
+	})};
+	auto io_effset = std::make_shared<EffectSet>(effs);
+
+	auto nil_to_uint8_typ =
+		make_function({make_type(VAL_, nil_typ)}, uint8_typ, io_effset);
+	auto nil_to_int64_typ =
+		make_function({make_type(VAL_, nil_typ)}, int64_typ, io_effset);
+	auto uint8_to_nil_typ =
+		make_function({make_type(VAL_, uint8_typ)}, nil_typ, io_effset);
+	auto int64_to_nil_typ =
+		make_function({make_type(VAL_, int64_typ)}, nil_typ, io_effset);
 	auto uint8_arr_to_nil_typ =
-		make_function({make_type(VAL_, uint8_arr_typ)}, nil_typ);
+		make_function({make_type(VAL_, uint8_arr_typ)}, nil_typ, io_effset);
 	auto int64_to_int64_arr_typ =
-		make_function({make_type(VAL_, int64_typ)}, int64_arr_typ);
+		make_function({make_type(VAL_, int64_typ)}, int64_arr_typ, io_effset);
 
 	const auto guids = symtab.symbols_declared_in(symtab.builtin_scope);
 	for (const auto guid : guids) {
@@ -314,6 +526,14 @@ bool Typechecker::typecheck() {
 									<< '\n';
 				assert(false);
 			}
+		} else if (ns == symtab.effset_namespace) {
+			if (name == "io") {
+				effset_names[guid] = io_effset;
+			} else {
+				assert(false);
+			}
+		} else {
+			assert(false);
 		}
 	}
 
@@ -523,13 +743,89 @@ bool Typechecker::submode(M sub, M sup) {
 		return typ;               \
 	}()
 
+E Typechecker::eval_effset(NodeIndex node_idx) {
+	const auto& node = ast.at(node_idx);
+	switch (node.type) {
+		case NodeType::EMPTY: assert(false);
+		case NodeType::APP: assert(false);
+		case NodeType::NUM: assert(false);
+		case NodeType::BLK: assert(false);
+		case NodeType::IF: assert(false);
+		case NodeType::WHEN: assert(false);
+		case NodeType::FOR: assert(false);
+		case NodeType::WHILE: assert(false);
+		case NodeType::BREAK: assert(false);
+		case NodeType::CONTINUE: assert(false);
+		case NodeType::ASS: assert(false);
+		case NodeType::OR: assert(false);
+		case NodeType::AND: assert(false);
+		case NodeType::GTN: assert(false);
+		case NodeType::LTN: assert(false);
+		case NodeType::GTE: assert(false);
+		case NodeType::LTE: assert(false);
+		case NodeType::EQ: assert(false);
+		case NodeType::AT: assert(false);
+		case NodeType::ADD: assert(false);
+		case NodeType::SUB: assert(false);
+		case NodeType::MUL: assert(false);
+		case NodeType::DIV: assert(false);
+		case NodeType::MOD: assert(false);
+		case NodeType::NOT: assert(false);
+		case NodeType::ID: assert(false);
+		case NodeType::STR: assert(false);
+		case NodeType::VAR_DECL: assert(false);
+		case NodeType::FUN_DECL: assert(false);
+		case NodeType::NIL: assert(false);
+		case NodeType::TRUE: assert(false);
+		case NodeType::FALSE: assert(false);
+		case NodeType::LET: assert(false);
+		case NodeType::CHAR: assert(false);
+		case NodeType::PATH: assert(false);
+		case NodeType::AS: assert(false);
+		case NodeType::INSTANCE: assert(false);
+		case NodeType::METALIST: {
+			auto joined = EMPTY_EFFSET;
+			for (auto idx : node) {
+				const auto effset = eval_effset(idx);
+				joined = union_of(joined, effset);
+			}
+			return joined;
+		}
+		case NodeType::GUID: {
+			assert(effset_names.contains(node.guid));
+			return effset_names.at(node.guid);
+		}
+		case NodeType::MODE: assert(false);
+		case NodeType::PARAM: assert(false);
+		case NodeType::RECORD_LITERAL: assert(false);
+		case NodeType::FIELD: assert(false);
+		case NodeType::FIELD_ACCESS: assert(false);
+		case NodeType::ARRAY_LITERAL: assert(false);
+		case NodeType::REPEAT: assert(false);
+		case NodeType::LEN: assert(false);
+		case NodeType::MODULE_BODY: assert(false);
+		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
+		case NodeType::RECORD_TYPE_LITERAL: assert(false);
+		case NodeType::FIELD_TYPE: assert(false);
+		case NodeType::TYPE_DECL: assert(false);
+		case NodeType::EFF_DECL: assert(false);
+		case NodeType::EFF_ALIAS: assert(false);
+		case NodeType::EFF_UNION: {
+			const auto left = eval_effset(node[0]);
+			const auto right = eval_effset(node[1]);
+			return union_of(left, right);
+		}
+	}
+	assert(false);
+}
+
 // If an expression has type of lvalue, it can also be used as an rvalue
 
 // | e1 : Ref<t1>
 // +------------
 // | |- e1 : t1
 
-T Typechecker::typecheck(NodeIndex node_idx) {
+TE Typechecker::typecheck(NodeIndex node_idx) {
 	auto int64_typ = make_integer(64, Integer::Sign::SIGNED);
 	auto uint8_typ = make_integer(8, Integer::Sign::UNSIGNED);
 
@@ -540,7 +836,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// | |- Void
 
 		case NodeType::EMPTY: {
-			return ASSOC_TYPE(node_idx, make_type(VAL_, VOID_));
+			auto t = make_type(VAL_, VOID_);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, EMPTY_EFFSET);
 		}
 
 			// | f : _ (m1 t1, m2 t2, ..., mn tn) -> t0
@@ -563,26 +861,39 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 			const auto& args_node = ast.at(args_idx);
 
+			auto joined = EMPTY_EFFSET;
 			std::vector<T> inputs {};
 			for (auto arg_idx : args_node) {
 				auto arg_typ = typecheck(arg_idx);
-				inputs.push_back(arg_typ);
+				inputs.push_back(arg_typ.first);
+				joined = union_of(joined, arg_typ.second);
 			}
 
 			auto outdata = make_datavar();
 
+			auto func_effset = make_effsetvar();
 			auto expected_func_type =
-				make_type(make_modevar(), make_function(inputs, outdata));
+				make_type(make_modevar(), make_function(inputs, outdata, func_effset));
 			auto func_type = typecheck(func_idx);
+			logger.log(
+				LogLevel::INFO,
+				"Application of function with type ({})",
+				*func_type.first
+			);
 
-			if (not cast_to(func_type, expected_func_type)) {
+			if (not cast_to(func_type.first, expected_func_type)) {
 				mismatch_error(
 					node.loc,
 					"Function and arguments don't match",
-					func_type,
+					func_type.first,
 					expected_func_type
 				);
 			}
+
+			joined = union_of(joined, func_type.second);
+			joined = union_of(joined, func_effset);
+
+			logger.log(LogLevel::INFO, "Application with effects ({})", *joined);
 
 			std::ostringstream oss {};
 			oss << '[';
@@ -595,29 +906,34 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				LogLevel::INFO,
 				node.loc,
 				"Applying function ({}) to arguments ({})",
-				*func_type,
+				*func_type.first,
 				oss.str()
 			);
 
 			const auto t1 = make_type(VAL_, outdata);
-			return ASSOC_TYPE(node_idx, t1);
+			ASSOC_TYPE(node_idx, t1);
+			return std::make_pair(t1, joined);
 		}
 			// |
 			// +------
 			// | |- n : Int<64>
 
 		case NodeType::NUM: {
-			return ASSOC_TYPE(
-				node_idx, make_type(VAL_, make_integer(64, Integer::Sign::SIGNED))
-			);
+			auto t = make_type(VAL_, make_integer(64, Integer::Sign::SIGNED));
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, EMPTY_EFFSET);
 		}
 			// FIXME: add typing rules
 		case NodeType::BLK: {
 			T ty = nullptr;
+			auto joined = EMPTY_EFFSET;
 			for (auto exp_idx : node) {
-				ty = typecheck(exp_idx);
+				auto t = typecheck(exp_idx);
+				ty = t.first;
+				joined = union_of(joined, t.second);
 			}
-			return ASSOC_TYPE(node_idx, ty);
+			ASSOC_TYPE(node_idx, ty);
+			return std::make_pair(ty, joined);
 		}
 
 			// | E |- e1 : Bool
@@ -635,11 +951,11 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 			auto t1 = make_type(make_modevar(), make_bool());
 
-			if (not unify(cond_typ, t1)) {
+			if (not unify(cond_typ.first, t1)) {
 				mismatch_error(
 					node.loc,
 					"Condition expression of if expression is not of type boolean",
-					cond_typ,
+					cond_typ.first,
 					t1
 				);
 			}
@@ -647,16 +963,20 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto then_typ = typecheck(then_idx);
 			auto else_typ = typecheck(else_idx);
 
-			if (not unify(then_typ, else_typ))
+			if (not unify(then_typ.first, else_typ.first))
 				mismatch_error(
 					node.loc,
 					"If expression has \"then\" and \"else\" branches with different "
 					"types",
-					then_typ,
-					else_typ
+					then_typ.first,
+					else_typ.first
 				);
 
-			return ASSOC_TYPE(node_idx, then_typ);
+			auto effset =
+				union_of(cond_typ.second, union_of(then_typ.second, else_typ.second));
+
+			ASSOC_TYPE(node_idx, then_typ.first);
+			return std::make_pair(then_typ.first, effset);
 		}
 
 			// | e1 : Bool
@@ -669,14 +989,16 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto then_idx = node[1];
 
 			auto cond_typ = typecheck(cond_idx);
-			if (not unify(cond_typ, make_type(make_modevar(), make_bool())))
+			if (not unify(cond_typ.first, make_type(make_modevar(), make_bool())))
 				logger.err(
 					node.loc,
 					"Condition expression of when expression is not of type boolean"
 				);
 
 			auto then_typ = typecheck(then_idx);
-			return ASSOC_TYPE(node_idx, make_type(VAL_, NIL_));
+			auto t = make_type(VAL_, NIL_);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, union_of(cond_typ.second, then_typ.second));
 		}
 
 			// Rules for for loop with and without step increment
@@ -700,24 +1022,38 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto step_idx = node[2];
 			auto then_idx = node[3];
 
+			auto joined = EMPTY_EFFSET;
+
 			auto var_typ = typecheck(decl_idx);
 			auto to_typ = typecheck(to_idx);
 
-			auto step_typ = (ast.at(step_idx).type == NodeType::EMPTY)
-			                ? make_type(VAL_, int64_typ)
-			                : typecheck(step_idx);
+			joined = union_of(joined, var_typ.second);
+			joined = union_of(joined, to_typ.second);
+
+			auto step_typ = [&]() {
+				if (ast.at(step_idx).type == NodeType::EMPTY)
+					return make_type(VAL_, int64_typ);
+				else {
+					auto t = typecheck(step_idx);
+					joined = union_of(joined, t.second);
+					return t.first;
+				}
+			}();
 
 			const auto t1 = make_type(VAL_, int64_typ);
 
-			if (not cast_to(var_typ, t1)) {
+			if (not cast_to(var_typ.first, t1)) {
 				mismatch_error(
-					node.loc, "Cannot cast loop variable type into integer", var_typ, t1
+					node.loc,
+					"Cannot cast loop variable type into integer",
+					var_typ.first,
+					t1
 				);
 			}
 
-			if (not cast_to(to_typ, t1)) {
+			if (not cast_to(to_typ.first, t1)) {
 				mismatch_error(
-					node.loc, "Cannot cast loop bound type into integer", to_typ, t1
+					node.loc, "Cannot cast loop bound type into integer", to_typ.first, t1
 				);
 			}
 
@@ -728,8 +1064,10 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			}
 
 			auto then_typ = typecheck(then_idx);
-			logger.log(LogLevel::INFO, "For loop with type {}", *then_typ);
-			return ASSOC_TYPE(node_idx, then_typ);
+			joined = union_of(joined, then_typ.second);
+			logger.log(LogLevel::INFO, "For loop with type {}", *then_typ.first);
+			ASSOC_TYPE(node_idx, then_typ.first);
+			return std::make_pair(then_typ.first, joined);
 		}
 
 			// | e1 : Bool
@@ -744,17 +1082,20 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto cond_typ = typecheck(cond_idx);
 			auto bool_typ = make_type(VAL_, make_bool());
 
-			if (not unify(cond_typ, bool_typ)) {
+			if (not unify(cond_typ.first, bool_typ)) {
 				mismatch_error(
 					node.loc,
 					"While loop condition must have type boolean",
-					cond_typ,
+					cond_typ.first,
 					bool_typ
 				);
 			}
 
 			auto then_typ = typecheck(then_idx);
-			return ASSOC_TYPE(node_idx, then_typ);
+			ASSOC_TYPE(node_idx, then_typ.first);
+			return std::make_pair(
+				then_typ.first, union_of(cond_typ.second, then_typ.second)
+			);
 		}
 
 			// | e1 : t1
@@ -765,11 +1106,13 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// +----------
 			// | |- continue e1 : t1
 
+		// FIXME: wrong?? maybe return void instead
 		case NodeType::BREAK:
 		case NodeType::CONTINUE: {
 			auto exp_idx = node[0];
 			auto exp_typ = typecheck(exp_idx);
-			return ASSOC_TYPE(node_idx, exp_typ);
+			ASSOC_TYPE(node_idx, exp_typ.first);
+			return exp_typ;
 		}
 
 			// | e1 : m1 t1
@@ -784,29 +1127,36 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto val = typecheck(node[1]);
 			auto t1 = make_type(VAR_, make_datavar());
 			logger.log(
-				LogLevel::INFO, node.loc, "assignment from {} to {}", *val, *path
+				LogLevel::INFO,
+				node.loc,
+				"assignment from {} to {}",
+				*val.first,
+				*path.first
 			);
-			if (not submode(path->mode, t1->mode))
+			if (not submode(path.first->mode, t1->mode))
 				logger.err(node.loc, "Left side of assignment must var or out");
-			if (not unify(path, t1))
+			if (not unify(path.first, t1))
 				logger.err(node.loc, "Left side of assignment must be an lvalue");
-			if (not unify(path, val))
+			if (not unify(path.first, val.first))
 				logger.err(node.loc, "Assignment with value of wrong type");
-			return ASSOC_TYPE(node_idx, val);
+			ASSOC_TYPE(node_idx, val.first);
+			return std::make_pair(val.first, union_of(path.second, val.second));
 		}
 			// FIXME: add typing rules
 		case NodeType::EQ: {
 			const auto left = typecheck(node[0]);
 			const auto right = typecheck(node[1]);
-			if (not unify(left, right))
+			if (not unify(left.first, right.first))
 				mismatch_error(
 					node.loc,
 					"Equality comparison of values of different types is always "
 					"false",
-					left,
-					right
+					left.first,
+					right.first
 				);
-			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
+			auto t = make_type(VAL_, make_bool());
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, union_of(left.second, right.second));
 		}
 
 			// | e1 : Bool
@@ -825,25 +1175,28 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto right_typ = typecheck(node[1]);
 			auto bool_typ = make_type(VAL_, make_bool());
 
-			if (not unify(left_typ, bool_typ)) {
+			if (not unify(left_typ.first, bool_typ)) {
 				mismatch_error(
 					node.loc,
 					"Left side of logical combinator does not have boolean type",
-					left_typ,
+					left_typ.first,
 					bool_typ
 				);
 			}
 
-			if (not unify(right_typ, bool_typ)) {
+			if (not unify(right_typ.first, bool_typ)) {
 				mismatch_error(
 					node.loc,
 					"Right side of logical combinator does not have boolean type",
-					right_typ,
+					right_typ.first,
 					bool_typ
 				);
 			}
 
-			return ASSOC_TYPE(node_idx, bool_typ);
+			ASSOC_TYPE(node_idx, bool_typ);
+			return std::make_pair(
+				bool_typ, union_of(left_typ.second, right_typ.second)
+			);
 		}
 			// FIXME: add typing rules
 		case NodeType::GTN:
@@ -852,12 +1205,16 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 		case NodeType::LTE: {
 			const auto left = typecheck(node[0]);
 			const auto right = typecheck(node[1]);
-			if (!(unify(left, make_type(VAL_, int64_typ))
-			      && unify(right, make_type(VAL_, int64_typ))))
+			if (not(
+						unify(left.first, make_type(VAL_, int64_typ))
+						and unify(right.first, make_type(VAL_, int64_typ))
+					))
 				logger.err(
 					node.loc, "Comparison operator arguments must be of numeric type"
 				);
-			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
+			auto t = make_type(VAL_, make_bool());
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, union_of(left.second, right.second));
 		}
 			// FIXME: add typing rules
 		case NodeType::ADD:
@@ -870,14 +1227,15 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto num = make_type(VAL_, int64_typ);
 			const auto& left_node = ast.at(node[0]);
 			const auto& right_node = ast.at(node[1]);
-			if (not cast_to(left, num))
+			if (not cast_to(left.first, num))
 				logger.err(left_node.loc, "Left-hand side of operator is not numeric");
-			if (not cast_to(right, num))
+			if (not cast_to(right.first, num))
 				logger.err(
 					right_node.loc,
 					"Arithmetic operator arguments must be of numeric type"
 				);
-			return ASSOC_TYPE(node_idx, num);
+			ASSOC_TYPE(node_idx, num);
+			return std::make_pair(num, union_of(left.second, right.second));
 		}
 
 			// If e1 is an array of t and e2 is an integer, then e1[e2] has type t
@@ -897,20 +1255,22 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto any_arr_typ = make_type(m1, make_array(t2));
 			auto arr_typ = typecheck(arr_idx);
 
-			if (not unify(any_arr_typ, arr_typ))
-				mismatch_error(node.loc, "Not an array", any_arr_typ, arr_typ);
+			if (not unify(any_arr_typ, arr_typ.first))
+				mismatch_error(node.loc, "Not an array", any_arr_typ, arr_typ.first);
 
 			auto off_typ = typecheck(off_idx);
 
-			if (not unify(off_typ, make_type(VAL_, int64_typ)))
+			if (not unify(off_typ.first, make_type(VAL_, int64_typ)))
 				mismatch_error(
 					node.loc,
 					"Index expression must be of integer type",
-					off_typ,
+					off_typ.first,
 					make_type(VAL_, int64_typ)
 				);
 
-			return ASSOC_TYPE(node_idx, make_type(m1, t2));
+			auto t = make_type(m1, t2);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, union_of(arr_typ.second, off_typ.second));
 		}
 
 			// | E |- e : Bool
@@ -921,12 +1281,13 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto exp_typ = typecheck(node[0]);
 			auto bool_typ = make_type(VAL_, make_bool());
 
-			if (not unify(exp_typ, bool_typ))
+			if (not unify(exp_typ.first, bool_typ))
 				mismatch_error(
-					node.loc, "Expression is not of type boolean", exp_typ, bool_typ
+					node.loc, "Expression is not of type boolean", exp_typ.first, bool_typ
 				);
 
-			return ASSOC_TYPE(node_idx, exp_typ);
+			ASSOC_TYPE(node_idx, exp_typ.first);
+			return exp_typ;
 		}
 
 		case NodeType::ID:
@@ -937,7 +1298,9 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// | |- s : Array<Uint<8>>
 
 		case NodeType::STR: {
-			return ASSOC_TYPE(node_idx, make_type(VAL_, make_array(uint8_typ)));
+			auto t = make_type(VAL_, make_array(uint8_typ));
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, EMPTY_EFFSET);
 		}
 
 		// | G |- e1 : m1 t1
@@ -969,11 +1332,11 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 			if (opt_type_node.type != NodeType::EMPTY) {
 				auto annot = make_type(make_modevar(), eval(opt_type_idx));
-				if (!unify(annot, exp))
+				if (not unify(annot, exp.first))
 					mismatch_error(
 						node.loc,
 						"Expression does not have type described in the annotation",
-						exp,
+						exp.first,
 						annot
 					);
 			}
@@ -987,7 +1350,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				return VAL_;
 			}();
 
-			auto t1 = make_type(m1, exp->datatype);
+			auto t1 = make_type(m1, exp.first->datatype);
 			const auto s = symtab.declaration_scope_of(id_node.guid).value();
 			const auto p1 = generalize(t1, s);
 			variables[id_node.guid] = p1;
@@ -997,11 +1360,13 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			// FIXME: add typing rules
 		case NodeType::FUN_DECL: {
 			auto opt_type_idx = node[2];
-			auto body_idx = node[3];
+			auto opt_effset_idx = node[3];
+			auto body_idx = node[4];
 
 			const auto& id_node = ast.at(node[0]);
 			const auto& params_node = ast.at(node[1]);
 			const auto& opt_type_node = ast.at(opt_type_idx);
+			const auto& effset_node = ast.at(opt_effset_idx);
 
 			assert(id_node.type == NodeType::GUID);
 
@@ -1021,7 +1386,11 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				                    ? make_datavar()
 				                    : eval(opt_type_idx);
 
-				return make_type(VAL_, make_function(inputs, output));
+				const auto effset = (effset_node.type == NodeType::EMPTY)
+				                    ? EMPTY_EFFSET
+				                    : eval_effset(opt_effset_idx);
+
+				return make_type(VAL_, make_function(inputs, output, effset));
 			}();
 
 			variables[id_node.guid] = dont_generalize(typ, {});
@@ -1069,21 +1438,35 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					}
 				}();
 
+				const auto effset = (effset_node.type == NodeType::EMPTY)
+				                    ? EMPTY_EFFSET
+				                    : eval_effset(opt_effset_idx);
+
 				auto p2 = dont_generalize(
-					make_type(VAL_, make_function(param_types, output)), {}
+					make_type(VAL_, make_function(param_types, output, effset)), {}
 				);
 
 				variables[id_node.guid] = p2;
 
 				auto body_type = typecheck(body_idx);
-				if (!unify(body_type->datatype, output))
+				if (!unify(body_type.first->datatype, output))
 					mismatch_error(
 						node.loc,
 						"Function annotation output type and infered type don't "
 						"match",
-						body_type,
+						body_type.first,
 						make_type(VAL_, output)
 					);
+
+				if (not ::cast_to(body_type.second, effset)) {
+					logger.log(
+						LogLevel::ERROR,
+						node.loc,
+						"Function declared with ({}) effects, but body had ({})",
+						*effset,
+						*body_type.second
+					);
+				}
 
 				const auto captures = [&]() {
 					auto mf = symtab.function_of(body_idx);
@@ -1114,7 +1497,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					return captures;
 				}();
 
-				typ = make_type(VAL_, make_closure(param_types, output, captures));
+				typ =
+					make_type(VAL_, make_closure(param_types, output, effset, captures));
 			}
 
 			const auto s = symtab.declaration_scope_of(ast.at(node[0]).guid).value();
@@ -1124,28 +1508,33 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			logger.log(LogLevel::INFO, "Function \"{}\" declare as ({})", name, *p1);
 
 			auto typ_ = typ;
-			return ASSOC_TYPE(node_idx, typ_);
+			ASSOC_TYPE(node_idx, typ_);
+			return std::make_pair(typ_, EMPTY_EFFSET);
 		}
 			// |
 			// +---------
 			// | |- nil : Nil
 
-		case NodeType::NIL:
-			return ASSOC_TYPE(node_idx, make_type(VAL_, NIL_));
+		case NodeType::NIL: {
+			auto t = make_type(VAL_, NIL_);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, EMPTY_EFFSET);
+		}
 
 			// |
 			// +---------
 			// | |- true : Bool
-
-		case NodeType::TRUE:
-			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
-
+			//
 			// |
 			// +---------
 			// | |- false : Bool
-
-		case NodeType::FALSE:
-			return ASSOC_TYPE(node_idx, make_type(VAL_, make_bool()));
+			//
+		case NodeType::TRUE:
+		case NodeType::FALSE: {
+			auto t = make_type(VAL_, make_bool());
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, EMPTY_EFFSET);
+		}
 
 			// FIXME: add typing rules
 		case NodeType::LET: {
@@ -1154,28 +1543,41 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 
 			const auto& decls = ast.at(decls_idx);
 
-			for (auto decl_idx : decls) typecheck(decl_idx);
+			auto joined = EMPTY_EFFSET;
+			for (auto decl_idx : decls) {
+				auto z = typecheck(decl_idx);
+				joined = union_of(joined, z.second);
+			}
 
-			return ASSOC_TYPE(node_idx, typecheck(exp_idx));
+			auto x = typecheck(exp_idx);
+			ASSOC_TYPE(node_idx, x.first);
+			return std::make_pair(x.first, union_of(joined, x.second));
 		}
 
 			// |
 			// +---------
 			// | |- c : Uint<8>
 
-		case NodeType::CHAR:
-			return ASSOC_TYPE(node_idx, make_type(VAL_, uint8_typ));
+		case NodeType::CHAR: {
+			auto t = make_type(VAL_, uint8_typ);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, EMPTY_EFFSET);
+		}
 
-		case NodeType::PATH:
-			return ASSOC_TYPE(node_idx, typecheck(node[0]));
+		case NodeType::PATH: {
+			auto t = typecheck(node[0]);
+			ASSOC_TYPE(node_idx, t.first);
+			return t;
+		}
 			// FIXME: add typing rules
 		case NodeType::AS: {
 			auto exp = typecheck(node[0]);
 			auto typ_ = make_type(make_modevar(), eval(node[1]));
-			if (cast_to(exp, typ_)) {
-				return ASSOC_TYPE(node_idx, typ_);
+			if (cast_to(exp.first, typ_)) {
+				ASSOC_TYPE(node_idx, typ_);
+				return std::make_pair(typ_, exp.second);
 			} else {
-				mismatch_error(node.loc, "Can't cast value to type", typ_, exp);
+				mismatch_error(node.loc, "Can't cast value to type", typ_, exp.first);
 				break;
 			}
 		}
@@ -1200,22 +1602,28 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			auto found_typ = variables.at(node.guid);
 			assert(found_typ != nullptr);
 			const auto t1 = instantiate(found_typ);
-			return ASSOC_TYPE(node_idx, t1);
+			logger.log(
+				LogLevel::INFO, "Type of \"{}\" instantiated to {}", name, *t1
+			);
+			ASSOC_TYPE(node_idx, t1);
+			return std::make_pair(t1, EMPTY_EFFSET);
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
 		case NodeType::RECORD_LITERAL: {
+			auto joined = EMPTY_EFFSET;
 			std::vector<std::pair<std::string, D>> field_tys {};
 			for (auto field_idx : node) {
 				const auto& field_node = ast.at(field_idx);
 				assert(field_node.type == NodeType::FIELD);
 				const auto t1 = typecheck(field_node[1]);
-				if (not submode(t1->mode, VAL_))
+				joined = union_of(joined, t1.second);
+				if (not submode(t1.first->mode, VAL_))
 					throw std::runtime_error("submoding error");
 				const auto& name_node = ast.at(field_node[0]);
 				assert(name_node.type == NodeType::ID);
 				const auto name = std::string(pool.find(name_node.str_id));
-				field_tys.push_back(std::make_pair(name, t1->datatype));
+				field_tys.push_back(std::make_pair(name, t1.first->datatype));
 			}
 			std::sort(
 				field_tys.begin(), field_tys.end(), [](const auto& x, const auto& y) {
@@ -1224,7 +1632,8 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			);
 			const auto d2 = make_record(field_tys);
 			const auto t2 = make_type(VAL_, d2);
-			return ASSOC_TYPE(node_idx, t2);
+			ASSOC_TYPE(node_idx, t2);
+			return std::make_pair(t2, joined);
 		}
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: {
@@ -1238,7 +1647,7 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			);
 			const auto t2 = make_type(make_modevar(), d2);
 			std::ostringstream ss1 {};
-			ss1 << *t1;
+			ss1 << *t1.first;
 			std::ostringstream ss2 {};
 			ss2 << *t2;
 			logger.log(
@@ -1248,19 +1657,22 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				ss1.str(),
 				ss2.str()
 			);
-			if (not unify(t1, t2))
+			if (not unify(t1.first, t2))
 				logger.err(
 					node.loc, "cannot access value without field \"{}\"", field_name
 				);
-			const auto t4 = make_type(t1->mode, d3);
-			return ASSOC_TYPE(node_idx, t4);
+			const auto t4 = make_type(t1.first->mode, d3);
+			ASSOC_TYPE(node_idx, t4);
+			return std::make_pair(t4, t1.second);
 		}
 		case NodeType::ARRAY_LITERAL: {
 			auto t1 = make_datavar();
 			std::vector<D> elt_dtys {t1};
+			auto joined = EMPTY_EFFSET;
 			for (auto elt_idx : node) {
 				const auto elt_ty = typecheck(elt_idx);
-				elt_dtys.push_back(elt_ty->datatype);
+				joined = union_of(joined, elt_ty.second);
+				elt_dtys.push_back(elt_ty.first->datatype);
 			}
 			for (auto [x, y] : std::views::adjacent<2>(elt_dtys)) {
 				if (not unify(x, y))
@@ -1270,32 +1682,35 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 					);
 			}
 			auto t2 = make_type(VAL_, make_array(t1));
-			return ASSOC_TYPE(node_idx, t2);
+			ASSOC_TYPE(node_idx, t2);
+			return std::make_pair(t2, joined);
 		}
 		case NodeType::REPEAT: {
 			const auto t0 = typecheck(node[0]);
 			const auto t1 = typecheck(node[1]);
 			const auto t2 =
 				make_type(make_modevar(), make_integer(64, Integer::Sign::UNSIGNED));
-			if (not cast_to(t1, t2)) {
+			if (not cast_to(t1.first, t2)) {
 				logger.err(
 					node.loc, "array expansion second argument must be an integer"
 				);
 			}
-			const auto t3 = make_type(VAL_, make_array(t0->datatype));
-			return ASSOC_TYPE(node_idx, t3);
+			const auto t3 = make_type(VAL_, make_array(t0.first->datatype));
+			ASSOC_TYPE(node_idx, t3);
+			return std::make_pair(t3, union_of(t0.second, t1.second));
 		}
 		case NodeType::LEN: {
 			const auto t0 = typecheck(node[0]);
 			const auto d0 = make_datavar();
 			const auto t1 = make_type(VAL_, make_array(d0));
-			if (not unify(t0, t1))
+			if (not unify(t0.first, t1))
 				logger.err(
 					node.loc, "operand to array length operator (#) was not an array"
 				);
 			const auto t2 =
 				make_type(VAL_, make_integer(64, Integer::Sign::UNSIGNED));
-			return ASSOC_TYPE(node_idx, t2);
+			ASSOC_TYPE(node_idx, t2);
+			return std::make_pair(t2, t0.second);
 		}
 		case NodeType::MODULE_BODY: {
 			const auto& decl_list = ast.at(node[0]);
@@ -1305,15 +1720,19 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 				const auto& name = ast.at(decl_name(decl_node));
 				// FIXME: wrong!!!
 				if (decl_node.type == NodeType::TYPE_DECL) {
+				} else if (decl_node.type == NodeType::EFF_DECL) {
+				} else if (decl_node.type == NodeType::EFF_ALIAS) {
 				} else {
 					const auto p = make_polytype(VAL_, make_scheme({}, make_datavar()));
 					variables[name.guid] = p;
 				}
 			}
+			auto joined = EMPTY_EFFSET;
 			for (auto decl : decl_list) {
-				typecheck(decl);
+				auto t = typecheck(decl);
+				joined = union_of(joined, t.second);
 			}
-			return make_type(VAL_, std::make_shared<Void>());
+			return std::make_pair(make_type(VAL_, VOID_), joined);
 		}
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
@@ -1324,8 +1743,62 @@ T Typechecker::typecheck(NodeIndex node_idx) {
 			const auto data = eval(node[1]);
 			assert(not type_names.contains(id_node.guid));
 			type_names[id_node.guid] = data;
-			return make_type(VAL_, VOID_);
+			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
+		case NodeType::EFF_DECL: {
+			const auto id_idx = node[0];
+			const auto params_idx = node[1];
+			const auto resume_type_idx = node[2];
+			const auto& id_node = ast.at(id_idx);
+			assert(id_node.type == NodeType::GUID);
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+			const auto& params_node = ast.at(params_idx);
+			assert(params_node.type == NodeType::METALIST);
+			std::vector<T> parameter_types {};
+			for (auto param_idx : params_node) {
+				const auto& param_node = ast.at(param_idx);
+				const auto& param_mode_node = ast.at(param_node[0]);
+				const auto mode = [&]() {
+					if (param_mode_node.type == NodeType::EMPTY)
+						throw std::runtime_error(
+							"effect declaration parameter must have mode specified"
+						);
+					else if (param_mode_node.mode == ModeLiteral::VAL)
+						return VAL_;
+					else if (param_mode_node.mode == ModeLiteral::VAR)
+						return VAR_;
+					else if (param_mode_node.mode == ModeLiteral::OUT)
+						return OUT_;
+					else
+						assert(false);
+				}();
+				const auto& param_type_node = ast.at(param_node[2]);
+				assert(param_type_node.type != NodeType::EMPTY);
+				const auto param_datatype = eval(param_node[2]);
+				parameter_types.push_back(make_type(mode, param_datatype));
+			}
+			const auto resume_type = eval(resume_type_idx);
+			const auto effect = std::make_shared<Effect>(Effect {
+				.name = std::string(name),
+				.inputs = parameter_types,
+				.output = resume_type,
+			});
+			std::vector<std::shared_ptr<Effect>> xs {{effect}};
+			const auto effect_set = std::make_shared<EffectSet>(xs);
+			effset_names[id_node.guid] = effect_set;
+			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
+		}
+		case NodeType::EFF_ALIAS: {
+			const auto id_idx = node[0];
+			const auto union_idx = node[1];
+			const auto& id_node = ast.at(id_idx);
+			assert(id_node.type == NodeType::GUID);
+			const auto effset = eval_effset(union_idx);
+			effset_names[id_node.guid] = effset;
+			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
+		}
+		case NodeType::EFF_UNION: assert(false);
 	}
 	assert(false && "unreachable");
 }
@@ -1427,7 +1900,8 @@ D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 						make_type(input->mode, substitute(subst, input->datatype))
 					);
 				auto output = substitute(subst, f.output);
-				return make_function(inputs, output);
+				// FIXME: traverse f.effects!
+				return make_function(inputs, output, f.effects);
 			},
 			[&](Closure&& c) -> D {
 				std::vector<T> inputs {};
@@ -1439,7 +1913,8 @@ D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 				std::map<Guid, D> captures {};
 				for (auto& [guid, capture] : c.captures)
 					captures[guid] = substitute(subst, capture);
-				return make_closure(inputs, output, captures);
+				// FIXME: traverse c.effects!
+				return make_closure(inputs, output, c.effects, captures);
 			},
 			[&](Record&& r) -> D {
 				decltype(r.fields) fields {};

@@ -130,6 +130,7 @@ test_example(generic_map_array)
 test_example(simple_closure)
 test_example(type_expressions)
 test_example(type_declarations)
+test_example(effect_declaration)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)

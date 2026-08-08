@@ -69,6 +69,9 @@ enum class NodeType {
 	RECORD_TYPE_LITERAL,
 	FIELD_TYPE,
 	TYPE_DECL,
+	EFF_DECL,
+	EFF_ALIAS,
+	EFF_UNION,
 };
 
 enum class BinaryOperator {

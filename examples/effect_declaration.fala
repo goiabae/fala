@@ -1,0 +1,7 @@
+effect write (val x: Int<64>): Nil
+
+fun f s !io =
+	write_str(s)
+
+fun main _ !io =
+	f("Hello, world!\n")

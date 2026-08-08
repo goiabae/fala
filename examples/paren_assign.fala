@@ -1,4 +1,4 @@
-fun main _ =
+fun main _ !io =
 	let var x =
 		1 + 2 + 3
 	in do

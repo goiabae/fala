@@ -1,4 +1,4 @@
-fun main _ =
+fun main _ !io =
 	let fun f x =
 		let fun g y =
 			x + y

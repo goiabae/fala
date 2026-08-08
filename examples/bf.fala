@@ -1,6 +1,6 @@
 -- brainfuck in fala
 
-fun main _ =
+fun main _ !io =
 	let
 		var GREAT = 0, -- >
 		var LESS  = 1, -- <

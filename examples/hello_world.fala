@@ -1,2 +1,2 @@
-fun main _ =
+fun main _ !io =
 	write_str("Hello, world!\n")

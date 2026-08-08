@@ -1,4 +1,4 @@
-fun main _ =
+fun main _ !io =
 	let
 		var max = read_int(nil),
 		var minus2 = do do write_int(0); write_str("\n") end; 0; end,

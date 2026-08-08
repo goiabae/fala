@@ -46,7 +46,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %token <character> CHAR
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS EFFECT
 %token NIL TRUE FALSE TYPE
 
 /* pontuation */
@@ -56,6 +56,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %token SEMICOL ";" COLON ":"
 %token COMMA ","
 %token DOT "."
+%token PIPE "|"
 %token NEWLINE "\n"
 
 /* binary operators */
@@ -67,6 +68,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %token DOTDOT ".."
 %token POUND "#"
 %token NOT
+%token BANG "!"
 
 %token START_REPL START_MODULE
 
@@ -91,7 +93,9 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> array_literal element_list
 %type <node> module_body declaration_list
 %type <node> program
-%type <node> type_declaration
+%type <node> type_declaration variable_declaration function_declaration
+%type <node> effect_declaration effect_union
+%type <node> opt_effect_specifiers effect_specifiers effect_specifier
 
 %%
 
@@ -182,9 +186,55 @@ decls : decl           { $$ = new_list_node(ast, NodeType::METALIST); $$ = list_
 
 /* Declarations */
 decl
-	: mode id opt_type "=" nls exp       { $$ = NODE(NodeType::VAR_DECL, $1, $2, $3, $exp); }
-	| FUN id params opt_type "=" nls exp { $$ = NODE(NodeType::FUN_DECL, $2, $3, $4, $exp); }
+	: variable_declaration
+	| function_declaration
 	| type_declaration
+	| effect_declaration
+	;
+
+variable_declaration
+	: mode id opt_type "=" nls exp { $$ = NODE(NodeType::VAR_DECL, $1, $2, $3, $exp); }
+	;
+
+function_declaration
+	: FUN id[name] params opt_type[result_type] opt_effect_specifiers[effects] "=" nls exp[body] {
+		$$ = NODE(NodeType::FUN_DECL, $name, $params, $result_type, $effects, $body);
+	}
+	;
+
+opt_effect_specifiers
+	: %empty { $$ = new_empty_node(ast); }
+	| effect_specifiers
+	;
+
+effect_specifiers
+	: effect_specifier {
+		$$ = new_list_node(ast, NodeType::METALIST);
+		$$ = list_append_node(ast, $$, $1);
+	}
+	| effect_specifiers[prefix] effect_specifier[postfix] {
+		$$ = list_append_node(ast, $prefix, $postfix);
+	}
+	;
+
+effect_specifier
+	: "!" id { $$ = $id; }
+	;
+
+effect_declaration
+	: EFFECT id params ":" type_expression {
+		$$ = NODE(NodeType::EFF_DECL, $2, $3, $5);
+	}
+	| EFFECT id "=" effect_union {
+		$$ = NODE(NodeType::EFF_ALIAS, $2, $4);
+	}
+	;
+
+effect_union
+	: id
+	| effect_union "|" id {
+		$$ = NODE(NodeType::EFF_UNION, $1, $3);
+	}
 	;
 
 opt_type : %empty { $$ = new_empty_node(ast); }

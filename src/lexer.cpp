@@ -56,6 +56,7 @@ enum {
 	KW_BOOL,
 	KW_AS,
 	KW_TYPE,
+	KW_EFFECT,
 	KW_COUNT,
 };
 
@@ -91,6 +92,7 @@ const char* keyword_repr(size_t i) {
 		case KW_BOOL: return "bool";
 		case KW_AS: return "as";
 		case KW_TYPE: return "type";
+		case KW_EFFECT: return "effect";
 	}
 	assert(false);
 }
@@ -128,6 +130,7 @@ int keyword_to_bison(size_t i) {
 		case KW_VAL: return tk::VAL;
 		case KW_OUT: return tk::OUT;
 		case KW_TYPE: return tk::TYPE;
+		case KW_EFFECT: return tk::EFFECT;
 	}
 	assert(false);
 }
@@ -223,6 +226,7 @@ int Lexer::lex() {
 		case ']': return tk::BRACKET_CLOSE;
 		case '{': return tk::CURLY_OPEN;
 		case '}': return tk::CURLY_CLOSE;
+		case '!': return tk::BANG;
 		case ';': return tk::SEMICOL;
 		case ':': return tk::COLON;
 		case ',': return tk::COMMA;

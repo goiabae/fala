@@ -2,12 +2,18 @@
 
 #include <cassert>
 
+#include "ast.hpp"
+
 void ScopeAnalyser::define_builtin(const char* name) {
 	m_symtab.define_builtin(m_pool.intern(name), m_symtab.value_namespace);
 }
 
 void ScopeAnalyser::define_builtin_type(const char* name) {
 	m_symtab.define_builtin(m_pool.intern(name), m_symtab.type_namespace);
+}
+
+void ScopeAnalyser::define_builtin_effset(const char* name) {
+	m_symtab.define_builtin(m_pool.intern(name), m_symtab.effset_namespace);
 }
 
 SymbolTable ScopeAnalyser::analyse() {
@@ -19,6 +25,7 @@ SymbolTable ScopeAnalyser::analyse() {
 	define_builtin_type("Int");
 	define_builtin_type("Uint");
 	define_builtin_type("Nil");
+	define_builtin_effset("io");
 	analyse(m_ast.root_index, m_symtab.root_scope);
 	return m_symtab;
 }
@@ -110,6 +117,13 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			return;
 		}
 		case NodeType::TYPE_DECL: assert(false);
+		case NodeType::EFF_DECL: assert(false);
+		case NodeType::EFF_ALIAS: assert(false);
+		case NodeType::EFF_UNION: {
+			analyse_type(node[0], scope_idx);
+			analyse_type(node[1], scope_idx);
+			return;
+		}
 	}
 }
 
@@ -244,7 +258,8 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			assert(id_node.type == NodeType::ID);
 			const auto params_idx = node[1];
 			const auto opt_type_idx = node[2];
-			const auto body_idx = node[3];
+			const auto opt_effset_idx = node[3];
+			const auto body_idx = node[4];
 			const auto guid = m_symtab.define(
 				id_node.str_id, scope_idx, id_idx, m_symtab.value_namespace
 			);
@@ -271,6 +286,20 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 				m.guid = guid;
 			}
 			analyse_type(opt_type_idx, inner_scope_idx);
+			const auto& opt_effset_node = m_ast.at(opt_effset_idx);
+			if (opt_effset_node.type != NodeType::EMPTY) {
+				assert(opt_effset_node.type == NodeType::METALIST);
+				for (auto effset_idx : opt_effset_node) {
+					const auto& effset_node = m_ast.at(effset_idx);
+					assert(effset_node.type == NodeType::ID);
+					const auto guid = m_symtab.use_of(
+						effset_node.str_id, scope_idx, effset_idx, m_symtab.effset_namespace
+					);
+					auto& m = m_ast.at(effset_idx);
+					m.type = NodeType::GUID;
+					m.guid = guid;
+				}
+			}
 			analyse(body_idx, inner_scope_idx);
 			return;
 		}
@@ -339,5 +368,49 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			m.guid = guid;
 			return;
 		}
+		case NodeType::EFF_DECL: {
+			const auto id_idx = node[0];
+			const auto& id_node = m_ast.at(id_idx);
+			assert(id_node.type == NodeType::ID);
+			const auto params_idx = node[1];
+			const auto opt_type_idx = node[2];
+			const auto guid = m_symtab.define(
+				id_node.str_id, scope_idx, id_idx, m_symtab.effset_namespace
+			);
+			auto& m = m_ast.at(id_idx);
+			m.type = NodeType::GUID;
+			m.guid = guid;
+			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
+			const auto& params_node = m_ast.at(params_idx);
+			for (const auto param_idx : params_node) {
+				const auto& param_node = m_ast.at(param_idx);
+				assert(param_node.type == NodeType::PARAM);
+				const auto& param_id_node = m_ast.at(param_node[1]);
+				assert(param_id_node.type == NodeType::ID);
+				analyse_type(param_node[2], inner_scope_idx);
+				const auto guid = m_symtab.define(
+					param_id_node.str_id,
+					inner_scope_idx,
+					param_node[1],
+					m_symtab.value_namespace
+				);
+				auto& m = m_ast.at(param_node[1]);
+				m.type = NodeType::GUID;
+				m.guid = guid;
+			}
+			analyse_type(opt_type_idx, inner_scope_idx);
+			return;
+		}
+		case NodeType::EFF_ALIAS: {
+			const auto guid = m_symtab.define(
+				m_ast.at(node[0]).str_id, scope_idx, node[0], m_symtab.effset_namespace
+			);
+			auto& m = m_ast.at(node[0]);
+			m.type = NodeType::GUID;
+			m.guid = guid;
+			analyse_type(node[1], scope_idx);
+			return;
+		}
+		case NodeType::EFF_UNION: assert(false);
 	}
 }
