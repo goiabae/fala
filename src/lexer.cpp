@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "codepoint.hpp"
+#include "codepoint_decoder.hpp"
 #include "parser.hpp"
 #include "token_value.hpp"
 
@@ -158,34 +160,81 @@ void Lexer::ensure() {
 	delete[] buf;
 }
 
-char Lexer::peek() {
+Codepoint Lexer::peek() {
 	ensure();
-	return ring_peek(&ring);
+	if (not peaked.has_value()) {
+		while (true) {
+			if (auto p = decoder.push((std::uint8_t)ring_read(&ring))) {
+				peaked = *p;
+				return *p;
+			}
+		}
+	} else {
+		return peaked.value();
+	}
 }
 
-char Lexer::advance() {
-	ensure();
-	char c = ring_read(&ring);
-	loc->end.byte_offset++;
-	if (c == '\n') {
-		loc->end.line++;
-		loc->end.column = 0;
-	} else if (c == '\t') {
-		loc->end.column += 2;
-	} else {
-		loc->end.column++;
+Codepoint Lexer::advance() {
+	if (peaked.has_value()) {
+		auto c = peaked.value();
+		peaked = {};
+		return c;
 	}
-	return c;
+	ensure();
+	while (true) {
+		auto c = ring_read(&ring);
+		if (c == EOT) return EOT;
+		if (auto p = decoder.push((std::uint8_t)c)) {
+			loc->end.byte_offset += static_cast<int>(size(*p));
+			if (*p == '\n') {
+				loc->end.line++;
+				loc->end.column = 0;
+			} else if (*p == '\t') {
+				loc->end.column += 2;
+			} else {
+				loc->end.column++;
+			}
+			return *p;
+		}
+	}
 }
 
 // advances a character if it matches, otherwise do nothing
 bool Lexer::match(char c) {
-	char ch = ring_peek(&ring);
-	if (ch == c) advance();
-	return ch == c;
+	auto ch = peek();
+	auto x = size(ch) == 1 and (std::uint8_t) ch == c;
+	if (x) advance();
+	return x;
 }
 
-static bool is_valid_id_char(char c) { return isalnum(c) || c == '_'; }
+static bool is_valid_id_char(Codepoint codepoint) {
+	if (is_digit(codepoint)) return true;
+	if (is_ascii_alpha(codepoint)) return true;
+	if (codepoint == '_') return true;
+	std::string portuguese_characters_not_in_ascii {"áàâãéêiíóôúçÁÀÂÃÉÊIÍÓÔÚÇ"};
+	CodepointDecoder decoder {};
+	std::vector<Codepoint> codepoints;
+	for (auto c : portuguese_characters_not_in_ascii)
+		if (auto codepoint = decoder.push((std::uint8_t)c))
+			codepoints.push_back(*codepoint);
+	for (auto cp : codepoints)
+		if (codepoint == cp) return true;
+	return false;
+}
+
+static bool is_valid_starting_id_char(Codepoint codepoint) {
+	if (is_ascii_alpha(codepoint)) return true;
+	if (codepoint == '_') return true;
+	std::string portuguese_characters_not_in_ascii {"áàâãéêiíóôúçÁÀÂÃÉÊIÍÓÔÚÇ"};
+	CodepointDecoder decoder {};
+	std::vector<Codepoint> codepoints;
+	for (auto c : portuguese_characters_not_in_ascii)
+		if (auto codepoint = decoder.push((std::uint8_t)c))
+			codepoints.push_back(*codepoint);
+	for (auto cp : codepoints)
+		if (codepoint == cp) return true;
+	return false;
+}
 
 static char* string_dup(const char* str) {
 	const size_t len = strlen(str);
@@ -214,8 +263,8 @@ int Lexer::lex() {
 			return tk::START_MODULE;
 	}
 
-	char c = advance();
-	if (c < 0) {
+	auto c = advance();
+	if (c == EOT) {
 		lines.push_back(current_line);
 		return tk::YYEOF;
 	}
@@ -272,14 +321,14 @@ int Lexer::lex() {
 					else
 						assert(false && "LEXER: Unknown escape sequence");
 				} else {
-					str += c;
+					str += to_bytestring(c);
 				}
 			}
 			value->str = string_dup(str.c_str());
 			return tk::STRING;
 		}
 		case '\'': {
-			char character = advance();
+			auto character = advance();
 			if (character == '\\') {
 				if (match('n'))
 					value->character = '\n';
@@ -290,21 +339,21 @@ int Lexer::lex() {
 				else
 					assert(false && "LEXER: Unknown espace sequence");
 			} else {
-				value->character = character;
+				value->character = to_ascii(character);
 			}
 
 			if (!match('\'')) assert(false && "LEXER: Invalid character literal");
 			return tk::CHAR;
 		}
 		default: {
-			if (isdigit(c)) {
+			if (is_digit(c)) {
 				long num = c - '0';
-				while (isdigit(c = peek())) num = num * 10 + (advance() - '0');
+				while (is_digit(c = peek())) num = num * 10 + (advance() - '0');
 				value->num = (Number)num;
 				return tk::NUMBER;
-			} else if (isalpha(c) || c == '_') {
-				string str {c};
-				while (is_valid_id_char(peek())) str += advance();
+			} else if (is_valid_starting_id_char(c)) {
+				string str = to_bytestring(c);
+				while (is_valid_id_char(peek())) str += to_bytestring(advance());
 
 				// could be a reserved keyword
 				for (size_t i = 0; i < KW_COUNT; i++)

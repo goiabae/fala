@@ -19,6 +19,7 @@ typedef struct Ring {
 
 // arbitrary choice
 #define RING_DEFAULT_CAP 1024
+#define EOT 0x04
 
 Ring ring_init(void);
 void ring_deinit(Ring* ring);
@@ -52,7 +53,7 @@ Ring ring_init(void) {
 void ring_deinit(Ring* ring) { free(ring->buf); }
 
 char ring_read(Ring* ring) {
-	if (ring->len == 0) return -1;
+	if (ring->len == 0) return EOT;
 	size_t idx = ring->read;
 	assert(idx <= (ring->cap - 1));
 	ring->read = (ring->read + 1) % ring->cap;

@@ -3,6 +3,8 @@
 
 #include <vector>
 
+#include "codepoint.hpp"
+#include "codepoint_decoder.hpp"
 #include "location.hpp"
 #include "reader.hpp"
 #include "ring.h"
@@ -20,8 +22,8 @@ struct Lexer {
 	int lex();
 
 	void ensure();
-	char peek();
-	char advance();
+	Codepoint peek();
+	Codepoint advance();
 	bool match(char c);
 
 	std::vector<std::string> get_lines() { return lines; }
@@ -31,6 +33,8 @@ struct Lexer {
 	bool has_sent_start {false};
 	std::string current_line {};
 	std::vector<std::string> lines {};
+	CodepointDecoder decoder {};
+	std::optional<Codepoint> peaked {};
 };
 
 int lexer_lex(union TokenValue* lval, Location* location, Lexer* scanner);
