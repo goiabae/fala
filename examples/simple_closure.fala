@@ -5,6 +5,6 @@ fun main _ !io =
 		in g
 	in
 	let val h = f(3) in do
-		write_int((h(4)))
-		write_str("\n")
+		write_int!((h(4)))
+		write_str!("\n")
 	end

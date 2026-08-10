@@ -476,7 +476,33 @@ bool Typechecker::typecheck() {
 		.inputs = {},
 		.output = {},
 	})};
-	auto io_effset = std::make_shared<EffectSet>(effs);
+	auto str = make_type(VAL_, make_array(uint8_typ));
+	auto write_str = std::make_shared<Effect>(Effect {
+		.name = "write_str",
+		.inputs = {str},
+		.output = {NIL_},
+	});
+	auto write_str_effset = std::make_shared<EffectSet>(
+		std::vector<std::shared_ptr<Effect>> {write_str}
+	);
+	auto write_int = std::make_shared<Effect>(Effect {
+		.name = "write_int",
+		.inputs = {make_type(VAL_, make_integer(64, Integer::Sign::SIGNED))},
+		.output = {NIL_},
+	});
+	auto write_int_effset = std::make_shared<EffectSet>(
+		std::vector<std::shared_ptr<Effect>> {write_int}
+	);
+	auto write_char = std::make_shared<Effect>(Effect {
+		.name = "write_char",
+		.inputs = {make_type(VAL_, uint8_typ)},
+		.output = {NIL_},
+	});
+	auto write_char_effset = std::make_shared<EffectSet>(
+		std::vector<std::shared_ptr<Effect>> {write_char}
+	);
+	auto io_effset =
+		union_of(write_str_effset, union_of(write_char_effset, write_int_effset));
 
 	auto nil_to_uint8_typ =
 		make_function({make_type(VAL_, nil_typ)}, uint8_typ, io_effset);
@@ -529,6 +555,15 @@ bool Typechecker::typecheck() {
 		} else if (ns == symtab.effset_namespace) {
 			if (name == "io") {
 				effset_names[guid] = io_effset;
+			} else if (name == "write_str") {
+				effset_names[guid] = write_str_effset;
+				name_to_effect[guid] = write_str;
+			} else if (name == "write_int") {
+				effset_names[guid] = write_int_effset;
+				name_to_effect[guid] = write_int;
+			} else if (name == "write_char") {
+				effset_names[guid] = write_char_effset;
+				name_to_effect[guid] = write_char;
 			} else {
 				assert(false);
 			}
@@ -815,6 +850,7 @@ E Typechecker::eval_effset(NodeIndex node_idx) {
 			const auto right = eval_effset(node[1]);
 			return union_of(left, right);
 		}
+		case NodeType::PERFORM: assert(false);
 	}
 	assert(false);
 }
@@ -1787,6 +1823,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			std::vector<std::shared_ptr<Effect>> xs {{effect}};
 			const auto effect_set = std::make_shared<EffectSet>(xs);
 			effset_names[id_node.guid] = effect_set;
+			name_to_effect[id_node.guid] = effect;
 			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
 		case NodeType::EFF_ALIAS: {
@@ -1799,6 +1836,23 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
 		case NodeType::EFF_UNION: assert(false);
+		case NodeType::PERFORM: {
+			auto effect_idx = node[0];
+			auto arguments_idx = node[1];
+			auto effset = eval_effset(effect_idx);
+			assert(effset->concrete.size() == 1);
+			auto effect = effset->concrete.at(0);
+			const auto& arguments_node = ast.at(arguments_idx);
+			auto joined = EMPTY_EFFSET;
+			std::vector<T> arguments {};
+			for (auto argument_idx : arguments_node) {
+				auto x = typecheck(argument_idx);
+				joined = union_of(joined, x.second);
+				arguments.push_back(x.first);
+			}
+			joined = union_of(joined, effset);
+			return std::make_pair(make_type(VAL_, effect->output), joined);
+		}
 	}
 	assert(false && "unreachable");
 }

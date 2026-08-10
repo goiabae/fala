@@ -5,6 +5,6 @@ fun main _ =
 		op >= 0 and op <= 7
 	in
 	if is_inst((op - 1)) then
-		write_str("incorrect behaviour!!\n")
+		write_str!("incorrect behaviour!!\n")
 	else
-		write_str("correct behaviour!!\n")
+		write_str!("correct behaviour!!\n")

@@ -19,13 +19,13 @@ void ScopeAnalyser::define_builtin_effset(const char* name) {
 SymbolTable ScopeAnalyser::analyse() {
 	define_builtin("read_int");
 	define_builtin("read_char");
-	define_builtin("write_int");
-	define_builtin("write_char");
-	define_builtin("write_str");
 	define_builtin_type("Int");
 	define_builtin_type("Uint");
 	define_builtin_type("Nil");
 	define_builtin_effset("io");
+	define_builtin_effset("write_str");
+	define_builtin_effset("write_int");
+	define_builtin_effset("write_char");
 	analyse(m_ast.root_index, m_symtab.root_scope);
 	return m_symtab;
 }
@@ -124,6 +124,7 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse_type(node[1], scope_idx);
 			return;
 		}
+		case NodeType::PERFORM: assert(false);
 	}
 }
 
@@ -412,5 +413,17 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			return;
 		}
 		case NodeType::EFF_UNION: assert(false);
+		case NodeType::PERFORM: {
+			const auto args_idx = node[1];
+			const auto& args_node = m_ast.at(args_idx);
+			const auto guid = m_symtab.use_of(
+				m_ast.at(node[0]).str_id, scope_idx, node[0], m_symtab.effset_namespace
+			);
+			auto& m = m_ast.at(node[0]);
+			m.type = NodeType::GUID;
+			m.guid = guid;
+			for (const auto arg_idx : args_node) analyse(arg_idx, scope_idx);
+			return;
+		}
 	}
 }

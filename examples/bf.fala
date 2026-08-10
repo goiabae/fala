@@ -32,10 +32,10 @@ fun main _ !io =
 			op = read_int(nil);
 		end;
 
-		write_str("brainfuck program:\n  ");
+		write_str!("brainfuck program:\n  ");
 		for var i = 0 to len then
-			write_int(inst[i]);
-		write_str("\n");
+			write_int!(inst[i]);
+		write_str!("\n");
 
 		-- run program
 		let fun is_inst op =
@@ -52,9 +52,9 @@ fun main _ !io =
 			else if op == MINUS then
 				do data [dp] = data [dp] - 1; nil end
 			else if op == DOT then
-				do write_int(data[dp]); write_str("\n") end
+				do write_int!(data[dp]); write_str!("\n") end
 			else if op == COMMA then
-				do write_int((data [dp] = read_int(nil))); write_str("\n") end
+				do write_int!((data [dp] = read_int(nil))); write_str!("\n") end
 			else if op == OPEN then
 				when data [dp] == 0 then do
 					while not (inst[next] == CLOSE) then

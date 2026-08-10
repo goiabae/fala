@@ -1,5 +1,5 @@
 let fun id x = x in
 do
-	write_int((id(3)))
-	write_str((id("\n")))
+	write_int!((id(3)))
+	write_str!((id("\n")))
 end

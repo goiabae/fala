@@ -2,14 +2,14 @@
 type IntArray = [Int<64>]
 
 fun write_arrln (val xs : IntArray) : Nil !io = do
-	write_str("[")
+	write_str!("[")
 	for var i = 0 to #xs then do
-		write_int(xs[i])
+		write_int!(xs[i])
 		when not (i == (#xs - 1)) then
-			write_str(";")
+			write_str!(";")
 	end
-	write_str("]")
-	write_str("\n")
+	write_str!("]")
+	write_str!("\n")
 end
 
 fun main _ !io =

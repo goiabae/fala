@@ -1,5 +1,5 @@
 fun main _ !io =
 	let var x = 69 in do
-		write_int(x)
-		write_str("\n")
+		write_int!(x)
+		write_str!("\n")
 	end

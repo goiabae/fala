@@ -72,6 +72,7 @@ enum class NodeType {
 	EFF_DECL,
 	EFF_ALIAS,
 	EFF_UNION,
+	PERFORM,
 };
 
 enum class BinaryOperator {

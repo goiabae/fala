@@ -79,6 +79,7 @@ struct Compiler {
 	DECLARE_NODE_HANDLER(block);
 	DECLARE_NODE_HANDLER(continue);
 	DECLARE_NODE_HANDLER(break);
+	DECLARE_NODE_HANDLER(perform);
 
 #undef DECLARE_NODE_HANDLER
 
@@ -91,7 +92,11 @@ struct Compiler {
 	std::size_t label_count {0};
 	std::size_t reg_count {0};
 	std::map<Guid, lir::Operand> variables;
+	std::map<Guid, lir::Immediate> effect_tags {};
 	vector<lir::Chunk> functions {};
+	lir::Immediate write_str_tag {-1};
+	lir::Immediate write_int_tag {-1};
+	lir::Immediate write_char_tag {-1};
 };
 
 } // namespace compiler

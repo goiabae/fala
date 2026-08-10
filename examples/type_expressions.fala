@@ -3,8 +3,8 @@
 fun f _ : [Int<64>] = 3..10
 
 fun write_intln x !io = do
-	write_int(x)
-	write_str("\n")
+	write_int!(x)
+	write_str!("\n")
 end
 
 fun g _ : { x: Int<64>; y: Int<64>; } =

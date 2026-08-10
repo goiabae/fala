@@ -91,6 +91,7 @@ struct Label {
 
 struct Immediate {
 	Immediate(int number) : number {number} {}
+	Immediate() = default;
 	int number;
 };
 

@@ -3,12 +3,12 @@ let var op = read_char nil in
 let var right = read_int nil in
 
 if op == '+' then
-    write_int (left + right)
+    write_int! (left + right)
 else if op == '-' then
-    write_int (left - right)
+    write_int! (left - right)
 else if op == '*' then
-    write_int (left * right)
+    write_int! (left * right)
 else if op == '/' then
-    write_int (left / right)
+    write_int! (left / right)
 else
-    write_str "Unknown operation!"
+    write_str! "Unknown operation!"

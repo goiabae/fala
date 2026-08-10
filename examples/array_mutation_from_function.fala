@@ -5,5 +5,5 @@ end in
 do
   xs[7] = 69
 	f xs
-	write_int xs[7]
+	write_int! xs[7]
 end

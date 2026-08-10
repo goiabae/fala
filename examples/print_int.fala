@@ -1,2 +1,2 @@
 fun main _ !io =
-	write_int((1 + 2))
+	write_int!((1 + 2))

@@ -4,5 +4,5 @@ in
 let var xs = "Foo" in
 do
 	f xs;
-	write_str xs
+	write_str! xs
 end

@@ -2,6 +2,6 @@ fun main _ !io =
 	let var x =
 		1 + 2 + 3
 	in do
-		write_int(x)
-		write_str("\n")
+		write_int!(x)
+		write_str!("\n")
 	end

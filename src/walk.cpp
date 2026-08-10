@@ -565,6 +565,7 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::EFF_DECL: assert(false);
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
+		case NodeType::PERFORM: assert(false);
 	}
 	assert(false);
 }

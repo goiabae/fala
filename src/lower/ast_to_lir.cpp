@@ -169,6 +169,10 @@ lir::Chunk Compiler::compile() {
 			.current_closure = {},
 		};
 		const auto start = make_label();
+		const auto l1 = make_label();
+		const auto l2 = make_label();
+		const auto l3 = make_label();
+		const auto l4 = make_label();
 		lir::Chunk chunk {};
 		chunk.emit(Opcode::JMP, start);
 		const auto module = compile(ast.root_index, ctx);
@@ -179,12 +183,47 @@ lir::Chunk Compiler::compile() {
 		const auto r1 = make_register();
 		const auto r2 = make_register();
 		const auto r3 = make_register();
+		const auto r4 = make_register();
+		const auto r8 = make_register();
+		const auto r9 = make_register();
+
+		// write_char! handler
+		chunk.emit(Opcode::CATCH, write_char_tag, l4);
+		chunk.emit(Opcode::POP, r4);
+		chunk.emit(lir::Opcode::POP, r8);
+		chunk.emit_loada(r9, lir::Immediate(0), r8);
+		chunk.emit(lir::Opcode::PRINTC, r9);
+		chunk.emit(Opcode::RESUME, r4);
+		chunk.emit_jmp(l2);
+
+		// write_str! handler
+		chunk.add_label(l4);
+		chunk.emit(Opcode::CATCH, write_str_tag, l1);
+		chunk.emit(Opcode::POP, r4);
+		chunk.emit(lir::Opcode::POP, r8);
+		chunk.emit_loada(r9, lir::Immediate(0), r8);
+		chunk.emit(lir::Opcode::PRINTF, r8);
+		chunk.emit(Opcode::RESUME, r4);
+		chunk.emit_jmp(l2);
+
+		// write_int! handler
+		chunk.add_label(l1);
+		chunk.emit(Opcode::CATCH, write_int_tag, l3);
+		chunk.emit(Opcode::POP, r4);
+		chunk.emit(lir::Opcode::POP, r8);
+		chunk.emit_loada(r9, lir::Immediate(0), r8);
+		chunk.emit(lir::Opcode::PRINTV, r9);
+		chunk.emit(Opcode::RESUME, r4);
+		chunk.emit_jmp(l2);
+
+		chunk.add_label(l3);
 		chunk.emit_loada(r2, lir::Immediate(0), main);
 		chunk.emit_alloca(r3, lir::Immediate(1));
 		chunk.emit_storea(lir::Immediate(0), lir::Immediate(0), r3);
 		chunk.emit(Opcode::PUSH, r3);
 		chunk.emit(Opcode::CALL, r2);
 		chunk.emit(Opcode::POP, r1);
+		chunk.add_label(l2);
 		return chunk;
 	} else {
 		const auto main = make_label();
@@ -301,6 +340,66 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 
 		return {chunk, res};
 	}
+}
+
+Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
+	const auto& node = ast.at(node_idx);
+	const auto func_idx = node[0];
+	const auto& func_node = ast.at(func_idx);
+	const auto& args_node = ast.at(node[1]);
+
+	assert(func_node.type == NodeType::GUID);
+	assert(args_node.type == NodeType::METALIST);
+
+	const auto name = symtab.name_of(func_node.guid).value();
+	const auto effect_name = std::string(pool.find(name));
+	const auto effect = tpc.name_to_effect.at(func_node.guid);
+	assert(effect != nullptr);
+	const auto effect_tag = effect_tags.at(func_node.guid);
+
+	lir::Chunk chunk {};
+
+	std::vector<lir::Operand> args {};
+	std::vector<std::shared_ptr<Type>> arg_tys {};
+	for (const auto arg_idx : args_node) {
+		const auto res = compile_or_allocate_lvalue(arg_idx, ctx);
+		chunk += res.code;
+		auto ty = tpc.node_to_type.at(arg_idx);
+		arg_tys.push_back(ty);
+		args.push_back(res.opnd);
+	}
+
+	for (const auto& [i, arg] :
+	     std::ranges::views::enumerate(std::ranges::reverse_view(args))) {
+		const auto param_mode =
+			(*(effect->inputs.at(static_cast<std::size_t>(i))->mode))
+				.to_concrete()
+				.value();
+		const auto arg_mode =
+			arg_tys.at(static_cast<std::size_t>(i))->mode->to_concrete().value();
+		const auto convention = passing_convention_for(param_mode, arg_mode);
+
+		if (convention == PassingConvention::ALIAS) {
+			chunk.emit(Opcode::PUSH, arg);
+		} else if (convention == PassingConvention::CLONE) {
+			const auto t = make_register();
+			chunk.emit_clonea(t, arg);
+			chunk.emit(Opcode::PUSH, t);
+		} else if (convention == PassingConvention::INVALID) {
+			throw std::runtime_error("cannot call function. conflicting modes");
+		} else {
+			assert(false);
+		}
+	}
+
+	chunk.emit(
+		Opcode::THROW, effect_tag, lir::Immediate(static_cast<int>(args.size()))
+	);
+	const auto res = make_register();
+	chunk.emit(Opcode::POP, res);
+	chunk.result_opnd = res;
+
+	return {chunk, res};
 }
 
 Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
@@ -614,6 +713,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::EFF_DECL: assert(false);
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
+		case NodeType::PERFORM: assert(false);
 	}
 	assert(false);
 }
@@ -661,6 +761,18 @@ void Compiler::allocate_variables() {
 		const auto scope = symtab.declaration_scope_of(sym).value();
 		if (scope != symtab.builtin_scope) {
 			variables[sym] = make_register();
+		}
+	}
+	auto i = 0ul;
+	for (const auto& [name, eff] : tpc.name_to_effect) {
+		effect_tags[name] = lir::Immediate(static_cast<int>(i++));
+		const auto x = std::string_view(pool.find(symtab.name_of(name).value()));
+		if (x == "write_str") {
+			write_str_tag = effect_tags.at(name);
+		} else if (x == "write_int") {
+			write_int_tag = effect_tags.at(name);
+		} else if (x == "write_char") {
+			write_char_tag = effect_tags.at(name);
 		}
 	}
 }
@@ -1121,6 +1233,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::EFF_DECL: assert(false);
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
+		case NodeType::PERFORM: COMPILE_WITH_HANDLER(compile_perform)
 	}
 	assert(false);
 }

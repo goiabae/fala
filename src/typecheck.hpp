@@ -62,6 +62,7 @@ struct Typechecker {
 	std::map<NodeIndex, T> node_to_type {};
 	std::map<Guid, D> type_names {};
 	std::map<Guid, E> effset_names {};
+	std::map<Guid, std::shared_ptr<Effect>> name_to_effect {};
 	Logger logger;
 
  private:

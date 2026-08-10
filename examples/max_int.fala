@@ -6,5 +6,5 @@ fun main _ !io =
 			let var x = read_int(nil) in
 			when x > max then
 				max = x;
-		write_int(max);
+		write_int!(max);
 	end

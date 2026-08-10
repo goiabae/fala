@@ -1,7 +1,7 @@
 fun main _ !io =
 	do
-		write_int(69)
-		write_str("\n")
-		write_int(420)
-		write_str("\n")
+		write_int!(69)
+		write_str!("\n")
+		write_int!(420)
+		write_str!("\n")
 	end

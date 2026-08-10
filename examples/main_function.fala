@@ -1,3 +1,3 @@
 let fun main _ = do
-  write_str "Hello, world!\n"
+  write_str! "Hello, world!\n"
 end in main nil

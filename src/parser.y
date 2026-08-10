@@ -96,6 +96,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> type_declaration variable_declaration function_declaration
 %type <node> effect_declaration effect_union
 %type <node> opt_effect_specifiers effect_specifiers effect_specifier
+%type <node> perform_effect
 
 %%
 
@@ -128,15 +129,17 @@ program : %empty { if (is_interactive(lexer)) YYACCEPT; }
         | nls exp nls  { ast_set_root(ast, $2); if (is_interactive(lexer)) YYACCEPT; }
         ;
 
-exp : do
-    | cond
-    | loop
-    | jump
-    | let
-    | app
-    | ass
-    | op
-    ;
+exp
+	: do
+	| cond
+	| loop
+	| jump
+	| let
+	| app
+	| ass
+	| op
+	| perform_effect
+	;
 
 nls : %empty | nls NEWLINE ;
 
@@ -256,6 +259,10 @@ mode : VAR { $$ = new_mode_node(ast, @$, ModeLiteral::VAR); }
 
 /* Function application */
 app : func "(" args ")" { $$ = NODE(NodeType::APP, $1, $3); };
+
+perform_effect
+	: id "!" "(" args ")" { $$ = NODE(NodeType::PERFORM, $id, $args); }
+	;
 
 /* TODO: allow application of function expressions to arguments */
 func : id ;
