@@ -1,0 +1,14 @@
+effect get (val x : Nil): Int<64>
+
+fun f _ !get =
+	get!(nil)
+
+fun main _ !io = do
+	let catch get _ =
+		resume 69
+	in do
+		write_int!((f(nil)))
+		write_str!("\n")
+	end
+	write_str!("420\n")
+end

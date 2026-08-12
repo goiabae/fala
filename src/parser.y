@@ -46,8 +46,8 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %token <character> CHAR
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS EFFECT
-%token NIL TRUE FALSE TYPE
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS EFFECT TYPE CATCH RESUME
+%token NIL TRUE FALSE
 
 /* pontuation */
 %token PAREN_OPEN "(" PAREN_CLOSE ")"
@@ -97,6 +97,8 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> effect_declaration effect_union
 %type <node> opt_effect_specifiers effect_specifiers effect_specifier
 %type <node> perform_effect
+%type <node> handler_declaration
+%type <node> resume_expression
 
 %%
 
@@ -139,6 +141,13 @@ exp
 	| ass
 	| op
 	| perform_effect
+	| resume_expression
+	;
+
+resume_expression
+	: RESUME exp {
+		$$ = NODE(NodeType::RESUME, $exp);
+	}
 	;
 
 nls : %empty | nls NEWLINE ;
@@ -193,6 +202,7 @@ decl
 	| function_declaration
 	| type_declaration
 	| effect_declaration
+	| handler_declaration
 	;
 
 variable_declaration
@@ -202,6 +212,12 @@ variable_declaration
 function_declaration
 	: FUN id[name] params opt_type[result_type] opt_effect_specifiers[effects] "=" nls exp[body] {
 		$$ = NODE(NodeType::FUN_DECL, $name, $params, $result_type, $effects, $body);
+	}
+	;
+
+handler_declaration
+	: CATCH id[name] params opt_type[result_type] "=" nls exp[body] {
+		$$ = NODE(NodeType::HANDLER_DECL, $name, $params, $result_type, $body);
 	}
 	;
 

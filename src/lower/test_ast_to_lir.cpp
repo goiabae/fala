@@ -264,7 +264,8 @@ TEST(ASTToLIRTest, let_expression) {
 			"L000:\n"
 			"    alloca %0, 1\n"
 			"    storea 3, 0(%0)\n"
-			"    loada %1, 0(%0)\n";
+			"    loada %1, 0(%0)\n"
+			"L%03zu:\n";
 		std::string a = std::string(b);
 		std::stringstream expected2;
 		expected2 << chunk;

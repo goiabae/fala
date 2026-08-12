@@ -167,6 +167,7 @@ lir::Chunk Compiler::compile() {
 		const Context ctx {
 			.handlers = handlers,
 			.current_closure = {},
+			.current_resumption = {},
 		};
 		const auto start = make_label();
 		const auto l1 = make_label();
@@ -234,6 +235,7 @@ lir::Chunk Compiler::compile() {
 		const Context ctx {
 			.handlers = handlers,
 			.current_closure = {},
+			.current_resumption = {},
 		};
 		const auto c0 = compile(ast.root_index, ctx);
 
@@ -461,6 +463,7 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	Context body_ctx {
 		.handlers = new_handlers,
 		.current_closure = ctx.current_closure,
+		.current_resumption = ctx.current_resumption,
 	};
 
 	const auto c0 = [&]() -> Result {
@@ -535,6 +538,7 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 	Context body_ctx {
 		.handlers = new_handlers,
 		.current_closure = ctx.current_closure,
+		.current_resumption = ctx.current_resumption,
 	};
 
 	const auto r0 = compile(node[0], ctx);
@@ -717,6 +721,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: assert(false);
+		case NodeType::HANDLER_DECL: assert(false);
+		case NodeType::RESUME: assert(false);
 	}
 	assert(false);
 }
@@ -826,6 +832,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const Context body_ctx {
 		.handlers = ctx.handlers,
 		.current_closure = clinfo,
+		.current_resumption = ctx.current_resumption,
 	};
 
 	const auto r0 = compile(body_idx, body_ctx);
@@ -877,14 +884,22 @@ Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
 	const auto exp_idx = node[1];
 	const auto& decls_node = ast.at(decls_idx);
 	Context exp_ctx {ctx};
+	const auto l = make_label();
 	const auto r0 = compile(exp_idx, exp_ctx);
 
 	lir::Chunk chunk {};
 	for (const auto decl_idx : decls_node) {
-		const auto ri = compile(decl_idx, exp_ctx);
-		chunk += ri.code;
+		const auto& decl = ast.at(decl_idx);
+		if (decl.type == NodeType::HANDLER_DECL) {
+			const auto ri = compile_handler_decl(decl_idx, exp_ctx, l);
+			chunk += ri.code;
+		} else {
+			const auto ri = compile(decl_idx, exp_ctx);
+			chunk += ri.code;
+		}
 	}
 	chunk += r0.code;
+	chunk.add_label(l);
 
 	return {chunk, r0.opnd};
 }
@@ -939,6 +954,7 @@ Result Compiler::compile_block(NodeIndex node_idx, Context ctx) {
 	const Context inner_ctx {
 		.handlers = ctx.handlers,
 		.current_closure = ctx.current_closure,
+		.current_resumption = ctx.current_resumption,
 	};
 	for (const auto stmt_idx : node) {
 		const auto ri = compile(stmt_idx, inner_ctx);
@@ -1237,8 +1253,49 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: COMPILE_WITH_HANDLER(compile_perform)
+		case NodeType::HANDLER_DECL: assert(false);
+		case NodeType::RESUME: {
+			const auto c0 = compile(node[0], ctx);
+			lir::Chunk chunk {};
+			chunk += c0.code;
+			chunk.emit(Opcode::PUSH, c0.opnd);
+			chunk.emit(Opcode::RESUME, ctx.current_resumption.value());
+			return {chunk, {}};
+		}
 	}
 	assert(false);
+}
+
+Result Compiler::compile_handler_decl(
+	NodeIndex node_idx, Context ctx, lir::Label exit
+) {
+	const auto& node = ast.at(node_idx);
+	const auto r4 = make_register();
+	const auto k = make_register();
+	const auto l4 = make_label();
+	const auto id_idx = node[0];
+	const auto& id_node = ast.at(id_idx);
+	const auto param_list_idx = node[1];
+	const auto& param_list_node = ast.at(param_list_idx);
+	const auto tag = effect_tags.at(id_node.guid);
+	lir::Chunk chunk {};
+	chunk.emit(Opcode::CATCH, tag, l4);
+	chunk.emit(Opcode::POP, k);
+	for (auto param_idx : param_list_node) {
+		const auto& param_node = ast.at(param_idx);
+		const auto& param_name = ast.at(param_node[1]);
+		chunk.emit(Opcode::POP, variables.at(param_name.guid));
+	}
+	Context handler_ctx {
+		.handlers = ctx.handlers,
+		.current_closure = ctx.current_closure,
+		.current_resumption = k,
+	};
+	const auto c0 = compile(node[3], handler_ctx);
+	chunk += c0.code;
+	chunk.emit_jmp(exit);
+	chunk.add_label(l4);
+	return {chunk, {}};
 }
 
 } // namespace compiler

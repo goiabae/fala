@@ -59,6 +59,8 @@ enum {
 	KW_AS,
 	KW_TYPE,
 	KW_EFFECT,
+	KW_CATCH,
+	KW_RESUME,
 	KW_COUNT,
 };
 
@@ -95,6 +97,8 @@ const char* keyword_repr(size_t i) {
 		case KW_AS: return "as";
 		case KW_TYPE: return "type";
 		case KW_EFFECT: return "effect";
+		case KW_CATCH: return "catch";
+		case KW_RESUME: return "resume";
 	}
 	assert(false);
 }
@@ -133,6 +137,8 @@ int keyword_to_bison(size_t i) {
 		case KW_OUT: return tk::OUT;
 		case KW_TYPE: return tk::TYPE;
 		case KW_EFFECT: return tk::EFFECT;
+		case KW_CATCH: return tk::CATCH;
+		case KW_RESUME: return tk::RESUME;
 	}
 	assert(false);
 }

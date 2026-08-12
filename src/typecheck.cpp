@@ -851,8 +851,27 @@ E Typechecker::eval_effset(NodeIndex node_idx) {
 			return union_of(left, right);
 		}
 		case NodeType::PERFORM: assert(false);
+		case NodeType::HANDLER_DECL: assert(false);
+		case NodeType::RESUME: assert(false);
 	}
 	assert(false);
+}
+
+static std::shared_ptr<Effect> singleton_effset(E a) {
+	if (a->variable != nullptr) throw std::runtime_error("");
+	if (a->concrete.size() != 1) throw std::runtime_error("");
+	return a->concrete.at(0);
+}
+
+static E remove_effect(E x, std::shared_ptr<Effect> effect) {
+	if (x->variable != nullptr) throw std::runtime_error("");
+	return std::make_shared<EffectSet>(difference2(x->concrete, {effect}));
+}
+
+static std::pair<T, E> remove_effect(
+	std::pair<T, E> x, std::shared_ptr<Effect> effect
+) {
+	return std::make_pair(x.first, remove_effect(x.second, effect));
 }
 
 // If an expression has type of lvalue, it can also be used as an rvalue
@@ -1498,7 +1517,8 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 					logger.log(
 						LogLevel::ERROR,
 						node.loc,
-						"Function declared with ({}) effects, but body had ({})",
+						"Function \"{}\", declared with ({}) effects, but body had ({})",
+						name,
 						*effset,
 						*body_type.second
 					);
@@ -1580,14 +1600,31 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& decls = ast.at(decls_idx);
 
 			auto joined = EMPTY_EFFSET;
+			std::vector<std::shared_ptr<Effect>> to_remove {};
 			for (auto decl_idx : decls) {
-				auto z = typecheck(decl_idx);
-				joined = union_of(joined, z.second);
+				const auto& decl_node = ast.at(decl_idx);
+				if (decl_node.type == NodeType::HANDLER_DECL) {
+					const auto effect_name = ast.at(decl_node[0]).guid;
+					auto effect = name_to_effect.at(effect_name);
+					to_remove.push_back(effect);
+					auto z = typecheck(decl_idx);
+					joined = union_of(joined, z.second);
+				} else {
+					auto z = typecheck(decl_idx);
+					joined = union_of(joined, z.second);
+				}
 			}
 
 			auto x = typecheck(exp_idx);
 			ASSOC_TYPE(node_idx, x.first);
-			return std::make_pair(x.first, union_of(joined, x.second));
+			joined = union_of(joined, x.second);
+
+			logger.log(LogLevel::INFO, "Accumulated effects ({})", *joined);
+			for (auto eff : to_remove) {
+				logger.log(LogLevel::INFO, "Removing ({})", *eff);
+				joined = remove_effect(joined, eff);
+			}
+			return std::make_pair(x.first, joined);
 		}
 
 			// |
@@ -1757,7 +1794,9 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				// FIXME: wrong!!!
 				if (decl_node.type == NodeType::TYPE_DECL) {
 				} else if (decl_node.type == NodeType::EFF_DECL) {
+					typecheck(decl);
 				} else if (decl_node.type == NodeType::EFF_ALIAS) {
+					typecheck(decl);
 				} else {
 					const auto p = make_polytype(VAL_, make_scheme({}, make_datavar()));
 					variables[name.guid] = p;
@@ -1765,8 +1804,12 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			}
 			auto joined = EMPTY_EFFSET;
 			for (auto decl : decl_list) {
-				auto t = typecheck(decl);
-				joined = union_of(joined, t.second);
+				const auto& decl_node = ast.at(decl);
+				if (decl_node.type != NodeType::EFF_DECL
+				    and decl_node.type != NodeType::EFF_ALIAS) {
+					auto t = typecheck(decl);
+					joined = union_of(joined, t.second);
+				}
 			}
 			return std::make_pair(make_type(VAL_, VOID_), joined);
 		}
@@ -1789,6 +1832,9 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			assert(id_node.type == NodeType::GUID);
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+			logger.log(
+				LogLevel::INFO, node.loc, "Declaring effect {}", id_node.guid.index
+			);
 			const auto& params_node = ast.at(params_idx);
 			assert(params_node.type == NodeType::METALIST);
 			std::vector<T> parameter_types {};
@@ -1838,7 +1884,12 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: {
 			auto effect_idx = node[0];
+			const auto& effect_node = ast.at(effect_idx);
+			assert(effect_node.type == NodeType::GUID);
 			auto arguments_idx = node[1];
+			logger.log(
+				LogLevel::INFO, node.loc, "Performing effect {}", effect_node.guid.index
+			);
 			auto effset = eval_effset(effect_idx);
 			assert(effset->concrete.size() == 1);
 			auto effect = effset->concrete.at(0);
@@ -1852,6 +1903,52 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			}
 			joined = union_of(joined, effset);
 			return std::make_pair(make_type(VAL_, effect->output), joined);
+		}
+		case NodeType::HANDLER_DECL: {
+			const auto& id_node = ast.at(node[0]);
+			assert(id_node.type == NodeType::GUID);
+			logger.log(
+				LogLevel::INFO, node.loc, "Handling effect {}", id_node.guid.index
+			);
+			auto effset = eval_effset(node[0]);
+			auto effect = singleton_effset(effset);
+			const auto& param_list_node = ast.at(node[1]);
+			for (auto param_idx : param_list_node) {
+				const auto& param = ast.at(param_idx);
+				assert(param.type == NodeType::PARAM);
+				const auto& param_name = ast.at(param[1]);
+				assert(param_name.type == NodeType::GUID);
+				const auto& param_mode = ast.at(param[0]);
+				assert(
+					param_mode.type == NodeType::MODE
+					|| param_mode.type == NodeType::EMPTY
+				);
+				const auto& param_type_node = ast.at(param[2]);
+				const auto mode = [&]() {
+					if (param_mode.type == NodeType::EMPTY)
+						return make_modevar();
+					else if (param_mode.mode == ModeLiteral::VAL)
+						return VAL_;
+					else if (param_mode.mode == ModeLiteral::VAR)
+						return VAR_;
+					else if (param_mode.mode == ModeLiteral::OUT)
+						return OUT_;
+					else
+						assert(false);
+				}();
+				auto param_datatype = (param_type_node.type == NodeType::EMPTY)
+				                      ? make_datavar()
+				                      : eval(param[2]);
+				auto var = make_type(mode, param_datatype);
+				const auto p1 = dont_generalize(var, {});
+				variables[param_name.guid] = p1;
+			}
+			auto p = typecheck(node[3]);
+			return remove_effect(p, effect);
+		}
+		case NodeType::RESUME: {
+			auto p = typecheck(node[0]);
+			return std::make_pair(make_type(VAL_, VOID_), p.second);
 		}
 	}
 	assert(false && "unreachable");

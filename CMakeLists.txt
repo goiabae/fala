@@ -131,6 +131,7 @@ test_example(simple_closure)
 test_example(type_expressions)
 test_example(type_declarations)
 test_example(effect_declaration)
+test_example(handler)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)

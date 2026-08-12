@@ -674,6 +674,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: assert(false);
+		case NodeType::HANDLER_DECL: assert(false);
+		case NodeType::RESUME: assert(false);
 	}
 	assert(false);
 }
@@ -784,6 +786,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: assert(false);
+		case NodeType::HANDLER_DECL: assert(false);
+		case NodeType::RESUME: assert(false);
 	}
 	assert(false);
 }

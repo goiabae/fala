@@ -120,6 +120,8 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			return;
 		}
 		case NodeType::PERFORM: assert(false);
+		case NodeType::HANDLER_DECL: assert(false);
+		case NodeType::RESUME: assert(false);
 	}
 }
 
@@ -349,6 +351,28 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			const auto& args_node = m_ast.at(args_idx);
 			refere(node[0], scope_idx, m_symtab.effset_namespace);
 			for (const auto arg_idx : args_node) analyse(arg_idx, scope_idx);
+			return;
+		}
+		case NodeType::HANDLER_DECL: {
+			const auto id_idx = node[0];
+			const auto params_idx = node[1];
+			const auto opt_type_idx = node[2];
+			const auto body_idx = node[3];
+			refere(id_idx, scope_idx, m_symtab.effset_namespace);
+			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
+			const auto& params_node = m_ast.at(params_idx);
+			for (const auto param_idx : params_node) {
+				const auto& param_node = m_ast.at(param_idx);
+				assert(param_node.type == NodeType::PARAM);
+				analyse_type(param_node[2], inner_scope_idx);
+				define(param_node[1], inner_scope_idx, m_symtab.value_namespace);
+			}
+			analyse_type(opt_type_idx, inner_scope_idx);
+			analyse(body_idx, scope_idx);
+			return;
+		}
+		case NodeType::RESUME: {
+			analyse(node[0], scope_idx);
 			return;
 		}
 	}
