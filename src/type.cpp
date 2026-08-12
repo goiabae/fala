@@ -85,7 +85,7 @@ std::optional<Mode::Concrete> Mode::to_concrete() {
 	}
 }
 
-static std::ostream& operator<<(std::ostream& st, const Effect& eff) {
+std::ostream& operator<<(std::ostream& st, const Effect& eff) {
 	return st << eff.name;
 }
 

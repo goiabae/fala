@@ -154,6 +154,7 @@ std::ostream& operator<<(std::ostream&, Mode::Concrete);
 std::ostream& operator<<(std::ostream&, const PolyType&);
 std::ostream& operator<<(std::ostream&, const DataScheme&);
 std::ostream& operator<<(std::ostream& st, const EffectSet& set);
+std::ostream& operator<<(std::ostream& st, const Effect& eff);
 
 M make_modevar(std::size_t index);
 D make_datavar(std::size_t index);
@@ -192,6 +193,7 @@ DEFFMT(Mode::Concrete);
 DEFFMT(PolyType);
 DEFFMT(DataScheme);
 DEFFMT(EffectSet);
+DEFFMT(Effect);
 
 #undef M
 #undef D
