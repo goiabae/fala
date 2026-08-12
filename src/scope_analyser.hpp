@@ -18,6 +18,8 @@ class ScopeAnalyser {
 	void define_builtin(const char*);
 	void define_builtin_type(const char*);
 	void define_builtin_effset(const char*);
+	Guid define(NodeIndex, ScopeIndex, Namespace);
+	Guid refere(NodeIndex, ScopeIndex, Namespace);
 
  private:
 	AST& m_ast;
