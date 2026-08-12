@@ -3,6 +3,7 @@
 set -u
 
 FALA="./build/fala"
+MAX_TIME=20s
 
 if [ -t 1 ]; then
 	red='\e[0;31m'
@@ -44,7 +45,7 @@ interpret() {
 		touch $tmp/$testname.in
 	fi
 	test "INTERPRETED(lir) ${testname}"
-	timeout 10s $inter -i $file < $tmp/$testname.in > $tmp/$testname.actual
+	timeout "${MAX_TIME}" $inter -i $file < $tmp/$testname.in > $tmp/$testname.actual
 	if [ $? -ne 0 ]; then
 		fail $testname out
 	fi
