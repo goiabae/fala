@@ -193,6 +193,7 @@ lir::Chunk Compiler::compile() {
 		chunk.emit(lir::Opcode::POP, r8);
 		chunk.emit_loada(r9, lir::Immediate(0), r8);
 		chunk.emit(lir::Opcode::PRINTC, r9);
+		chunk.emit(Opcode::PUSH, lir::Immediate(0));
 		chunk.emit(Opcode::RESUME, r4);
 		chunk.emit_jmp(l2);
 
@@ -203,6 +204,7 @@ lir::Chunk Compiler::compile() {
 		chunk.emit(lir::Opcode::POP, r8);
 		chunk.emit_loada(r9, lir::Immediate(0), r8);
 		chunk.emit(lir::Opcode::PRINTF, r8);
+		chunk.emit(Opcode::PUSH, lir::Immediate(0));
 		chunk.emit(Opcode::RESUME, r4);
 		chunk.emit_jmp(l2);
 
@@ -213,6 +215,7 @@ lir::Chunk Compiler::compile() {
 		chunk.emit(lir::Opcode::POP, r8);
 		chunk.emit_loada(r9, lir::Immediate(0), r8);
 		chunk.emit(lir::Opcode::PRINTV, r9);
+		chunk.emit(Opcode::PUSH, lir::Immediate(0));
 		chunk.emit(Opcode::RESUME, r4);
 		chunk.emit_jmp(l2);
 

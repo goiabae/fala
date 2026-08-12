@@ -459,6 +459,7 @@ TEST(VMTest, control_operators) {
 	const auto r12 = make_integer_register(12);
 	const auto r13 = make_integer_register(13);
 	const auto r14 = make_integer_register(14);
+	const auto r15 = make_integer_register(15);
 
 	const auto l0 = lir::Label(0);
 	const auto l1 = lir::Label(1);
@@ -480,6 +481,7 @@ TEST(VMTest, control_operators) {
 	chunk.emit_storea(r6, lir::Immediate(0), r7);
 	chunk.emit(lir::Opcode::PUSH, r7);
 	chunk.emit(lir::Opcode::THROW, lir::Immediate(0), lir::Immediate(1));
+	chunk.emit(lir::Opcode::POP, r15);
 	chunk.emit(lir::Opcode::PRINTV, lir::Immediate(9));
 	chunk.emit(lir::Opcode::PUSH, lir::Immediate(0));
 	chunk.emit(lir::Opcode::RET);
@@ -490,6 +492,7 @@ TEST(VMTest, control_operators) {
 	chunk.emit(lir::Opcode::POP, r8);
 	chunk.emit_loada(r9, lir::Immediate(0), r8);
 	chunk.emit(lir::Opcode::PRINTV, r9);
+	chunk.emit(lir::Opcode::PUSH, lir::Immediate(0));
 	chunk.emit(lir::Opcode::RESUME, r14);
 	chunk.emit_jmp(l3);
 

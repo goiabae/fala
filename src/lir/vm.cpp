@@ -393,8 +393,10 @@ void VM::run(const lir::Chunk& code) {
 				goto dont_inc;
 			}
 			case Opcode::RESUME: {
+				const auto top = stack.top();
 				const auto k = fetch(inst.operands[0]).as_continuation();
 				restore_continuation(*k);
+				stack.push(top);
 				break;
 			}
 			case Opcode::THROW: {
