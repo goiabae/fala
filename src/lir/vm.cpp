@@ -197,7 +197,7 @@ void VM::run(const lir::Chunk& code) {
 				auto& cell = cells[inst.operands[0].as_register().index];
 				if (stack.size() == 0)
 					throw std::runtime_error("can't pop value. stack was empty");
-				cell = stack.top();
+				cell = stack.back();
 				stack.pop();
 				break;
 			}
@@ -222,7 +222,7 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			case Opcode::FUNC:
 				callstack.push(return_address);
-				return_address = (size_t)stack.top().as_integer();
+				return_address = (size_t)stack.back().as_integer();
 				stack.pop();
 				break;
 			case Opcode::ALLOCA: {
@@ -393,7 +393,7 @@ void VM::run(const lir::Chunk& code) {
 				goto dont_inc;
 			}
 			case Opcode::RESUME: {
-				const auto top = stack.top();
+				const auto top = stack.back();
 				const auto k = fetch(inst.operands[0]).as_continuation();
 				restore_continuation(*k);
 				stack.push(top);
@@ -412,7 +412,7 @@ void VM::run(const lir::Chunk& code) {
 					const auto handler = maybe_handler.value();
 					std::vector<Value> args {};
 					for (auto i = 0ul; i < arg_count; i++) {
-						args.push_back(stack.top());
+						args.push_back(stack.back());
 						stack.pop();
 					}
 					restore_continuation(handler);
@@ -421,6 +421,31 @@ void VM::run(const lir::Chunk& code) {
 					}
 					stack.push(Value(std::make_shared<Continuation>(current_cont)));
 				}
+				break;
+			}
+			case Opcode::BUMP: {
+				const auto n = fetch(inst.operands[0]).as_integer();
+				assert(n >= 0);
+				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
+					stack.push(Value());
+				}
+				break;
+			}
+			case Opcode::DROP: {
+				const auto n = fetch(inst.operands[0]).as_integer();
+				assert(n >= 0);
+				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
+					stack.pop();
+				}
+				break;
+			}
+			case Opcode::PICK: {
+				auto& r = deref(inst.operands[0]);
+				const auto n = fetch(inst.operands[1]).as_integer();
+				assert(n >= 0);
+				auto v = &stack.at(stack.size() - 1 - static_cast<std::size_t>(n));
+				auto p = Value(v, 1);
+				r = p;
 				break;
 			}
 		}

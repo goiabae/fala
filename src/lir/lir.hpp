@@ -39,8 +39,6 @@ enum class Opcode {
 	JMP,
 	JMP_FALSE,
 	JMP_TRUE,
-	PUSH,
-	POP,
 	CALL,
 	RET,
 	FUNC,
@@ -50,6 +48,13 @@ enum class Opcode {
 	RESUME,
 	THROW,
 
+	// stack operations
+	BUMP,
+	DROP,
+	PUSH,
+	POP,
+	PICK,
+
 	// pointer operations
 	ALLOCA,
 	LOADA,
@@ -58,6 +63,7 @@ enum class Opcode {
 	CLONEA,
 	REPEAT,
 	INITA,
+
 };
 
 class Type;

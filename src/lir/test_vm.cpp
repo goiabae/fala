@@ -87,7 +87,7 @@ TEST(VMTest, push_immediate) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(vm.stack.top().as_integer(), 69);
+	EXPECT_EQ(vm.stack.back().as_integer(), 69);
 }
 
 TEST(VMTest, heap_allocation) {

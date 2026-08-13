@@ -12,6 +12,7 @@
 #include <utility>
 #include <variant>
 
+#include "fixed_vector.hpp"
 #include "lir/lir.hpp"
 
 namespace lir {
@@ -123,7 +124,7 @@ static constexpr const auto register_count = 2048;
 
 struct Continuation {
 	std::array<Value, register_count> cells;
-	std::stack<Value> stack;
+	FixedVector<Value> stack;
 	std::stack<std::size_t> callstack;
 	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
 		prompt_tags;
@@ -133,7 +134,7 @@ struct Continuation {
 
 struct VM {
 	VM(std::istream& input, std::ostream& output)
-	: input {input}, output {output} {}
+	: input {input}, output {output}, stack(4096) {}
 
 	std::istream& input;
 	std::ostream& output;
@@ -141,7 +142,7 @@ struct VM {
 	bool should_print_result {true};
 
 	std::array<Value, register_count> cells {};
-	std::stack<Value> stack {};
+	FixedVector<Value> stack;
 	std::stack<std::size_t> callstack {};
 	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
 		prompt_tags {};

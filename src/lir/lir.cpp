@@ -1,5 +1,6 @@
 #include "lir.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <ostream>
 #include <stdexcept>
@@ -97,6 +98,9 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::CATCH: return 2;
 		case Opcode::RESUME: return 1;
 		case Opcode::THROW: return 2;
+		case Opcode::BUMP: return 1;
+		case Opcode::DROP: return 1;
+		case Opcode::PICK: return 2;
 	}
 	assert(false);
 };
@@ -215,6 +219,9 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::CATCH: return "catch";
 		case Opcode::RESUME: return "resume";
 		case Opcode::THROW: return "throw";
+		case Opcode::BUMP: return "bump";
+		case Opcode::DROP: return "drop";
+		case Opcode::PICK: return "pick";
 	}
 	assert(false);
 }
