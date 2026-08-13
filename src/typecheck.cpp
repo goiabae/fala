@@ -450,16 +450,21 @@ bool cast_to(T from, T to) {
 	   and cast_to(from->datatype, to->datatype);
 }
 
+template<typename... Args>
 void Typechecker::mismatch_error(
-	Location loc, const char* msg, T got, T expected
+	Location loc, std::format_string<Args...> fmt, T got, T expected, Args... args
 ) {
-	std::cerr << ANSI_STYLE_BOLD << "<FIXME.fala>:" << loc.begin.line + 1 << ":"
-						<< loc.begin.column + 1 << ": " << ANSI_COLOR_RED
-						<< "TYPECHECK ERROR:" ANSI_COLOR_RESET << ' ' << msg << '\n'
-						<< "\tExpected: " << *expected << '\n'
-						<< "\t     Got: " << *got << '\n';
-	std::exit(1);
+	const auto msg = std::format(fmt, std::forward(args)...);
+	logger.err(
+		loc,
+		"{}\n\tExpected: {}\n\t     Got: "
+		"{}\n",
+		msg,
+		*expected,
+		*got
+	);
 }
+
 #define BIND_FUNC(NAME, TYP) \
 	env.insert(scope_id, pool.intern(strdup(NAME)), TYP)
 
@@ -940,8 +945,8 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				mismatch_error(
 					node.loc,
 					"Function and arguments don't match",
-					func_type.first,
-					expected_func_type
+					expected_func_type,
+					func_type.first
 				);
 			}
 

@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#include <format>
 #include <map>
 #include <unordered_set>
 #include <vector>
@@ -36,7 +37,10 @@ struct Typechecker {
 	bool unify(M, M);
 	bool unify(D, D);
 	bool unify(T, T);
-	void mismatch_error(Location, const char*, T, T);
+	template<typename... Args>
+	void mismatch_error(
+		Location, std::format_string<Args...>, T, T, Args... args
+	);
 	D make_datavar();
 	D make_genvar();
 	M make_modevar();
