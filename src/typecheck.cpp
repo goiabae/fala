@@ -1261,8 +1261,8 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto left = typecheck(node[0]);
 			const auto right = typecheck(node[1]);
 			if (not(
-						unify(left.first, make_type(VAL_, int64_typ))
-						and unify(right.first, make_type(VAL_, int64_typ))
+						cast_to(left.first, make_type(VAL_, int64_typ))
+						and cast_to(right.first, make_type(VAL_, int64_typ))
 					))
 				logger.err(
 					node.loc, "Comparison operator arguments must be of numeric type"
