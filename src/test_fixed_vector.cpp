@@ -13,8 +13,9 @@ TEST(FixedVectorTest, copy_constructible) {
 	FixedVector<int> a {1, 2, 3};
 	FixedVector<int> b {a};
 
+	a[0] = 69;
 	ASSERT_EQ(a.size(), 3);
-	ASSERT_TRUE(a[0] == 1 and a[1] == 2 and a[2] == 3);
+	ASSERT_TRUE(a[0] == 69 and a[1] == 2 and a[2] == 3);
 	ASSERT_EQ(b.size(), 3);
 	ASSERT_TRUE(b[0] == 1 and b[1] == 2 and b[2] == 3);
 }

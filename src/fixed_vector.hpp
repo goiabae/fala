@@ -15,6 +15,7 @@ class FixedVector {
 	FixedVector();
 	FixedVector(std::initializer_list<T> init);
 	FixedVector(std::size_t count, const T& value);
+	FixedVector(std::size_t count);
 
 	FixedVector(const FixedVector<T>& other);
 	FixedVector(FixedVector<T>&& other);
@@ -44,13 +45,15 @@ class FixedVector {
  private:
 	std::unique_ptr<T[]> m_data {};
 	std::size_t m_size {};
+	std::size_t m_cap {};
 
  public:
-	FixedVector() : m_data {nullptr}, m_size {0} {}
+	FixedVector() : m_data {nullptr}, m_size {0}, m_cap {0} {}
 
 	FixedVector(std::initializer_list<T> init) {
 		m_data = std::make_unique<T[]>(init.size());
 		m_size = init.size();
+		m_cap = init.size();
 		std::ranges::copy(init, m_data.get());
 	}
 
@@ -58,28 +61,40 @@ class FixedVector {
 		m_data = std::make_unique<T[]>(count);
 		for (auto i = 0ul; i < count; i++) m_data.get()[i] = value;
 		m_size = count;
+		m_cap = count;
+	}
+
+	FixedVector(std::size_t count) {
+		m_data = std::make_unique<T[]>(count);
+		for (auto i = 0ul; i < count; i++) m_data.get()[i] = {};
+		m_size = 0;
+		m_cap = count;
 	}
 
 	FixedVector(const FixedVector<T>& other) {
 		m_data = std::make_unique<T[]>(other.size());
 		m_size = other.size();
+		m_cap = other.m_cap;
 		std::ranges::copy(other, m_data.get());
 	}
 
 	FixedVector(FixedVector<T>&& other)
-	: m_data(std::move(other.m_data)), m_size(std::move(other.m_size)) {
+	: m_data(std::move(other.m_data)),
+		m_size(std::move(other.m_size)),
+		m_cap(std::move(other.m_cap)) {
 		other.m_size = 0;
+		other.m_cap = 0;
 	}
 
 	FixedVector<T>& operator=(const FixedVector<T>& other) {
-		if (other.size() != m_size)
+		if (other.m_cap != m_cap)
 			throw std::runtime_error("assignment to vector of different size");
-		std::ranges::copy(other, std::begin(*m_data));
+		std::ranges::copy(other.begin(), other.end(), m_data.get());
 		return *this;
 	}
 
 	FixedVector<T>& operator=(FixedVector<T>&& other) {
-		if (other.size() != m_size)
+		if (other.m_cap != m_cap)
 			throw std::runtime_error("assignment to vector of different size");
 		m_data = std::move(other.m_data);
 		other.m_size = 0;
@@ -92,6 +107,15 @@ class FixedVector {
 	}
 
 	const T& operator[](std::size_t i) const {
+		return const_cast<FixedVector<T>&&>(*this)[i];
+	}
+
+	T& at(std::size_t i) {
+		if (i > (size() - 1)) std::runtime_error("index out of bounds");
+		return m_data.get()[i];
+	}
+
+	const T& at(std::size_t i) const {
 		return const_cast<FixedVector<T>&&>(*this)[i];
 	}
 
@@ -119,6 +143,24 @@ class FixedVector {
 	}
 
 	std::size_t size() const noexcept { return m_size; }
+
+	void push(const T& value) {
+		if (m_size == m_cap)
+			throw std::runtime_error("vector full. cant push element");
+		m_data[m_size++] = value;
+	}
+
+	T pop() {
+		if (m_size == 0) throw std::runtime_error("vector empty. cant pop element");
+		auto v = m_data[m_size - 1];
+		m_size--;
+		return v;
+	}
+
+	T back() {
+		if (m_size == 0) throw std::runtime_error("vector empty. cant get back");
+		return m_data[m_size - 1];
+	}
 };
 
 static_assert(std::is_default_constructible<FixedVector<int>>());
