@@ -26,13 +26,6 @@ namespace compiler {
 using lir::Opcode;
 using std::vector;
 
-static void err(const char* msg);
-
-void err(const char* msg) {
-	std::cout << "COMPILER_ERR: " << msg << std::endl;
-	exit(1);
-}
-
 static NodeIndex decl_name(const Node& node) {
 	if (node.type == NodeType::VAR_DECL) {
 		return node[1];
@@ -52,9 +45,6 @@ static NodeIndex decl_name(const Node& node) {
 namespace builtin {
 static Result read_int(Compiler& comp, vector<lir::Operand> args);
 static Result read_char(Compiler& comp, vector<lir::Operand> args);
-static Result write_int(Compiler& comp, vector<lir::Operand> args);
-static Result write_char(Compiler& comp, vector<lir::Operand> args);
-static Result write_str(Compiler& comp, vector<lir::Operand> args);
 
 struct Builtin {
 	Result (*ptr)(Compiler& comp, vector<lir::Operand> args);
@@ -64,40 +54,7 @@ struct Builtin {
 constexpr auto builtins = {
 	Builtin {read_int, "read_int"},
 	Builtin {read_char, "read_char"},
-	Builtin {write_int, "write_int"},
-	Builtin {write_char, "write_char"},
-	Builtin {write_str, "write_str"},
 };
-
-Result write_int(Compiler& comp, vector<lir::Operand> args) {
-	if (args.size() != 1)
-		err("write_int accepts only a single integer as argument");
-	lir::Chunk chunk {};
-	auto t1 = comp.make_register();
-	chunk.emit_loada(t1, lir::Immediate(0), args[0]);
-	chunk.emit(Opcode::PRINTV, t1);
-	return {chunk, {}};
-}
-
-Result write_char(Compiler& comp, vector<lir::Operand> args) {
-	if (args.size() != 1)
-		err("write_int accepts only a single character as argument");
-	lir::Chunk chunk {};
-	auto op = args[0];
-	auto t1 = comp.make_register();
-	chunk.emit_loada(t1, lir::Immediate(0), op);
-	chunk.emit(Opcode::PRINTC, t1);
-	return {chunk, {}};
-}
-
-Result write_str(Compiler&, vector<lir::Operand> args) {
-	if (args.size() != 1)
-		err("write_str accepts only a single pointer to character as argument");
-	lir::Chunk chunk {};
-	auto& op = args[0];
-	chunk.emit(Opcode::PRINTF, op);
-	return {chunk, {}};
-}
 
 Result read_int(Compiler& comp, vector<lir::Operand>) {
 	lir::Chunk chunk {};
