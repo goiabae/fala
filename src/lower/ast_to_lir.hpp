@@ -18,6 +18,11 @@ struct Result {
 	lir::Operand opnd;
 };
 
+struct Result2 {
+	lir::Block block;
+	lir::Operand opnd;
+};
+
 struct Handler {
 	lir::Label destination_label;
 	lir::Operand result_register;
@@ -58,14 +63,16 @@ struct Compiler {
 
 	lir::Chunk compile();
 	Result compile(NodeIndex node_idx, Context ctx);
-	Result compile_handler_decl(NodeIndex node_idx, Context ctx, lir::Label exit);
-	Result compile_lvalue(NodeIndex node_idx, Context ctx);
-	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
-	Result compile_case(
+	lir::Block compile_handler_decl(
+		NodeIndex node_idx, Context ctx, lir::Label exit
+	);
+	Result2 compile_lvalue(NodeIndex node_idx, Context ctx);
+	Result2 compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
+	lir::Block compile_case(
 		NodeIndex node_idx, Context ctx, lir::Label exit, lir::Register res,
 		std::shared_ptr<Datatype> expr_type, lir::Operand expr
 	);
-	Result compile_pattern_match(
+	lir::Block compile_pattern_match(
 		NodeIndex node_idx, Context ctx, lir::Label exit,
 		std::shared_ptr<Datatype> expr_type, lir::Operand expr
 	);
@@ -74,7 +81,7 @@ struct Compiler {
 	void allocate_variables();
 
 #define DECLARE_NODE_HANDLER(NAME) \
-	Result compile_##NAME(NodeIndex node_idx, Context ctx)
+	Result2 compile_##NAME(NodeIndex node_idx, Context ctx)
 
 	DECLARE_NODE_HANDLER(app);
 	DECLARE_NODE_HANDLER(if);
