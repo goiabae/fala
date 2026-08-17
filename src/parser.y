@@ -100,6 +100,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> handler_declaration
 %type <node> resume_expression
 %type <node> union_constructor_list union_constructor union_type_literal argument_type_list argument_type opt_argument_type_list
+%type <node> opt_args
 %type <node> match_case match_case_list match_expression
 %type <node> pattern pattern_list opt_pattern_list constructor_pattern
 
@@ -326,7 +327,7 @@ mode : VAR { $$ = new_mode_node(ast, @$, ModeLiteral::VAR); }
 		 ;
 
 /* Function application */
-app : func "(" args ")" { $$ = NODE(NodeType::APP, $1, $3); };
+app : func "(" opt_args ")" { $$ = NODE(NodeType::APP, $1, $3); };
 
 perform_effect
 	: id "!" "(" args ")" { $$ = NODE(NodeType::PERFORM, $id, $args); }
@@ -334,6 +335,11 @@ perform_effect
 
 /* TODO: allow application of function expressions to arguments */
 func : id ;
+
+opt_args
+	: %empty { $$ = new_list_node(ast, NodeType::METALIST); }
+	| args
+	;
 
 args
   : arg {
