@@ -172,13 +172,17 @@ struct Block {
  private:
 	lir::Chunk chunk;
 	std::function<void(lir::Chunk&, lir::Operand)> destination_patcher;
+	lir::Label entry_point;
 
  public:
 	lir::Chunk and_then(lir::Operand) const;
+	lir::Label entry() const { return entry_point; }
 
  public:
-	static lir::Block defer_last_jump(const lir::Chunk&);
-	static lir::Block defer_last_conditional_jump(const lir::Chunk&);
+	static lir::Block defer_last_jump(const lir::Chunk&, lir::Label);
+	static lir::Block defer_last_conditional_jump(const lir::Chunk&, lir::Label);
+
+	friend lir::Block sequence(const lir::Block&, const lir::Block&);
 };
 
 // return amount of operands of each opcode

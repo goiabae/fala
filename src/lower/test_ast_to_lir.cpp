@@ -203,13 +203,16 @@ TEST(ASTToLIRTest, add_integers) {
 		const char* b =
 			"    jump L000\n"
 			"L000:\n"
-			"    jump L001\n"
 			"L001:\n"
-			"    jump L002\n"
+			"L003:\n"
+			"    jump L004\n"
 			"L002:\n"
+			"L004:\n"
+			"    jump L005\n"
+			"L005:\n"
 			"    add %0, 1, 2\n"
-			"    jump L003\n"
-			"L003:\n";
+			"    jump L006\n"
+			"L006:\n";
 		std::string expected = std::string(b);
 		std::stringstream actualss;
 		actualss << chunk;
@@ -263,20 +266,25 @@ TEST(ASTToLIRTest, let_expression) {
 		const char* b =
 			"    jump L000\n"
 			"L000:\n"
-			"    jump L003\n"
-			"L003:\n"
+			"L005:\n"
+			"L006:\n"
+			"L007:\n"
+			"    jump L008\n"
+			"L008:\n"
 			"    alloca %0, 1\n"
 			"    storea 3, 0(%0)\n"
+			"    jump L009\n"
+			"L002:\n"
+			"L003:\n"
+			"L009:\n"
 			"    jump L004\n"
 			"L004:\n"
-			"    jump L002\n"
-			"L002:\n"
 			"    loada %1, 0(%0)\n"
-			"    jump L005\n"
+			"    jump L010\n"
 			"L001:\n"
-			"L005:\n"
-			"    jump L006\n"
-			"L006:\n";
+			"L010:\n"
+			"    jump L011\n"
+			"L011:\n";
 		std::string expected = std::string(b);
 		std::stringstream actualss;
 		actualss << chunk;

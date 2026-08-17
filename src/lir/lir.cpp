@@ -437,17 +437,31 @@ void patch_last_conditional_jump(lir::Chunk& chunk, lir::Operand opnd) {
 	chunk.m_vec.back().operands[1] = opnd;
 }
 
-lir::Block Block::defer_last_jump(const lir::Chunk& chunk) {
+lir::Block Block::defer_last_jump(const lir::Chunk& chunk, lir::Label entry) {
 	Block blk;
 	blk.chunk = chunk;
 	blk.destination_patcher = append_final_jump;
+	blk.entry_point = entry;
 	return blk;
 }
 
-lir::Block Block::defer_last_conditional_jump(const lir::Chunk& chunk) {
+lir::Block Block::defer_last_conditional_jump(
+	const lir::Chunk& chunk, lir::Label entry
+) {
 	Block blk;
 	blk.chunk = chunk;
 	blk.destination_patcher = patch_last_conditional_jump;
+	blk.entry_point = entry;
+	return blk;
+}
+
+lir::Block sequence(const lir::Block& a, const lir::Block& b) {
+	// FIXME: the patcher for b might not be valid anymore because the offsets of
+	// things have changed
+	Block blk;
+	blk.chunk = a.and_then(b.entry_point) + b.chunk;
+	blk.destination_patcher = b.destination_patcher;
+	blk.entry_point = a.entry_point;
 	return blk;
 }
 
