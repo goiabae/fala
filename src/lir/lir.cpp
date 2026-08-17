@@ -16,6 +16,9 @@ static std::ostream& print_inst_indirect(
 	std::ostream& st, const Instruction& inst
 );
 
+static void append_final_jump(lir::Chunk&, lir::Operand);
+static void patch_last_conditional_jump(lir::Chunk&, lir::Operand);
+
 std::ostream& operator<<(std::ostream& st, const ByteString& bs) {
 	st << '\"';
 	for (auto c : bs.bytes) {
@@ -418,6 +421,34 @@ Chunk& Chunk::emit_nop() { return emit(Opcode::NOP); }
 
 Chunk& Chunk::emit_enclose(Operand result, Operand label, Operand closure) {
 	return emit(Opcode::ENCLOSE, result, label, closure);
+}
+
+lir::Chunk Block::and_then(lir::Operand opnd) const {
+	auto patched = chunk;
+	destination_patcher(patched, opnd);
+	return patched;
+}
+
+void append_final_jump(lir::Chunk& chunk, lir::Operand opnd) {
+	chunk.emit_jmp(opnd);
+}
+
+void patch_last_conditional_jump(lir::Chunk& chunk, lir::Operand opnd) {
+	chunk.m_vec.back().operands[1] = opnd;
+}
+
+lir::Block Block::defer_last_jump(const lir::Chunk& chunk) {
+	Block blk;
+	blk.chunk = chunk;
+	blk.destination_patcher = append_final_jump;
+	return blk;
+}
+
+lir::Block Block::defer_last_conditional_jump(const lir::Chunk& chunk) {
+	Block blk;
+	blk.chunk = chunk;
+	blk.destination_patcher = patch_last_conditional_jump;
+	return blk;
 }
 
 } // namespace lir

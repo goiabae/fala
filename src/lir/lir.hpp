@@ -168,6 +168,19 @@ struct Chunk {
 	Chunk& emit_resume(Operand continuation);
 };
 
+struct Block {
+ private:
+	lir::Chunk chunk;
+	std::function<void(lir::Chunk&, lir::Operand)> destination_patcher;
+
+ public:
+	lir::Chunk and_then(lir::Operand) const;
+
+ public:
+	static lir::Block defer_last_jump(const lir::Chunk&);
+	static lir::Block defer_last_conditional_jump(const lir::Chunk&);
+};
+
 // return amount of operands of each opcode
 size_t opcode_opnd_count(Opcode op);
 const char* opcode_repr(Opcode op);
