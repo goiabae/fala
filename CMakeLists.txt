@@ -132,6 +132,7 @@ test_example(type_expressions)
 test_example(type_declarations)
 test_example(effect_declaration)
 test_example(handler)
+test_example(unions)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)

@@ -11,6 +11,7 @@
 #include <iterator>
 #include <memory>
 #include <ranges>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -248,9 +249,7 @@ lir::Chunk Compiler::compile() {
 	}
 }
 
-lir::Operand Compiler::make_register() {
-	return lir::Operand(lir::Register(reg_count++));
-}
+lir::Register Compiler::make_register() { return lir::Register(reg_count++); }
 
 lir::Label Compiler::make_label() { return lir::Label(label_count++); }
 
@@ -305,6 +304,47 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		} else {
 			throw std::runtime_error("unknown builtin");
 		}
+	} else if (tpc.constructors.contains(func_node.guid)) {
+		const auto ty = tpc.node_to_type.at(func_idx);
+		const auto dty = get_datatype(ty);
+		const auto fty = erase_function_captures(dty);
+		const auto name =
+			std::string_view(pool.find(symtab.name_of(func_node.guid).value()));
+		const auto unty = std::dynamic_pointer_cast<Union>(fty->output);
+		assert(unty != nullptr);
+		if (auto found = std::ranges::find(
+					unty->constructors,
+					std::string(name),
+					[](const auto& x) { return x.name; }
+				);
+		    found != unty->constructors.end()) {
+			auto index = std::distance(unty->constructors.begin(), found);
+			const auto r0 = make_register();
+			chunk.emit_alloca(
+				r0, lir::Immediate(static_cast<int>((*found).arguments.size()))
+			);
+			auto i = 0;
+			for (const auto& arg : args) {
+				const auto ri = make_register();
+				chunk.emit_loada(ri, lir::Immediate(0), arg);
+				chunk.emit_storea(ri, lir::Immediate(i), r0);
+				i++;
+			}
+			const auto r1 = make_register();
+			chunk.emit_alloca(r1, lir::Immediate(2));
+			chunk.emit_storea(
+				lir::Immediate(static_cast<int>(index)), lir::Immediate(0), r1
+			);
+			chunk.emit_storea(r0, lir::Immediate(1), r1);
+			return {chunk, r1};
+		} else {
+			logger.log(
+				LogLevel::ERROR,
+				"Constructor of union not found! Something went wrong with the "
+				"typechecker"
+			);
+		}
+		assert(false);
 	} else {
 		const auto ty = tpc.node_to_type.at(func_idx);
 		const auto name =
@@ -723,8 +763,89 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::PERFORM: assert(false);
 		case NodeType::HANDLER_DECL: assert(false);
 		case NodeType::RESUME: assert(false);
+		case NodeType::UNION_TYPE_LITERAL: assert(false);
+		case NodeType::UNION_CONSTRUCTOR: assert(false);
+		case NodeType::MATCH: assert(false);
+		case NodeType::CASE: assert(false);
+		case NodeType::CTOR_PATTERN: assert(false);
 	}
 	assert(false);
+}
+
+Result Compiler::compile_case(
+	NodeIndex node_idx, Context ctx, lir::Label exit, lir::Register res,
+	std::shared_ptr<Datatype> expr_type, lir::Operand expr
+) {
+	const auto& node = ast.at(node_idx);
+	assert(node.type == NodeType::CASE);
+	const auto l0 = make_label();
+	const auto c0 = compile_pattern_match(node[0], ctx, l0, expr_type, expr);
+	const auto c1 = compile(node[1], ctx);
+	lir::Chunk chunk {};
+	chunk += c0.code;
+	chunk += c1.code;
+	chunk.emit_mov(res, c1.opnd);
+	chunk.emit_jmp(exit);
+	chunk.add_label(l0);
+	return {chunk, {}};
+}
+
+Result Compiler::compile_pattern_match(
+	NodeIndex node_idx, Context ctx, lir::Label if_fail,
+	std::shared_ptr<Datatype> expr_type, lir::Operand expr
+) {
+	const auto& node = ast.at(node_idx);
+	switch (node.type) {
+		case NodeType::CTOR_PATTERN: {
+			const auto& name_node = ast.at(node[0]);
+			assert(name_node.type == NodeType::GUID);
+			const auto ctor_name =
+				std::string(pool.find(symtab.name_of(name_node.guid).value()));
+			const auto union_ty =
+				std::dynamic_pointer_cast<Union>(get_datatype(expr_type));
+			assert(union_ty != nullptr);
+			if (auto found = std::ranges::find(
+						union_ty->constructors,
+						ctor_name,
+						[](const auto& x) { return x.name; }
+					);
+			    found != union_ty->constructors.end()) {
+				auto tag = std::distance(union_ty->constructors.begin(), found);
+				lir::Chunk chunk {};
+				const auto r0 = make_register();
+				const auto r1 = make_register();
+				const auto r2 = make_register();
+				chunk.emit_loada(r0, lir::Immediate(0), expr);
+				chunk.emit(Opcode::EQ, r1, r0, lir::Immediate(static_cast<int>(tag)));
+				chunk.emit(Opcode::JMP_FALSE, r1, if_fail);
+				chunk.emit_loada(r2, lir::Immediate(1), expr);
+				const auto& arguments_node = ast.at(node[1]);
+				for (auto i = 0ul; i < arguments_node.size(); i++) {
+					const auto ri = make_register();
+					chunk.emit_loada(ri, lir::Immediate(static_cast<int>(i)), r2);
+					const auto ci = compile_pattern_match(
+						arguments_node[i], ctx, if_fail, (*found).arguments.at(i), ri
+					);
+					chunk += ci.code;
+				}
+				return {chunk, {}};
+			} else {
+				throw std::runtime_error(
+					"pattern match type does not contain constructor"
+				);
+			};
+		}
+		case NodeType::GUID: {
+			const auto r0 = variables.at(node.guid);
+			lir::Chunk chunk {};
+			chunk.emit_alloca(r0, lir::Immediate(1));
+			chunk.emit_storea(expr, lir::Immediate(0), r0);
+			return {chunk, {}};
+		}
+		default: {
+			throw std::runtime_error("unhandled pattern match");
+		}
+	}
 }
 
 Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
@@ -809,7 +930,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(cty->captures.size())));
 	ClosureInfo clinfo {
 		.function_name = id_node.guid,
-		.object = t3.as_register(),
+		.object = t3,
 		.offsets = {},
 	};
 	{
@@ -1262,6 +1383,25 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			chunk.emit(Opcode::RESUME, ctx.current_resumption.value());
 			return {chunk, {}};
 		}
+		case NodeType::UNION_TYPE_LITERAL: assert(false);
+		case NodeType::UNION_CONSTRUCTOR: assert(false);
+		case NodeType::MATCH: {
+			const auto r0 = make_register();
+			const auto l0 = make_label();
+			const auto ty = tpc.node_to_type.at(node[0]);
+			const auto dty = ty->datatype;
+			lir::Chunk chunk {};
+			const auto c0 = compile(node[0], ctx);
+			chunk += c0.code;
+			for (const auto case_idx : ast.at(node[1])) {
+				const auto ci = compile_case(case_idx, ctx, l0, r0, dty, c0.opnd);
+				chunk += ci.code;
+			}
+			chunk.add_label(l0);
+			return {chunk, r0};
+		}
+		case NodeType::CASE: assert(false);
+		case NodeType::CTOR_PATTERN: assert(false);
 	}
 	assert(false);
 }
@@ -1270,7 +1410,6 @@ Result Compiler::compile_handler_decl(
 	NodeIndex node_idx, Context ctx, lir::Label exit
 ) {
 	const auto& node = ast.at(node_idx);
-	const auto r4 = make_register();
 	const auto k = make_register();
 	const auto l4 = make_label();
 	const auto id_idx = node[0];

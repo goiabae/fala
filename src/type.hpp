@@ -42,6 +42,7 @@ struct TypeVariable;
 struct Array;
 struct Record;
 struct RowSet;
+struct Union;
 
 struct EffectSet;
 
@@ -90,6 +91,17 @@ struct Record final : DERIVE (
 
 struct RowSet final : DERIVE (
 	std::map<std::string, std::shared_ptr<Datatype>> rows;
+);
+
+
+struct Union final : DERIVE (
+	struct Constructor {
+		std::string name;
+		std::vector<D> arguments;
+	};
+	Union() = default;
+	Union(std::vector<Constructor> constructors) : constructors(constructors) {}
+	std::vector<Constructor> constructors;
 );
 
 // clang-format on
@@ -173,6 +185,8 @@ std::shared_ptr<DataScheme> make_scheme(
 	std::vector<std::shared_ptr<TypeVariable>>, D
 );
 E make_effsetvar(std::size_t index);
+T as_monotype(std::shared_ptr<PolyType>);
+D get_datatype(D);
 
 std::shared_ptr<Function> erase_function_captures(D);
 

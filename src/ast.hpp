@@ -75,6 +75,11 @@ enum class NodeType {
 	PERFORM,
 	HANDLER_DECL,
 	RESUME,
+	UNION_TYPE_LITERAL,
+	UNION_CONSTRUCTOR,
+	MATCH,
+	CASE,
+	CTOR_PATTERN,
 };
 
 enum class BinaryOperator {

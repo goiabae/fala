@@ -61,6 +61,9 @@ enum {
 	KW_EFFECT,
 	KW_CATCH,
 	KW_RESUME,
+	KW_UNION,
+	KW_MATCH,
+	KW_WITH,
 	KW_COUNT,
 };
 
@@ -99,6 +102,9 @@ const char* keyword_repr(size_t i) {
 		case KW_EFFECT: return "effect";
 		case KW_CATCH: return "catch";
 		case KW_RESUME: return "resume";
+		case KW_UNION: return "union";
+		case KW_MATCH: return "match";
+		case KW_WITH: return "with";
 	}
 	assert(false);
 }
@@ -139,6 +145,9 @@ int keyword_to_bison(size_t i) {
 		case KW_EFFECT: return tk::EFFECT;
 		case KW_CATCH: return tk::CATCH;
 		case KW_RESUME: return tk::RESUME;
+		case KW_UNION: return tk::UNION;
+		case KW_MATCH: return tk::MATCH;
+		case KW_WITH: return tk::WITH;
 	}
 	assert(false);
 }

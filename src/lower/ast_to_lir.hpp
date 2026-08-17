@@ -8,6 +8,7 @@
 #include "lir/lir.hpp"
 #include "str_pool.h"
 #include "symbol_table.hpp"
+#include "type.hpp"
 #include "typecheck.hpp"
 
 namespace compiler {
@@ -60,7 +61,15 @@ struct Compiler {
 	Result compile_handler_decl(NodeIndex node_idx, Context ctx, lir::Label exit);
 	Result compile_lvalue(NodeIndex node_idx, Context ctx);
 	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
-	lir::Operand make_register();
+	Result compile_case(
+		NodeIndex node_idx, Context ctx, lir::Label exit, lir::Register res,
+		std::shared_ptr<Datatype> expr_type, lir::Operand expr
+	);
+	Result compile_pattern_match(
+		NodeIndex node_idx, Context ctx, lir::Label exit,
+		std::shared_ptr<Datatype> expr_type, lir::Operand expr
+	);
+	lir::Register make_register();
 	lir::Label make_label();
 	void allocate_variables();
 

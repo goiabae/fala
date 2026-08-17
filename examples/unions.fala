@@ -1,0 +1,33 @@
+
+type Option = union
+	Some(Int<64>)
+	None()
+end
+
+fun always_none _ : Option =
+	None()
+
+fun some_one _ : Option =
+	Some(69)
+
+fun f _ = do
+	-- match always_none(nil) with
+	match some_one(nil) with
+		None() then 1
+		Some(x) then
+			match some_one(nil) with
+				None() then 0
+				Some(y) then x + y * 2
+			end
+	end
+end
+
+fun write_intln x !io = do
+	write_int!(x)
+	write_str!("\n")
+end
+
+fun main _ !io =
+	let val none = always_none(nil) in
+	let val _ = write_intln((f(nil))) in
+	nil

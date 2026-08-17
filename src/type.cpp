@@ -1,6 +1,7 @@
 #include "type.hpp"
 
 #include <ostream>
+#include <ranges>
 #include <sstream>
 #include <variant>
 
@@ -46,8 +47,7 @@ std::ostream& operator<<(std::ostream& st, const Type& t) {
 	return st;
 }
 
-std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
-	auto t = t1->datatype;
+std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Datatype> t) {
 	if (auto t2 = std::dynamic_pointer_cast<Integer>(t)) {
 		return t;
 	} else if (auto t2 = std::dynamic_pointer_cast<Nil>(t)) {
@@ -68,9 +68,16 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
 		return t2;
 	} else if (auto t2 = std::dynamic_pointer_cast<Closure>(t)) {
 		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Union>(t)) {
+		return t2;
 	} else {
 		assert(false && "no more variants of type!!!");
 	}
+}
+
+std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Type> t1) {
+	auto t = t1->datatype;
+	return get_datatype(t);
 }
 
 std::optional<Mode::Concrete> Mode::to_concrete() {
@@ -208,6 +215,25 @@ std::ostream& Nil::print(std::ostream& st) const {
 	return st;
 }
 
+size_t Union::size_of() { assert(false); }
+
+std::ostream& Union::print(std::ostream& st) const {
+	st << "{";
+	for (const auto& [i, ctor] : std::ranges::views::enumerate(constructors)) {
+		if (i != 0) st << "|";
+		st << ' ' << ctor.name << '(';
+		for (const auto& [j, argument] :
+		     std::ranges::views::enumerate(ctor.arguments)) {
+			st << *argument;
+			if (static_cast<std::size_t>(j) != (ctor.arguments.size() - 1))
+				st << ", ";
+		}
+		st << ')';
+	}
+	st << " }";
+	return st;
+}
+
 void TypeVariable::bind_to(std::shared_ptr<Datatype> t) {
 	bound_type = t;
 	is_bound = true;
@@ -312,4 +338,12 @@ std::shared_ptr<Function> erase_function_captures(D data) {
 
 E make_effsetvar(std::size_t index) {
 	return std::make_shared<EffectSet>(index);
+}
+
+T as_monotype(std::shared_ptr<PolyType> p) {
+	if (p->scheme->quantified.size() != 0)
+		throw std::runtime_error(
+			"can't cast polytype with quantified arguments to a monotype"
+		);
+	return make_type(p->mode, p->scheme->body);
 }

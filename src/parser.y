@@ -46,7 +46,7 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %token <character> CHAR
 
 /* keywords and constants */
-%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS EFFECT TYPE CATCH RESUME
+%token DO END IF THEN ELSE WHEN FOR FROM TO STEP WHILE BREAK CONTINUE VAR VAL OUT LET IN FUN BOOL INT UINT AS EFFECT TYPE CATCH RESUME UNION MATCH WITH
 %token NIL TRUE FALSE
 
 /* pontuation */
@@ -99,6 +99,9 @@ AST parse(Reader* reader, StringPool& pool, bool is_repl);
 %type <node> perform_effect
 %type <node> handler_declaration
 %type <node> resume_expression
+%type <node> union_constructor_list union_constructor union_type_literal argument_type_list argument_type opt_argument_type_list
+%type <node> match_case match_case_list match_expression
+%type <node> pattern pattern_list opt_pattern_list constructor_pattern
 
 %%
 
@@ -142,6 +145,55 @@ exp
 	| op
 	| perform_effect
 	| resume_expression
+	| match_expression
+	;
+
+match_expression
+	: MATCH exp WITH nls match_case_list[cases] nls END {
+		$$ = NODE(NodeType::MATCH, $exp, $cases);
+	}
+	;
+
+match_case_list
+	: match_case {
+		$$ = new_list_node(ast, NodeType::METALIST);
+		$$ = list_append_node(ast, $$, $1);
+	}
+	| match_case_list[prefix] nls match_case[postfix] {
+		$$ = list_append_node(ast, $prefix, $postfix);
+	}
+	;
+
+match_case
+	: pattern THEN nls exp {
+		$$ = NODE(NodeType::CASE, $pattern, $exp);
+	}
+	;
+
+pattern
+	: id
+	| constructor_pattern
+	;
+
+constructor_pattern
+	: id[name] "(" opt_pattern_list[args] ")" {
+		$$ = NODE(NodeType::CTOR_PATTERN, $name, $args);
+	}
+	;
+
+opt_pattern_list
+	: %empty { $$ = new_list_node(ast, NodeType::METALIST); }
+	| pattern_list
+	;
+
+pattern_list
+	: pattern {
+		$$ = new_list_node(ast, NodeType::METALIST);
+		$$ = list_append_node(ast, $$, $1);
+	}
+	| pattern_list[prefix] "," pattern[postfix] {
+		$$ = list_append_node(ast, $prefix, $postfix);
+	}
 	;
 
 resume_expression
@@ -393,7 +445,46 @@ type_expression
 	| record_type_literal
 	| array_type_literal
 	| id
+	| union_type_literal
 	;
+
+union_type_literal
+	: UNION nls union_constructor_list[lst] nls END {
+		$$ = NODE(NodeType::UNION_TYPE_LITERAL, $lst);
+	}
+	;
+
+union_constructor_list
+	: union_constructor {
+		$$ = new_list_node(ast, NodeType::METALIST);
+		$$ = list_append_node(ast, $$, $1);
+	}
+	| union_constructor_list[prefix] nls union_constructor[postfix]
+	{ $$ = list_append_node(ast, $prefix, $postfix); }
+	;
+
+union_constructor
+	: id "(" opt_argument_type_list ")" {
+		$$ = NODE(NodeType::UNION_CONSTRUCTOR, $1, $3);
+	}
+	;
+
+opt_argument_type_list
+	: %empty { $$ = new_list_node(ast, NodeType::METALIST); }
+	| argument_type_list
+	;
+
+argument_type_list
+	: argument_type {
+		$$ = new_list_node(ast, NodeType::METALIST);
+		$$ = list_append_node(ast, $$, $1);
+	}
+	| argument_type_list[prefix] nls "," nls argument_type[postfix] {
+		$$ = list_append_node(ast, $prefix, $postfix);
+	}
+	;
+
+argument_type : type_expression ;
 
 type_instantiation
 	: id "<" type_argument_list ">"

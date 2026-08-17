@@ -1,10 +1,7 @@
-#include <cstdint>
 #include <exception>
 #include <utility>
 
 #include "ast.hpp"
-#include "codepoint.hpp"
-#include "codepoint_decoder.hpp"
 #include "file.hpp"
 #include "file_reader.hpp"
 #include "line_reader.hpp"

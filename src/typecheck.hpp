@@ -32,6 +32,7 @@ struct Typechecker {
 
 	bool typecheck();
 	TE typecheck(NodeIndex node_idx);
+	void typecheck_pattern(NodeIndex node_idx, D data);
 	D eval(NodeIndex);
 	E eval_effset(NodeIndex);
 	bool unify(M, M);
@@ -66,6 +67,7 @@ struct Typechecker {
 	std::map<NodeIndex, T> node_to_type {};
 	std::map<Guid, D> type_names {};
 	std::map<Guid, E> effset_names {};
+	std::unordered_set<Guid> constructors {};
 	std::map<Guid, std::shared_ptr<Effect>> name_to_effect {};
 	Logger logger;
 

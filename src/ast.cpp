@@ -97,6 +97,11 @@ bool is_branch_node(NodeType type) {
 		case NodeType::PERFORM: return true;
 		case NodeType::HANDLER_DECL: return true;
 		case NodeType::RESUME: return true;
+		case NodeType::UNION_TYPE_LITERAL: return true;
+		case NodeType::UNION_CONSTRUCTOR: return true;
+		case NodeType::MATCH: return true;
+		case NodeType::CASE: return true;
+		case NodeType::CTOR_PATTERN: return true;
 	}
 	assert(false);
 }
@@ -161,6 +166,11 @@ const char* node_type_repr(enum NodeType type) {
 		case NodeType::PERFORM: return "NodeType::PERFORM";
 		case NodeType::HANDLER_DECL: return "HANDLER_DECL";
 		case NodeType::RESUME: return "NodeType::RESUME";
+		case NodeType::UNION_TYPE_LITERAL: return "NodeType::UNION_TYPE_LITERAL";
+		case NodeType::UNION_CONSTRUCTOR: return "NodeType::UNION_CONSTRUCTOR";
+		case NodeType::MATCH: return "NodeType::MATCH";
+		case NodeType::CASE: return "NodeType::CASE";
+		case NodeType::CTOR_PATTERN: return "NodeType::CTOR_PATTERN: break";
 	}
 	assert(false);
 }
@@ -244,6 +254,11 @@ const char* node_repr(enum NodeType type) {
 		case NodeType::PERFORM: return "perform";
 		case NodeType::HANDLER_DECL: return "handler";
 		case NodeType::RESUME: return "resume";
+		case NodeType::UNION_TYPE_LITERAL: return "union_type_literal";
+		case NodeType::UNION_CONSTRUCTOR: return "union_constructor";
+		case NodeType::MATCH: return "match";
+		case NodeType::CASE: return "case";
+		case NodeType::CTOR_PATTERN: return "ctor";
 	}
 	assert(false);
 }

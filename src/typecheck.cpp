@@ -14,6 +14,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 
 #include "ast.hpp"
@@ -113,6 +114,8 @@ auto visit(T&& obj, F&& f) {
 		return f(std::forward<Record>(*x));
 	} else if (auto x = dynamic_cast<RowSet*>(&obj)) {
 		return f(std::forward<RowSet>(*x));
+	} else if (auto x = dynamic_cast<Union*>(&obj)) {
+		return f(std::forward<Union>(*x));
 	} else {
 		assert(false && "no more datatype subclasses!!!");
 	}
@@ -721,6 +724,28 @@ bool Typechecker::unify(D a, D b) {
 		return true;
 	}
 
+	if (auto ua = to<Union>(a)) {
+		if (auto ub = to<Union>(b)) {
+			if (ua->constructors.size() != ub->constructors.size()) return false;
+			auto ctors = ua->constructors;
+			for (const auto& ctor : ctors) {
+				if (auto found = std::ranges::find(
+							ub->constructors, ctor.name, [](const auto& x) { return x.name; }
+						);
+				    found != ub->constructors.end()) {
+					if (ctor.arguments.size() != (*found).arguments.size()) return false;
+					for (const auto& [arga, argb] :
+					     std::ranges::views::zip(ctor.arguments, (*found).arguments)) {
+						if (not unify(arga, argb)) return false;
+					}
+				} else {
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+
 	return false;
 }
 
@@ -858,6 +883,11 @@ E Typechecker::eval_effset(NodeIndex node_idx) {
 		case NodeType::PERFORM: assert(false);
 		case NodeType::HANDLER_DECL: assert(false);
 		case NodeType::RESUME: assert(false);
+		case NodeType::UNION_TYPE_LITERAL: assert(false);
+		case NodeType::UNION_CONSTRUCTOR: assert(false);
+		case NodeType::MATCH: assert(false);
+		case NodeType::CASE: assert(false);
+		case NodeType::CTOR_PATTERN: assert(false);
 	}
 	assert(false);
 }
@@ -1509,7 +1539,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				variables[id_node.guid] = p2;
 
 				auto body_type = typecheck(body_idx);
-				if (!unify(body_type.first->datatype, output))
+				if (not unify(body_type.first->datatype, output))
 					mismatch_error(
 						node.loc,
 						"Function annotation output type and infered type don't "
@@ -1955,8 +1985,69 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			auto p = typecheck(node[0]);
 			return std::make_pair(make_type(VAL_, VOID_), p.second);
 		}
+		case NodeType::UNION_TYPE_LITERAL: assert(false);
+		case NodeType::UNION_CONSTRUCTOR: assert(false);
+		case NodeType::MATCH: {
+			const auto p = typecheck(node[0]);
+			auto joined = p.second;
+			auto d = make_datavar();
+			for (auto case_idx : ast.at(node[1])) {
+				const auto& case_node = ast.at(case_idx);
+				assert(case_node.type == NodeType::CASE);
+				typecheck_pattern(case_node[0], p.first->datatype);
+				auto t = typecheck(case_node[1]);
+				if (not unify(d, t.first->datatype)) {
+					logger.log(
+						LogLevel::ERROR, "case of match expression has wrong typel"
+					);
+				}
+				joined = union_of(joined, t.second);
+			}
+			return std::make_pair(make_type(VAL_, d), joined);
+		}
+		case NodeType::CASE: assert(false);
+		case NodeType::CTOR_PATTERN: assert(false);
 	}
 	assert(false && "unreachable");
+}
+
+void Typechecker::typecheck_pattern(NodeIndex node_idx, D data) {
+	const auto& node = ast.at(node_idx);
+	switch (node.type) {
+		case NodeType::GUID: {
+			variables[node.guid] = make_polytype(VAL_, make_scheme({}, data));
+			return;
+		}
+		case NodeType::CTOR_PATTERN: {
+			const auto& name_node = ast.at(node[0]);
+			assert(name_node.type == NodeType::GUID);
+			const auto ty = as_monotype(variables.at(name_node.guid));
+			const auto fty = std::dynamic_pointer_cast<Function>(get_datatype(ty));
+			assert(fty != nullptr);
+			if (not unify(data, fty->output)) throw std::runtime_error("");
+			auto uty = std::dynamic_pointer_cast<Union>(get_datatype(data));
+			const auto name =
+				std::string(pool.find(symtab.name_of(name_node.guid).value()));
+			if (auto found = std::ranges::find(
+						uty->constructors, name, [](const auto& x) { return x.name; }
+					);
+			    found != uty->constructors.end()) {
+				const auto& arguments_node = ast.at(node[1]);
+				assert(arguments_node.type == NodeType::METALIST);
+				for (auto i = 0ul; i < (*found).arguments.size(); i++) {
+					typecheck_pattern(arguments_node[i], (*found).arguments.at(i));
+				}
+				return;
+			} else {
+				throw std::runtime_error("impossible?");
+			}
+		}
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled pattern node {}", node_type_repr(node.type))
+			);
+		}
+	}
 }
 
 std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
@@ -2038,6 +2129,33 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 		case NodeType::GUID: {
 			return type_names.at(node.guid);
 		}
+		case NodeType::UNION_TYPE_LITERAL: {
+			auto union_dty = std::make_shared<Union>();
+			for (auto constructor_idx : ast.at(node[0])) {
+				const auto& constructor_node = ast.at(constructor_idx);
+				assert(constructor_node.type == NodeType::UNION_CONSTRUCTOR);
+				const auto& constructor_name = ast.at(constructor_node[0]);
+				assert(constructor_name.type == NodeType::GUID);
+				assert(not variables.contains(constructor_name.guid));
+				const auto name =
+					std::string(pool.find(symtab.name_of(constructor_name.guid).value()));
+				const auto& constructor_arguments = ast.at(constructor_node[1]);
+				std::vector<D> xs {};
+				std::vector<T> ys {};
+				for (auto argument_idx : constructor_arguments) {
+					auto d = eval(argument_idx);
+					xs.push_back(d);
+					ys.push_back(make_type(VAL_, d));
+				}
+				union_dty->constructors.emplace_back(name, xs);
+				variables[constructor_name.guid] = make_polytype(
+					VAL_, make_scheme({}, make_function(ys, union_dty, EMPTY_EFFSET))
+				);
+				assert(not constructors.contains(constructor_name.guid));
+				constructors.insert(constructor_name.guid);
+			}
+			return union_dty;
+		}
 		default: assert(false);
 	}
 }
@@ -2086,6 +2204,22 @@ D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 			},
 			[&](Array&& a) -> D {
 				return make_array(substitute(subst, a.item_type));
+			},
+			[&](Union&& u) -> D {
+				std::vector<Union::Constructor> ctors {};
+				for (const auto& ctor : u.constructors) {
+					std::vector<D> arguments {};
+					for (const auto& argument : ctor.arguments) {
+						arguments.push_back(substitute(subst, argument));
+					}
+					ctors.push_back(
+						Union::Constructor {
+							.name = ctor.name,
+							.arguments = arguments,
+						}
+					);
+				}
+				return std::make_shared<Union>(ctors);
 			},
 			[&](TypeVariable&& a) -> D {
 				if (a.is_bound
@@ -2221,6 +2355,15 @@ std::unordered_set<V> Typechecker::free_type_variables(D data) {
 			},
 			[&](Array&& a) -> std::unordered_set<V> {
 				return free_type_variables(a.item_type);
+			},
+			[&](Union&& u) -> std::unordered_set<V> {
+				std::unordered_set<V> set {};
+				for (const auto& ctor : u.constructors) {
+					for (const auto& arg : ctor.arguments) {
+						set.merge(free_type_variables(arg));
+					}
+				}
+				return set;
 			},
 			[&](TypeVariable&& a) -> std::unordered_set<V> {
 				if (a.is_generalized) return {};

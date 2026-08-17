@@ -1,6 +1,7 @@
 #include "scope_analyser.hpp"
 
 #include <cassert>
+#include <stdexcept>
 
 #include "ast.hpp"
 
@@ -122,6 +123,25 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 		case NodeType::PERFORM: assert(false);
 		case NodeType::HANDLER_DECL: assert(false);
 		case NodeType::RESUME: assert(false);
+		case NodeType::UNION_TYPE_LITERAL: {
+			for (auto constructor_idx : node) {
+				analyse_type(constructor_idx, scope_idx);
+			}
+			return;
+		}
+		case NodeType::UNION_CONSTRUCTOR: {
+			const auto name_idx = node[0];
+			const auto argument_list_idx = node[1];
+			define(name_idx, scope_idx, m_symtab.value_namespace);
+			const auto& argument_list_node = m_ast.at(argument_list_idx);
+			for (auto argument_idx : argument_list_node) {
+				analyse_type(argument_idx, scope_idx);
+			}
+			return;
+		}
+		case NodeType::MATCH: assert(false);
+		case NodeType::CASE: assert(false);
+		case NodeType::CTOR_PATTERN: assert(false);
 	}
 }
 
@@ -375,6 +395,41 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse(node[0], scope_idx);
 			return;
 		}
+		case NodeType::UNION_TYPE_LITERAL: assert(false);
+		case NodeType::UNION_CONSTRUCTOR: assert(false);
+		case NodeType::MATCH: {
+			analyse(node[0], scope_idx);
+			for (const auto case_idx : m_ast.at(node[1])) {
+				analyse(case_idx, scope_idx);
+			}
+			return;
+		}
+		case NodeType::CASE: {
+			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
+			analyse_pattern(node[0], inner_scope_idx);
+			analyse(node[1], inner_scope_idx);
+			return;
+		}
+		case NodeType::CTOR_PATTERN: assert(false);
+	}
+}
+
+void ScopeAnalyser::analyse_pattern(NodeIndex node_idx, ScopeIndex scope_idx) {
+	const auto& node = m_ast.at(node_idx);
+
+	if (node.type == NodeType::CTOR_PATTERN) {
+		analyse(node[0], scope_idx);
+		for (const auto& argument : m_ast.at(node[1])) {
+			analyse_pattern(argument, scope_idx);
+		}
+		return;
+	} else if (node.type == NodeType::ID) {
+		define(node_idx, scope_idx, m_symtab.value_namespace);
+		return;
+	} else {
+		throw std::runtime_error(
+			std::format("Unhandled {} node", node_type_repr(node.type))
+		);
 	}
 }
 

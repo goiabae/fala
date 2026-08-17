@@ -568,6 +568,11 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::PERFORM: assert(false);
 		case NodeType::HANDLER_DECL: assert(false);
 		case NodeType::RESUME: assert(false);
+		case NodeType::UNION_TYPE_LITERAL: assert(false);
+		case NodeType::UNION_CONSTRUCTOR: assert(false);
+		case NodeType::MATCH: assert(false);
+		case NodeType::CASE: assert(false);
+		case NodeType::CTOR_PATTERN: assert(false);
 	}
 	assert(false);
 }
