@@ -288,7 +288,13 @@ void VM::run(const lir::Chunk& code) {
 				auto offset = a.as_integer();
 				auto t1 = cells[pointer_register.index];
 				if (not t1.is_pointer())
-					throw std::runtime_error("loada base operand was not a pointer");
+					throw std::runtime_error(
+						std::format(
+							"(pc={}) loada base operand was not a pointer: {}",
+							program_counter,
+							serialize(t1)
+						)
+					);
 				auto pointer = t1.as_pointer();
 				auto value = pointer[(size_t)offset];
 				auto& cell = cells[result_register.as_register().index];
@@ -519,6 +525,28 @@ std::optional<Continuation> VM::find_handler(std::size_t tag) {
 	for (const auto& [tag2, handler] : std::ranges::views::reverse(prompt_tags))
 		if (tag2 == tag) return *handler;
 	return std::nullopt;
+}
+
+std::string VM::serialize(Value value) {
+	// FIXME: does not handle cycles in pointers, which might lead to infinite
+	// recursion
+	if (value.is_integer()) {
+		return std::format("{}", (int64_t)value.as_integer());
+	} else if (value.is_undefined()) {
+		return std::format("☠️");
+	} else if (value.is_pointer()) {
+		auto ptr = value.as_pointer();
+		std::string s {};
+		s += "(";
+		for (auto i = 0ul; i < ptr.size(); i++) {
+			s += serialize(*(ptr[i]));
+			if (i != (ptr.size() - 1)) s += " ";
+		}
+		s += ")";
+		return s;
+	} else {
+		return "K";
+	}
 }
 
 } // namespace lir

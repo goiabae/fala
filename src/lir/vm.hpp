@@ -148,6 +148,7 @@ struct VM {
 		prompt_tags {};
 	size_t program_counter {0};
 	std::size_t return_address {0};
+	std::string serialize(Value);
 
 	void run(const Chunk&);
 	std::size_t address_of_label(const Chunk&, lir::Label);
