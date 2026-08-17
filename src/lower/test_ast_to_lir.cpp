@@ -264,12 +264,19 @@ TEST(ASTToLIRTest, let_expression) {
 			"L000:\n"
 			"    alloca %0, 1\n"
 			"    storea 3, 0(%0)\n"
+			"    jump L003\n"
+			"L003:\n"
+			"    jump L002\n"
+			"L002:\n"
 			"    loada %1, 0(%0)\n"
-			"L%03zu:\n";
-		std::string a = std::string(b);
-		std::stringstream expected2;
-		expected2 << chunk;
-		EXPECT_EQ(expected2.str(), a);
+			"L001:\n"
+			"    jump L004\n"
+			"L004:\n";
+		std::string expected = std::string(b);
+		std::stringstream actualss;
+		actualss << chunk;
+		std::string actual = actualss.str();
+		EXPECT_EQ(expected, actual);
 	} catch (std::exception& exn) {
 		EXPECT_TRUE(false) << exn.what();
 	}

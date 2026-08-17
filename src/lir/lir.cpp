@@ -144,7 +144,7 @@ std::ostream& operator<<(std::ostream& st, const Chunk& chunk) {
 		i++;
 	}
 	for (auto l : chunk.label_indexes)
-		if (l.second == i) st << std::format("L%03zu:\n", l.first);
+		if (l.second == i) st << std::format("L{:03}:\n", l.first);
 	return st;
 }
 
