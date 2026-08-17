@@ -199,21 +199,22 @@ TEST(ASTToLIRTest, add_integers) {
 	checker.typecheck();
 	compiler::Compiler comp {ast, pool, checker, symtab};
 	const auto chunk = comp.compile();
-	lir::Chunk expected {};
-	{
-		const auto r0 = make_int_reg(0);
-		const auto l0 = lir::Operand(lir::Label(0));
-		const auto c_one = lir::Immediate(1);
-		const auto c_two = lir::Immediate(2);
-		expected //
-			.emit_jmp(l0)
-			.add_label(l0)
-			.emit_binop(BinaryOperator::PLUS, r0, c_one, c_two);
-		expected.result_opnd = r0;
-	}
 	try {
-		auto are_equal = chunk == expected;
-		EXPECT_TRUE(are_equal);
+		const char* b =
+			"    jump L000\n"
+			"L000:\n"
+			"    jump L001\n"
+			"L001:\n"
+			"    jump L002\n"
+			"L002:\n"
+			"    add %0, 1, 2\n"
+			"    jump L003\n"
+			"L003:\n";
+		std::string expected = std::string(b);
+		std::stringstream actualss;
+		actualss << chunk;
+		std::string actual = actualss.str();
+		EXPECT_EQ(expected, actual);
 	} catch (std::exception& exn) {
 		EXPECT_TRUE(false) << exn.what();
 	}
@@ -262,16 +263,20 @@ TEST(ASTToLIRTest, let_expression) {
 		const char* b =
 			"    jump L000\n"
 			"L000:\n"
-			"    alloca %0, 1\n"
-			"    storea 3, 0(%0)\n"
 			"    jump L003\n"
 			"L003:\n"
+			"    alloca %0, 1\n"
+			"    storea 3, 0(%0)\n"
+			"    jump L004\n"
+			"L004:\n"
 			"    jump L002\n"
 			"L002:\n"
 			"    loada %1, 0(%0)\n"
+			"    jump L005\n"
 			"L001:\n"
-			"    jump L004\n"
-			"L004:\n";
+			"L005:\n"
+			"    jump L006\n"
+			"L006:\n";
 		std::string expected = std::string(b);
 		std::stringstream actualss;
 		actualss << chunk;

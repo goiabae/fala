@@ -62,7 +62,7 @@ struct Compiler {
 		logger("AST->LIR", ast.file_name, ast.lines) {}
 
 	lir::Chunk compile();
-	Result compile(NodeIndex node_idx, Context ctx);
+	Result2 compile(NodeIndex node_idx, Context ctx);
 	lir::Block compile_handler_decl(
 		NodeIndex node_idx, Context ctx, lir::Label exit
 	);
