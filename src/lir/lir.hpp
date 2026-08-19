@@ -182,7 +182,7 @@ struct Block {
 	static lir::Block defer_last_jump(const lir::Chunk&, lir::Label);
 	static lir::Block defer_last_conditional_jump(const lir::Chunk&, lir::Label);
 
-	friend lir::Block sequence(const lir::Block&, const lir::Block&);
+	friend lir::Block operator>>(const lir::Block&, const lir::Block&);
 };
 
 // return amount of operands of each opcode

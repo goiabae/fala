@@ -83,8 +83,6 @@ struct Compiler {
 	template<class F>
 	lir::Block with_chunk(const F&);
 
-	lir::Block sequence(const lir::Block&, const lir::Block&);
-
 #define DECLARE_NODE_HANDLER(NAME) \
 	Result2 compile_##NAME(NodeIndex node_idx, Context ctx)
 

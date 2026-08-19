@@ -455,7 +455,7 @@ lir::Block Block::defer_last_conditional_jump(
 	return blk;
 }
 
-lir::Block sequence(const lir::Block& a, const lir::Block& b) {
+lir::Block operator>>(const lir::Block& a, const lir::Block& b) {
 	// FIXME: the patcher for b might not be valid anymore because the offsets of
 	// things have changed
 	Block blk;
