@@ -14,11 +14,6 @@
 namespace compiler {
 
 struct Result {
-	lir::Chunk code;
-	lir::Operand opnd;
-};
-
-struct Result2 {
 	lir::Block block;
 	lir::Operand opnd;
 };
@@ -62,12 +57,12 @@ struct Compiler {
 		logger("AST->LIR", ast.file_name, ast.lines) {}
 
 	lir::Chunk compile();
-	Result2 compile(NodeIndex node_idx, Context ctx);
+	Result compile(NodeIndex node_idx, Context ctx);
 	lir::Block compile_handler_decl(
 		NodeIndex node_idx, Context ctx, lir::Label exit
 	);
-	Result2 compile_lvalue(NodeIndex node_idx, Context ctx);
-	Result2 compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
+	Result compile_lvalue(NodeIndex node_idx, Context ctx);
+	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);
 	lir::Block compile_case(
 		NodeIndex node_idx, Context ctx, lir::Label exit, lir::Register res,
 		std::shared_ptr<Datatype> expr_type, lir::Operand expr
@@ -79,12 +74,12 @@ struct Compiler {
 	lir::Register make_register();
 	lir::Label make_label();
 	void allocate_variables();
+	Result compile_constant(lir::Operand);
 
-	template<class F>
-	lir::Block with_chunk(const F&);
+	lir::ChunkRef make_chunk();
 
 #define DECLARE_NODE_HANDLER(NAME) \
-	Result2 compile_##NAME(NodeIndex node_idx, Context ctx)
+	Result compile_##NAME(NodeIndex node_idx, Context ctx)
 
 	DECLARE_NODE_HANDLER(app);
 	DECLARE_NODE_HANDLER(if);
@@ -115,6 +110,7 @@ struct Compiler {
 	std::map<Guid, lir::Operand> variables;
 	std::map<Guid, lir::Immediate> effect_tags {};
 	vector<lir::Chunk> functions {};
+	std::vector<lir::Chunk> chunks {};
 	lir::Immediate write_str_tag {-1};
 	lir::Immediate write_int_tag {-1};
 	lir::Immediate write_char_tag {-1};

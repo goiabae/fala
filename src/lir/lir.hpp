@@ -168,21 +168,35 @@ struct Chunk {
 	Chunk& emit_resume(Operand continuation);
 };
 
+struct ChunkRef {
+	std::vector<lir::Chunk>& chunks;
+	std::size_t index;
+	lir::Label entry;
+
+ public:
+	ChunkRef emit(
+		lir::Opcode opcode, lir::Operand fst = {}, lir::Operand snd = {},
+		lir::Operand trd = {}
+	);
+	void finalize();
+};
+
+struct AppendFinalJump {
+	std::size_t block_id;
+};
+
+using ChunkPatch = std::variant<AppendFinalJump>;
+
 struct Block {
- private:
-	lir::Chunk chunk;
-	std::function<void(lir::Chunk&, lir::Operand)> destination_patcher;
-	lir::Label entry_point;
+ public:
+	lir::Label entry;
+	std::vector<ChunkPatch> patches;
 
  public:
-	lir::Chunk and_then(lir::Operand) const;
-	lir::Label entry() const { return entry_point; }
+	void and_then(std::vector<lir::Chunk>&, lir::Operand);
 
  public:
-	static lir::Block defer_last_jump(const lir::Chunk&, lir::Label);
-	static lir::Block defer_last_conditional_jump(const lir::Chunk&, lir::Label);
-
-	friend lir::Block operator>>(const lir::Block&, const lir::Block&);
+	static lir::Block defer_last_jump(lir::Label entry, std::size_t to_patch);
 };
 
 // return amount of operands of each opcode

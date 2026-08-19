@@ -5,6 +5,8 @@
 #include <ostream>
 #include <stdexcept>
 
+#include "utils.hpp"
+
 namespace lir {
 
 static std::ostream& operator<<(std::ostream&, const ByteString&);
@@ -15,9 +17,6 @@ static int print_inst_indirect(FILE* fd, const Instruction& inst);
 static std::ostream& print_inst_indirect(
 	std::ostream& st, const Instruction& inst
 );
-
-static void append_final_jump(lir::Chunk&, lir::Operand);
-static void patch_last_conditional_jump(lir::Chunk&, lir::Operand);
 
 std::ostream& operator<<(std::ostream& st, const ByteString& bs) {
 	st << '\"';
@@ -423,46 +422,39 @@ Chunk& Chunk::emit_enclose(Operand result, Operand label, Operand closure) {
 	return emit(Opcode::ENCLOSE, result, label, closure);
 }
 
-lir::Chunk Block::and_then(lir::Operand opnd) const {
-	auto patched = chunk;
-	destination_patcher(patched, opnd);
-	return patched;
-}
-
-void append_final_jump(lir::Chunk& chunk, lir::Operand opnd) {
-	chunk.emit_jmp(opnd);
-}
-
-void patch_last_conditional_jump(lir::Chunk& chunk, lir::Operand opnd) {
-	chunk.m_vec.back().operands[1] = opnd;
-}
-
-lir::Block Block::defer_last_jump(const lir::Chunk& chunk, lir::Label entry) {
-	Block blk;
-	blk.chunk = chunk;
-	blk.destination_patcher = append_final_jump;
-	blk.entry_point = entry;
-	return blk;
-}
-
-lir::Block Block::defer_last_conditional_jump(
-	const lir::Chunk& chunk, lir::Label entry
+static void apply_patch(
+	const ChunkPatch& patch, std::vector<lir::Chunk>& chunks, lir::Operand opnd
 ) {
-	Block blk;
-	blk.chunk = chunk;
-	blk.destination_patcher = patch_last_conditional_jump;
-	blk.entry_point = entry;
+	std::visit(
+		overloaded {[&](const AppendFinalJump& patch) {
+			chunks.at(patch.block_id).emit_jmp(opnd);
+		}},
+		patch
+	);
+}
+
+void Block::and_then(std::vector<lir::Chunk>& chunks, lir::Operand opnd) {
+	for (const auto& patch : patches) {
+		apply_patch(patch, chunks, opnd);
+	}
+}
+
+lir::Block Block::defer_last_jump(lir::Label entry, std::size_t to_patch) {
+	Block blk {
+		.entry = entry, .patches = {AppendFinalJump {.block_id = to_patch}}
+	};
 	return blk;
 }
 
-lir::Block operator>>(const lir::Block& a, const lir::Block& b) {
-	// FIXME: the patcher for b might not be valid anymore because the offsets of
-	// things have changed
-	Block blk;
-	blk.chunk = a.and_then(b.entry_point) + b.chunk;
-	blk.destination_patcher = b.destination_patcher;
-	blk.entry_point = a.entry_point;
-	return blk;
+ChunkRef ChunkRef::emit(
+	lir::Opcode opcode, lir::Operand fst, lir::Operand snd, lir::Operand trd
+) {
+	chunks.at(index).emit(opcode, fst, snd, trd);
+	return *this;
+}
+
+void ChunkRef::finalize() {
+	// TODO: valid chunk
 }
 
 } // namespace lir

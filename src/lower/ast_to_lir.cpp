@@ -57,17 +57,17 @@ constexpr auto builtins = {
 };
 
 Result read_int(Compiler& comp, vector<lir::Operand>) {
-	lir::Chunk chunk {};
 	lir::Operand tmp = comp.make_register();
+	auto chunk = comp.make_chunk();
 	chunk.emit(Opcode::READV, tmp);
-	return {chunk, tmp};
+	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), tmp};
 }
 
 Result read_char(Compiler& comp, vector<lir::Operand>) {
-	lir::Chunk chunk {};
 	lir::Operand tmp = comp.make_register();
+	auto chunk = comp.make_chunk();
 	chunk.emit(Opcode::READC, tmp);
-	return {chunk, tmp};
+	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), tmp};
 }
 
 } // namespace builtin
@@ -127,16 +127,16 @@ lir::Chunk Compiler::compile() {
 			.current_closure = {},
 			.current_resumption = {},
 		};
-		const auto start = make_label();
-		const auto l1 = make_label();
-		const auto l2 = make_label();
-		const auto l3 = make_label();
-		const auto l4 = make_label();
-		lir::Chunk chunk {};
-		chunk.emit(Opcode::JMP, start);
-		const auto module = compile(ast.root_index, ctx);
-		for (const auto& f : functions) chunk += f;
-		chunk.add_label(start);
+
+		auto chunk = make_chunk();
+		auto start = make_chunk();
+		auto write_char_handler = make_chunk();
+		auto write_str_handler = make_chunk();
+		auto write_int_handler = make_chunk();
+		auto exit = make_chunk();
+		auto module = compile(ast.root_index, ctx);
+		auto start2 = make_chunk();
+
 		const auto main = module.opnd;
 		const auto r1 = make_register();
 		const auto r2 = make_register();
@@ -145,102 +145,99 @@ lir::Chunk Compiler::compile() {
 		const auto r8 = make_register();
 		const auto r9 = make_register();
 
-		{
-			const auto l5 = make_label();
-			chunk += module.block.and_then(l5);
-			chunk.add_label(l5);
-		}
+		chunk.emit(Opcode::JMP, start.entry);
+		chunk.finalize();
 
-		// write_char! handler
-		chunk.emit(Opcode::CATCH, write_char_tag, l4);
-		chunk.emit(Opcode::POP, r4);
-		chunk.emit(lir::Opcode::POP, r8);
-		chunk.emit_loada(r9, lir::Immediate(0), r8);
-		chunk.emit(lir::Opcode::PRINTC, r9);
-		chunk.emit(Opcode::PUSH, lir::Immediate(0));
-		chunk.emit(Opcode::RESUME, r4);
-		chunk.emit_jmp(l2);
+		start.emit(Opcode::JMP, module.block.entry);
+		start.finalize();
 
-		// write_str! handler
-		chunk.add_label(l4);
-		chunk.emit(Opcode::CATCH, write_str_tag, l1);
-		chunk.emit(Opcode::POP, r4);
-		chunk.emit(lir::Opcode::POP, r8);
-		chunk.emit_loada(r9, lir::Immediate(0), r8);
-		chunk.emit(lir::Opcode::PRINTF, r8);
-		chunk.emit(Opcode::PUSH, lir::Immediate(0));
-		chunk.emit(Opcode::RESUME, r4);
-		chunk.emit_jmp(l2);
+		module.block.and_then(chunks, write_char_handler.entry);
 
-		// write_int! handler
-		chunk.add_label(l1);
-		chunk.emit(Opcode::CATCH, write_int_tag, l3);
-		chunk.emit(Opcode::POP, r4);
-		chunk.emit(lir::Opcode::POP, r8);
-		chunk.emit_loada(r9, lir::Immediate(0), r8);
-		chunk.emit(lir::Opcode::PRINTV, r9);
-		chunk.emit(Opcode::PUSH, lir::Immediate(0));
-		chunk.emit(Opcode::RESUME, r4);
-		chunk.emit_jmp(l2);
+		write_char_handler.emit(
+			Opcode::CATCH, write_char_tag, write_str_handler.entry
+		);
+		write_char_handler.emit(Opcode::POP, r4);
+		write_char_handler.emit(Opcode::POP, r8);
+		write_char_handler.emit(Opcode::LOADA, r9, lir::Immediate(0), r8);
+		write_char_handler.emit(Opcode::PRINTC, r9);
+		write_char_handler.emit(Opcode::PUSH, lir::Immediate(0));
+		write_char_handler.emit(Opcode::RESUME, r4);
+		write_char_handler.emit(Opcode::JMP, exit.entry);
+		write_char_handler.finalize();
 
-		chunk.add_label(l3);
-		chunk.emit_loada(r2, lir::Immediate(0), main);
-		chunk.emit_alloca(r3, lir::Immediate(1));
-		chunk.emit_storea(lir::Immediate(0), lir::Immediate(0), r3);
-		chunk.emit(Opcode::PUSH, r3);
-		chunk.emit(Opcode::CALL, r2);
-		chunk.emit(Opcode::POP, r1);
-		chunk.add_label(l2);
-		return chunk;
+		write_str_handler.emit(
+			Opcode::CATCH, write_str_tag, write_int_handler.entry
+		);
+		write_str_handler.emit(Opcode::POP, r4);
+		write_str_handler.emit(Opcode::POP, r8);
+		write_str_handler.emit(Opcode::LOADA, r9, lir::Immediate(0), r8);
+		write_str_handler.emit(Opcode::PRINTF, r8);
+		write_str_handler.emit(Opcode::PUSH, lir::Immediate(0));
+		write_str_handler.emit(Opcode::RESUME, r4);
+		write_str_handler.emit(Opcode::JMP, exit.entry);
+		write_str_handler.finalize();
+
+		write_int_handler.emit(Opcode::CATCH, write_int_tag, start2.entry);
+		write_int_handler.emit(Opcode::POP, r4);
+		write_int_handler.emit(Opcode::POP, r8);
+		write_int_handler.emit(Opcode::LOADA, r9, lir::Immediate(0), r8);
+		write_int_handler.emit(lir::Opcode::PRINTV, r9);
+		write_int_handler.emit(Opcode::PUSH, lir::Immediate(0));
+		write_int_handler.emit(Opcode::RESUME, r4);
+		write_int_handler.emit(Opcode::JMP, exit.entry);
+		write_int_handler.finalize();
+
+		start2.emit(Opcode::LOADA, r2, lir::Immediate(0), main);
+		start2.emit(Opcode::ALLOCA, r3, lir::Immediate(1));
+		start2.emit(Opcode::STOREA, lir::Immediate(0), lir::Immediate(0), r3);
+		start2.emit(Opcode::PUSH, r3);
+		start2.emit(Opcode::CALL, r2);
+		start2.emit(Opcode::POP, r1);
+		start2.emit(Opcode::JMP, exit.entry);
+		start2.finalize();
 	} else {
-		const auto main = make_label();
 		const SignalHandlers handlers {};
 		const Context ctx {
 			.handlers = handlers,
 			.current_closure = {},
 			.current_resumption = {},
 		};
-		const auto c0 = compile(ast.root_index, ctx);
 
-		lir::Chunk chunk {};
-		chunk.emit(Opcode::JMP, main);
-		for (const auto& f : functions) chunk += f;
-		chunk.add_label(main);
-		{
-			const auto l2 = make_label();
-			chunk += c0.block.and_then(l2);
-			chunk.add_label(l2);
-		}
-		return chunk;
+		auto start = make_chunk();
+		auto c0 = compile(ast.root_index, ctx);
+		auto exit = make_chunk();
+
+		start.emit(Opcode::JMP, c0.block.entry);
+		start.finalize();
+
+		c0.block.and_then(chunks, exit.entry);
 	}
+
+	lir::Chunk result {};
+	for (const auto& c : chunks) result += c;
+	return result;
 }
 
 lir::Register Compiler::make_register() { return lir::Register(reg_count++); }
 
 lir::Label Compiler::make_label() { return lir::Label(label_count++); }
 
-Result2 Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	if (node.type == NodeType::PATH) {
 		return compile_lvalue(node_idx, ctx);
 	} else {
-		const auto c0 = compile(node_idx, ctx);
+		auto c0 = compile(node_idx, ctx);
+		auto load_lvalue = make_chunk();
 		const auto t1 = make_register();
-		lir::Chunk chunk {};
-		const auto entry = make_label();
-		chunk.add_label(entry);
-		{
-			const auto l = make_label();
-			chunk += c0.block.and_then(l);
-			chunk.add_label(l);
-		}
-		chunk.emit_alloca(t1, lir::Immediate(1));
-		chunk.emit_storea(c0.opnd, lir::Immediate(0), t1);
-		return {lir::Block::defer_last_jump(chunk, entry), t1};
+		c0.block.and_then(chunks, load_lvalue.entry);
+		load_lvalue.emit(Opcode::ALLOCA, t1, lir::Immediate(1));
+		load_lvalue.emit(Opcode::STOREA, c0.opnd, lir::Immediate(0), t1);
+		return {lir::Block::defer_last_jump(c0.block.entry, load_lvalue.index), t1};
 	}
 }
 
-Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto func_idx = node[0];
 	const auto& func_node = ast.at(func_idx);
@@ -249,22 +246,19 @@ Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	assert(func_node.type == NodeType::GUID);
 	assert(args_node.type == NodeType::METALIST);
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-
+	std::vector<lir::Block> arg_blocks {};
 	std::vector<lir::Operand> args {};
 	std::vector<std::shared_ptr<Type>> arg_tys {};
 	for (const auto arg_idx : args_node) {
 		const auto res = compile_or_allocate_lvalue(arg_idx, ctx);
-		{
-			const auto l = make_label();
-			chunk += res.block.and_then(l);
-			chunk.add_label(l);
-		}
+		arg_blocks.push_back(res.block);
 		auto ty = tpc.node_to_type.at(arg_idx);
 		arg_tys.push_back(ty);
 		args.push_back(res.opnd);
+	}
+
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(arg_blocks)) {
+		a.and_then(chunks, b.entry);
 	}
 
 	const auto scope = symtab.relative_scope_of(func_node.guid, node[0]).value();
@@ -276,9 +270,16 @@ Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		      std::ranges::find(builtin::builtins, func_name, get_name);
 		    builtin_ptr != std::end(builtin::builtins)) {
 			const auto& builtin = *builtin_ptr;
-			const auto result = builtin.ptr(*this, args);
-			chunk += result.code;
-			return {lir::Block::defer_last_jump(chunk, entry), result.opnd};
+			auto result = builtin.ptr(*this, args);
+			if (arg_blocks.size() > 0) {
+				arg_blocks.back().and_then(chunks, result.block.entry);
+			}
+			lir::Block blk {
+				.entry =
+					(arg_blocks.size() > 0) ? arg_blocks.at(0).entry : result.block.entry,
+				.patches = result.block.patches,
+			};
+			return {blk, result.opnd};
 		} else {
 			throw std::runtime_error("unknown builtin");
 		}
@@ -298,23 +299,34 @@ Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		    found != unty->constructors.end()) {
 			auto index = std::distance(unty->constructors.begin(), found);
 			const auto r0 = make_register();
-			chunk.emit_alloca(
-				r0, lir::Immediate(static_cast<int>((*found).arguments.size()))
+			auto call = make_chunk();
+			if (arg_blocks.size() > 0) {
+				arg_blocks.back().and_then(chunks, call.entry);
+			}
+			call.emit(
+				Opcode::ALLOCA,
+				r0,
+				lir::Immediate(static_cast<int>((*found).arguments.size()))
 			);
 			auto i = 0;
 			for (const auto& arg : args) {
 				const auto ri = make_register();
-				chunk.emit_loada(ri, lir::Immediate(0), arg);
-				chunk.emit_storea(ri, lir::Immediate(i), r0);
+				call.emit(Opcode::LOADA, ri, lir::Immediate(0), arg);
+				call.emit(Opcode::STOREA, ri, lir::Immediate(i), r0);
 				i++;
 			}
 			const auto r1 = make_register();
-			chunk.emit_alloca(r1, lir::Immediate(2));
-			chunk.emit_storea(
-				lir::Immediate(static_cast<int>(index)), lir::Immediate(0), r1
+			call.emit(Opcode::ALLOCA, r1, lir::Immediate(2));
+			call.emit(
+				Opcode::STOREA,
+				lir::Immediate(static_cast<int>(index)),
+				lir::Immediate(0),
+				r1
 			);
-			chunk.emit_storea(r0, lir::Immediate(1), r1);
-			return {lir::Block::defer_last_jump(chunk, entry), r1};
+			call.emit(Opcode::STOREA, r0, lir::Immediate(1), r1);
+			auto entry =
+				(arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
+			return {lir::Block::defer_last_jump(entry, call.index), r1};
 		} else {
 			logger.log(
 				LogLevel::ERROR,
@@ -331,6 +343,7 @@ Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		const auto dty = get_datatype(ty);
 		const auto fty = erase_function_captures(dty);
 		assert(fty != nullptr);
+		auto call = make_chunk();
 		for (const auto& [i, arg] :
 		     std::ranges::views::enumerate(std::ranges::reverse_view(args))) {
 			const auto param_mode =
@@ -342,11 +355,11 @@ Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			const auto convention = passing_convention_for(param_mode, arg_mode);
 
 			if (convention == PassingConvention::ALIAS) {
-				chunk.emit(Opcode::PUSH, arg);
+				call.emit(Opcode::PUSH, arg);
 			} else if (convention == PassingConvention::CLONE) {
 				const auto t = make_register();
-				chunk.emit_clonea(t, arg);
-				chunk.emit(Opcode::PUSH, t);
+				call.emit(Opcode::CLONEA, t, arg);
+				call.emit(Opcode::PUSH, t);
 			} else if (convention == PassingConvention::INVALID) {
 				throw std::runtime_error("cannot call function. conflicting modes");
 			} else {
@@ -354,22 +367,26 @@ Result2 Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			}
 		}
 
-		const auto func = compile(func_idx, ctx);
-		{
-			const auto l = make_label();
-			chunk += func.block.and_then(l);
-			chunk.add_label(l);
-		}
-		chunk.emit(Opcode::CALL, func.opnd);
-		const auto res = make_register();
-		chunk.emit(Opcode::POP, res);
-		chunk.result_opnd = res;
+		auto func = compile(func_idx, ctx);
 
-		return {lir::Block::defer_last_jump(chunk, entry), res};
+		call.emit(Opcode::JMP, func.block.entry);
+		call.finalize();
+
+		auto call2 = make_chunk();
+
+		func.block.and_then(chunks, call2.entry);
+
+		const auto res = make_register();
+		call2.emit(Opcode::CALL, func.opnd);
+		call2.emit(Opcode::POP, res);
+
+		auto entry = (arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
+
+		return {lir::Block::defer_last_jump(entry, call2.index), res};
 	}
 }
 
-Result2 Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto func_idx = node[0];
 	const auto& func_node = ast.at(func_idx);
@@ -384,24 +401,22 @@ Result2 Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 	assert(effect != nullptr);
 	const auto effect_tag = effect_tags.at(func_node.guid);
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-
+	std::vector<lir::Block> arg_blocks {};
 	std::vector<lir::Operand> args {};
 	std::vector<std::shared_ptr<Type>> arg_tys {};
 	for (const auto arg_idx : args_node) {
 		const auto res = compile_or_allocate_lvalue(arg_idx, ctx);
-		{
-			const auto l = make_label();
-			chunk += res.block.and_then(l);
-			chunk.add_label(l);
-		}
+		arg_blocks.push_back(res.block);
 		auto ty = tpc.node_to_type.at(arg_idx);
 		arg_tys.push_back(ty);
 		args.push_back(res.opnd);
 	}
 
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(arg_blocks)) {
+		a.and_then(chunks, b.entry);
+	}
+
+	auto call = make_chunk();
 	for (const auto& [i, arg] :
 	     std::ranges::views::enumerate(std::ranges::reverse_view(args))) {
 		const auto param_mode =
@@ -413,11 +428,11 @@ Result2 Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 		const auto convention = passing_convention_for(param_mode, arg_mode);
 
 		if (convention == PassingConvention::ALIAS) {
-			chunk.emit(Opcode::PUSH, arg);
+			call.emit(Opcode::PUSH, arg);
 		} else if (convention == PassingConvention::CLONE) {
 			const auto t = make_register();
-			chunk.emit_clonea(t, arg);
-			chunk.emit(Opcode::PUSH, t);
+			call.emit(Opcode::CLONEA, t, arg);
+			call.emit(Opcode::PUSH, t);
 		} else if (convention == PassingConvention::INVALID) {
 			throw std::runtime_error("cannot call function. conflicting modes");
 		} else {
@@ -425,73 +440,64 @@ Result2 Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 		}
 	}
 
-	chunk.emit(
+	call.emit(
 		Opcode::THROW, effect_tag, lir::Immediate(static_cast<int>(args.size()))
 	);
 	const auto res = make_register();
-	chunk.emit(Opcode::POP, res);
-	chunk.result_opnd = res;
+	call.emit(Opcode::POP, res);
 
-	return {lir::Block::defer_last_jump(chunk, entry), res};
+	auto entry = (arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
+
+	return {lir::Block::defer_last_jump(entry, call.index), res};
 }
 
-Result2 Compiler::compile_if(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto cond_idx = node[0];
 	const auto then_idx = node[1];
 	const auto else_idx = node[2];
 	const auto res = make_register();
-	const auto exit = make_label();
-	const auto l3 = make_label();
-	const auto l4 = make_label();
-	const auto l5 = make_label();
 
 	// c0 ---> c3 ---> c2 ---> c5
 	//         |               |
 	//         v               v
 	//         c1 ---> c4 ---> *
 
-	const auto c0 = compile(cond_idx, ctx);
-	const auto c1 = compile(then_idx, ctx);
-	const auto c2 = compile(else_idx, ctx);
+	auto c0 = compile(cond_idx, ctx);
+	auto c1 = compile(then_idx, ctx);
+	auto c2 = compile(else_idx, ctx);
+	auto c3 = make_chunk();
+	auto c4 = make_chunk();
+	auto c5 = make_chunk();
 
-	const auto c3 = [&]() {
-		lir::Chunk chunk {};
-		chunk.add_label(l3);
-		chunk.emit(Opcode::JMP_FALSE, c0.opnd, c2.block.entry());
-		chunk.emit_jmp(c1.block.entry());
-		return chunk;
-	}();
+	c0.block.and_then(chunks, c3.entry);
+	c1.block.and_then(chunks, c4.entry);
+	c2.block.and_then(chunks, c5.entry);
 
-	const auto c4 = [&]() {
-		lir::Chunk chunk {};
-		chunk.add_label(l4);
-		chunk.emit(Opcode::MOV, res, c1.opnd);
-		chunk.emit(Opcode::JMP, exit);
-		return chunk;
-	}();
+	c3.emit(Opcode::JMP_FALSE, c0.opnd, c2.block.entry);
+	c3.emit(Opcode::JMP, c1.block.entry);
+	c3.finalize();
 
-	const auto c5 = [&]() {
-		lir::Chunk chunk {};
-		chunk.add_label(l5);
-		chunk.emit(Opcode::MOV, res, c2.opnd);
-		chunk.emit(Opcode::JMP, exit);
-		return chunk;
-	}();
+	c4.emit(Opcode::MOV, res, c1.opnd);
 
-	lir::Chunk chunk {};
-	chunk += c0.block.and_then(l3);
-	chunk += c3;
-	chunk += c1.block.and_then(l4);
-	chunk += c4;
-	chunk += c2.block.and_then(l5);
-	chunk += c5;
-	chunk.add_label(exit);
+	c5.emit(Opcode::MOV, res, c2.opnd);
 
-	return {lir::Block::defer_last_jump(chunk, c0.block.entry()), res};
+	lir::Block blk {
+		.entry = c0.block.entry,
+		.patches = {
+			lir::AppendFinalJump {
+				.block_id = c4.index,
+			},
+			lir::AppendFinalJump {
+				.block_id = c5.index,
+			},
+		},
+	};
+
+	return {blk, res};
 }
 
-Result2 Compiler::compile_for(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 
 	const auto decl_idx = node[0];
@@ -501,17 +507,15 @@ Result2 Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 
 	const auto& step_node = ast.at(step_idx);
 
-	const auto beg = make_label();
-	const auto inc = make_label();
-	const auto end = make_label();
-	const auto mov = make_label();
 	const auto cmp = make_register();
+	const auto result = make_register();
 
-	const auto result_register = make_register();
+	auto cend = make_chunk();
+	auto cinc = make_chunk();
 
 	SignalHandlers new_handlers {
-		{inc, result_register},
-		{end, result_register},
+		{cinc.entry, result},
+		{cend.entry, result},
 		ctx.handlers.return_handler,
 		true,
 		true,
@@ -528,47 +532,43 @@ Result2 Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	const auto t1 = make_register();
 	const auto t2 = make_register();
 
-	const auto c0 = [&]() -> Result2 {
+	auto c0 = [&]() -> Result {
 		if (step_node.type != NodeType::EMPTY) {
 			return compile(step_idx, ctx);
 		} else {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			return {lir::Block::defer_last_jump(chunk, entry), lir::Immediate(1)};
+			auto chunk = make_chunk();
+			return {
+				lir::Block::defer_last_jump(chunk.entry, chunk.index), lir::Immediate(1)
+			};
 		}
 	}();
 
-	const auto c1 = compile(decl_idx, header_ctx);
-	const auto c2 = compile(to_idx, header_ctx);
-	const auto c3 = compile(then_idx, body_ctx);
+	auto c1 = compile(decl_idx, header_ctx);
+	auto c2 = compile(to_idx, header_ctx);
+	auto c3 = compile(then_idx, body_ctx);
 
-	const auto cbeg = [&]() {
-		lir::Chunk chunk {};
-		chunk.add_label(beg);
-		chunk.emit_loada(t1, lir::Immediate(0), c1.opnd);
-		chunk.emit(Opcode::EQ, cmp, t1, c2.opnd);
-		chunk.emit(Opcode::JMP_TRUE, cmp, end);
-		chunk.emit_jmp(c3.block.entry());
-		return chunk;
-	}();
+	auto cbeg = make_chunk();
+	auto cmov = make_chunk();
 
-	const auto cmov = [&]() {
-		lir::Chunk chunk {};
-		chunk.add_label(mov);
-		chunk.emit(Opcode::MOV, result_register, c3.opnd);
-		chunk.emit_jmp(inc);
-		return chunk;
-	}();
+	c0.block.and_then(chunks, c1.block.entry);
+	c1.block.and_then(chunks, c2.block.entry);
+	c2.block.and_then(chunks, cbeg.entry);
+	c3.block.and_then(chunks, cmov.entry);
 
-	const auto cinc = [&]() {
-		lir::Chunk chunk {};
-		chunk.add_label(inc);
-		chunk.emit(Opcode::ADD, t2, t1, c0.opnd);
-		chunk.emit_storea(t2, lir::Immediate(0), c1.opnd);
-		chunk.emit_jmp(beg);
-		return chunk;
-	}();
+	cbeg.emit(lir::Opcode::LOADA, t1, lir::Immediate(0), c1.opnd);
+	cbeg.emit(Opcode::EQ, cmp, t1, c2.opnd);
+	cbeg.emit(Opcode::JMP_FALSE, cmp, c3.block.entry);
+	cbeg.emit(lir::Opcode::JMP, cend.entry);
+	cbeg.finalize();
+
+	cmov.emit(Opcode::MOV, result, c3.opnd);
+	cmov.emit(lir::Opcode::JMP, cinc.entry);
+	cmov.finalize();
+
+	cinc.emit(Opcode::ADD, t2, t1, c0.opnd);
+	cinc.emit(lir::Opcode::STOREA, t2, lir::Immediate(0), c1.opnd);
+	cinc.emit(lir::Opcode::JMP, cbeg.entry);
+	cinc.finalize();
 
 	//                      cinc <-- cmov
 	//                       |       ^
@@ -576,52 +576,52 @@ Result2 Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	// c0 --> c1 --> c2 --> cbeg --> c3
 	//                       |
 	//                       v
-	//                       *
+	//                      cend --> *
 
-	lir::Chunk chunk {};
-	chunk += (c0.block >> c1.block >> c2.block).and_then(beg);
-	chunk += cbeg;
-	chunk += c3.block.and_then(mov);
-	chunk += cmov;
-	chunk += cinc;
-	chunk.add_label(end);
-
-	return {
-		lir::Block::defer_last_jump(chunk, c0.block.entry()), result_register
+	lir::Block blk {
+		.entry = c0.block.entry,
+		.patches = {lir::AppendFinalJump {.block_id = cend.index}}
 	};
+
+	return {blk, result};
 }
 
-Result2 Compiler::compile_when(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto cond_idx = node[0];
 	const auto then_idx = node[1];
-	const auto l1 = make_label();
 	const auto r = make_register();
-	const auto c0 = compile(cond_idx, ctx);
-	const auto c1 = compile(then_idx, ctx);
+	auto c0 = compile(cond_idx, ctx);
+	auto c1 = compile(then_idx, ctx);
+	auto c2 = make_chunk();
+	auto c3 = make_chunk();
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	{
-		const auto l2 = make_label();
-		chunk += c0.block.and_then(l2);
-		chunk.add_label(l2);
-	}
-	chunk.emit(Opcode::MOV, r, {});
-	chunk.emit(Opcode::JMP_FALSE, c0.opnd, l1);
-	{
-		const auto l3 = make_label();
-		chunk += c1.block.and_then(l3);
-		chunk.add_label(l3);
-	}
-	chunk.emit(Opcode::MOV, r, c1.opnd);
-	chunk.add_label(l1);
+	c0.block.and_then(chunks, c2.entry);
 
-	return {lir::Block::defer_last_jump(chunk, entry), r};
+	c2.emit(Opcode::MOV, r, {});
+	c2.emit(Opcode::JMP_TRUE, c0.opnd, c1.block.entry);
+
+	c1.block.and_then(chunks, c3.entry);
+
+	c3.emit(Opcode::MOV, r, c1.opnd);
+
+	// c0 --> c2 --> c1
+	//        |      |
+	//        v      v
+	//        * <--  c3
+
+	lir::Block blk {
+		.entry = c0.block.entry,
+		.patches = {
+			lir::AppendFinalJump {.block_id = c2.index},
+			lir::AppendFinalJump {.block_id = c3.index},
+		}
+	};
+
+	return {blk, r};
 }
 
-Result2 Compiler::compile_while(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto beg = make_label();
 	const auto end = make_label();
@@ -642,29 +642,27 @@ Result2 Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 		.current_resumption = ctx.current_resumption,
 	};
 
-	const auto r0 = compile(node[0], ctx);
-	const auto r1 = compile(node[1], body_ctx);
+	auto c0 = compile(node[0], ctx);
+	auto c1 = compile(node[1], body_ctx);
+	auto c2 = make_chunk();
+	auto c3 = make_chunk();
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	chunk.add_label(beg);
-	{
-		const auto l0 = make_label();
-		chunk += r0.block.and_then(l0);
-		chunk.add_label(l0);
-	}
-	chunk.emit(Opcode::JMP_FALSE, r0.opnd, end);
-	{
-		const auto l1 = make_label();
-		chunk += r1.block.and_then(l1);
-		chunk.add_label(l1);
-	}
-	chunk.emit(Opcode::MOV, result_register, r1.opnd);
-	chunk.emit(Opcode::JMP, beg);
-	chunk.add_label(end);
+	c0.block.and_then(chunks, c2.entry);
 
-	return {lir::Block::defer_last_jump(chunk, entry), result_register};
+	c2.emit(Opcode::JMP_TRUE, c0.opnd, c1.block.entry);
+
+	c1.block.and_then(chunks, c3.entry);
+
+	c3.emit(Opcode::MOV, result_register, c1.opnd);
+	c3.emit(Opcode::JMP, c0.block.entry);
+	c3.finalize();
+
+	lir::Block blk {
+		.entry = c0.block.entry,
+		.patches = {lir::AppendFinalJump {.block_id = c2.index}},
+	};
+
+	return {blk, result_register};
 }
 
 #if 0
@@ -675,7 +673,7 @@ static bool fits_in_register(const Datatype& d) {
 }
 #endif
 
-Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::EMPTY: assert(false);
@@ -703,29 +701,21 @@ Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			// r0 : *---> v
 			//
 			const auto& node = ast.at(node_idx);
-			const auto c0 = compile_lvalue(node[0], ctx);
-			const auto c1 = compile(node[1], ctx);
+			auto c0 = compile_lvalue(node[0], ctx);
+			auto c1 = compile(node[1], ctx);
+			auto c2 = make_chunk();
 			const auto r0 = make_register();
 			const auto r1 = make_register();
 			const auto r2 = make_register();
 
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l0 = make_label();
-				chunk += c0.block.and_then(l0);
-				chunk.add_label(l0);
-			}
-			{
-				const auto l1 = make_label();
-				chunk += c1.block.and_then(l1);
-				chunk.add_label(l1);
-			}
-			chunk.emit_loada(r1, lir::Immediate(0), c0.opnd);
-			chunk.emit_loada(r2, lir::Immediate(0), r1);
-			chunk.emit_shifta(r0, c1.opnd, r2);
-			return {lir::Block::defer_last_jump(chunk, entry), r0};
+			c0.block.and_then(chunks, c1.block.entry);
+			c1.block.and_then(chunks, c2.entry);
+
+			c2.emit(lir::Opcode::LOADA, r1, lir::Immediate(0), c0.opnd);
+			c2.emit(lir::Opcode::LOADA, r2, lir::Immediate(0), r1);
+			c2.emit(lir::Opcode::SHIFTA, r0, c1.opnd, r2);
+
+			return {lir::Block::defer_last_jump(c0.block.entry, c2.index), r0};
 		}
 		case NodeType::ADD: assert(false);
 		case NodeType::SUB: assert(false);
@@ -757,9 +747,6 @@ Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			if (rel == RelativeScope::FREE) {
 				assert(ctx.current_closure.has_value());
 				const auto& clinfo = ctx.current_closure.value();
-				lir::Chunk chunk {};
-				const auto entry = make_label();
-				chunk.add_label(entry);
 				const auto t1 = make_register();
 				if (not clinfo.offsets.contains(node.guid)) {
 					std::string s {};
@@ -789,13 +776,16 @@ Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 					name,
 					node.guid.index
 				);
-				chunk.emit_shifta(
+
+				auto chunk = make_chunk();
+				chunk.emit(
+					lir::Opcode::SHIFTA,
 					t1,
 					lir::Immediate(static_cast<int>(clinfo.offsets.at(node.guid))),
 					clinfo.object
 				);
 
-				return {lir::Block::defer_last_jump(chunk, entry), t1};
+				return {lir::Block::defer_last_jump(chunk.entry, chunk.index), t1};
 			} else {
 				logger.log(
 					LogLevel::INFO,
@@ -804,11 +794,10 @@ Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 					node.guid.index
 				);
 				assert(variables.contains(node.guid));
-				lir::Chunk chunk {};
-				const auto entry = make_label();
-				chunk.add_label(entry);
+				auto chunk = make_chunk();
 				return {
-					lir::Block::defer_last_jump(chunk, entry), variables.at(node.guid)
+					lir::Block::defer_last_jump(chunk.entry, chunk.index),
+					variables.at(node.guid)
 				};
 			}
 		}
@@ -817,7 +806,8 @@ Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::RECORD_LITERAL: assert(false);
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: {
-			const auto r0 = compile_lvalue(node[0], ctx);
+			auto c0 = compile_lvalue(node[0], ctx);
+			auto c1 = make_chunk();
 			const auto t0 = std::dynamic_pointer_cast<Record>(
 				get_datatype(tpc.node_to_type.at(node[0]))
 			);
@@ -832,17 +822,10 @@ Result2 Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			const auto field_ty = found->second;
 			const auto t1 = make_register();
 			const auto t3 = make_register();
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l = make_label();
-				chunk += r0.block.and_then(l);
-				chunk.add_label(l);
-			}
-			chunk.emit_loada(t3, lir::Immediate(0), r0.opnd);
-			chunk.emit_shifta(t1, lir::Immediate(static_cast<int>(d)), t3);
-			return {lir::Block::defer_last_jump(chunk, entry), t1};
+			c0.block.and_then(chunks, c1.entry);
+			c1.emit(lir::Opcode::LOADA, t3, lir::Immediate(0), c0.opnd);
+			c1.emit(lir::Opcode::SHIFTA, t1, lir::Immediate(static_cast<int>(d)), t3);
+			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), t1};
 		}
 		case NodeType::ARRAY_LITERAL: assert(false);
 		case NodeType::REPEAT: assert(false);
@@ -873,26 +856,15 @@ lir::Block Compiler::compile_case(
 ) {
 	const auto& node = ast.at(node_idx);
 	assert(node.type == NodeType::CASE);
-	const auto l0 = make_label();
-	const auto c0 = compile_pattern_match(node[0], ctx, l0, expr_type, expr);
-	const auto c1 = compile(node[1], ctx);
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	{
-		const auto l1 = make_label();
-		chunk += c0.and_then(l1);
-		chunk.add_label(l1);
-	}
-	{
-		const auto l2 = make_label();
-		chunk += c1.block.and_then(l2);
-		chunk.add_label(l2);
-	}
-	chunk.emit_mov(res, c1.opnd);
-	chunk.emit_jmp(exit);
-	chunk.add_label(l0);
-	return lir::Block::defer_last_jump(chunk, entry);
+	auto c3 = make_chunk();
+	auto c0 = compile_pattern_match(node[0], ctx, c3.entry, expr_type, expr);
+	auto c1 = compile(node[1], ctx);
+	auto c2 = make_chunk();
+	c0.and_then(chunks, c1.block.entry);
+	c1.block.and_then(chunks, c2.entry);
+	c2.emit(lir::Opcode::MOV, res, c1.opnd);
+	c2.emit(lir::Opcode::JMP, exit);
+	return lir::Block::defer_last_jump(c0.entry, c3.index);
 }
 
 lir::Block Compiler::compile_pattern_match(
@@ -916,30 +888,44 @@ lir::Block Compiler::compile_pattern_match(
 					);
 			    found != union_ty->constructors.end()) {
 				auto tag = std::distance(union_ty->constructors.begin(), found);
-				lir::Chunk chunk {};
-				const auto entry = make_label();
-				chunk.add_label(entry);
 				const auto r0 = make_register();
 				const auto r1 = make_register();
 				const auto r2 = make_register();
-				chunk.emit_loada(r0, lir::Immediate(0), expr);
-				chunk.emit(Opcode::EQ, r1, r0, lir::Immediate(static_cast<int>(tag)));
-				chunk.emit(Opcode::JMP_FALSE, r1, if_fail);
-				chunk.emit_loada(r2, lir::Immediate(1), expr);
+				auto c0 = make_chunk();
+				c0.emit(lir::Opcode::LOADA, r0, lir::Immediate(0), expr);
+				c0.emit(Opcode::EQ, r1, r0, lir::Immediate(static_cast<int>(tag)));
+				c0.emit(Opcode::JMP_FALSE, r1, if_fail);
+				c0.emit(lir::Opcode::LOADA, r2, lir::Immediate(1), expr);
+				std::vector<lir::Block> blocks {lir::Block {
+					.entry = c0.entry,
+					.patches = {lir::AppendFinalJump {.block_id = c0.index}}
+				}};
 				const auto& arguments_node = ast.at(node[1]);
 				for (auto i = 0ul; i < arguments_node.size(); i++) {
 					const auto ri = make_register();
-					chunk.emit_loada(ri, lir::Immediate(static_cast<int>(i)), r2);
+					auto ca = make_chunk();
 					const auto ci = compile_pattern_match(
 						arguments_node[i], ctx, if_fail, (*found).arguments.at(i), ri
 					);
-					{
-						const auto li = make_label();
-						chunk += ci.and_then(li);
-						chunk.add_label(li);
-					}
+					ca.emit(
+						lir::Opcode::LOADA, ri, lir::Immediate(static_cast<int>(i)), r2
+					);
+					ca.emit(lir::Opcode::JMP, ci.entry);
+					ca.finalize();
+					lir::Block blk {
+						.entry = ca.entry,
+						.patches = ci.patches,
+					};
+					blocks.push_back(blk);
 				}
-				return lir::Block::defer_last_jump(chunk, entry);
+				for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+					a.and_then(chunks, b.entry);
+				}
+				lir::Block blk {
+					.entry = c0.entry,
+					.patches = blocks.back().patches,
+				};
+				return blk;
 			} else {
 				throw std::runtime_error(
 					"pattern match type does not contain constructor"
@@ -948,12 +934,10 @@ lir::Block Compiler::compile_pattern_match(
 		}
 		case NodeType::GUID: {
 			const auto r0 = variables.at(node.guid);
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			chunk.emit_alloca(r0, lir::Immediate(1));
-			chunk.emit_storea(expr, lir::Immediate(0), r0);
-			return lir::Block::defer_last_jump(chunk, entry);
+			auto chunk = make_chunk();
+			chunk.emit(lir::Opcode::ALLOCA, r0, lir::Immediate(1));
+			chunk.emit(lir::Opcode::STOREA, expr, lir::Immediate(0), r0);
+			return lir::Block::defer_last_jump(chunk.entry, chunk.index);
 		}
 		default: {
 			throw std::runtime_error("unhandled pattern match");
@@ -961,7 +945,7 @@ lir::Block Compiler::compile_pattern_match(
 	}
 }
 
-Result2 Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 
 	const auto id_idx = node[1];
@@ -973,29 +957,24 @@ Result2 Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 	const auto name =
 		std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
 	const auto var = variables.at(id_node.guid);
 
-	if (exp_node.type == NodeType::PATH) {
-		const auto r0 = compile_lvalue(exp_idx, ctx);
-		{
-			const auto l = make_label();
-			chunk += r0.block.and_then(l);
-			chunk.add_label(l);
+	auto c = [&]() {
+		if (exp_node.type == NodeType::PATH) {
+			auto c0 = compile_lvalue(exp_idx, ctx);
+			auto c1 = make_chunk();
+			c0.block.and_then(chunks, c1.entry);
+			c1.emit(lir::Opcode::CLONEA, var, c0.opnd);
+			return lir::Block::defer_last_jump(c0.block.entry, c1.index);
+		} else {
+			auto c0 = compile(exp_idx, ctx);
+			auto c1 = make_chunk();
+			c0.block.and_then(chunks, c1.entry);
+			c1.emit(lir::Opcode::ALLOCA, var, lir::Immediate(1));
+			c1.emit(lir::Opcode::STOREA, c0.opnd, lir::Immediate(0), var);
+			return lir::Block::defer_last_jump(c0.block.entry, c1.index);
 		}
-		chunk.emit_clonea(var, r0.opnd);
-	} else {
-		const auto r0 = compile(exp_idx, ctx);
-		{
-			const auto l = make_label();
-			chunk += r0.block.and_then(l);
-			chunk.add_label(l);
-		}
-		chunk.emit_alloca(var, lir::Immediate(1));
-		chunk.emit_storea(r0.opnd, lir::Immediate(0), var);
-	}
+	}();
 
 	logger.log(
 		LogLevel::INFO,
@@ -1005,7 +984,7 @@ Result2 Compiler::compile_var_decl(NodeIndex node_idx, Context ctx) {
 		var
 	);
 
-	return {lir::Block::defer_last_jump(chunk, entry), var};
+	return {c, var};
 }
 
 void Compiler::allocate_variables() {
@@ -1030,7 +1009,7 @@ void Compiler::allocate_variables() {
 	}
 }
 
-Result2 Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto id_idx = node[0];
 	const auto params_idx = node[1];
@@ -1039,7 +1018,7 @@ Result2 Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto& params_node = ast.at(params_idx);
 	assert(id_node.type == NodeType::GUID);
 
-	const auto func_name = make_label();
+	auto c0 = make_chunk();
 	const auto t2 = variables.at(id_node.guid);
 	const auto t3 = make_register();
 
@@ -1048,11 +1027,14 @@ Result2 Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	const auto cty = std::dynamic_pointer_cast<Closure>(dty);
 	assert(cty != nullptr);
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
+	auto chunk = make_chunk();
+
 	const auto t1 = make_register();
-	chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(cty->captures.size())));
+	chunk.emit(
+		lir::Opcode::ALLOCA,
+		t1,
+		lir::Immediate(static_cast<int>(cty->captures.size()))
+	);
 	ClosureInfo clinfo {
 		.function_name = id_node.guid,
 		.object = t3,
@@ -1063,17 +1045,19 @@ Result2 Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 		for (const auto& [a, b] : cty->captures) {
 			const auto ti = make_register();
 			const auto ti2 = make_register();
-			chunk.emit_loada(ti2, lir::Immediate(0), variables.at(a));
-			chunk.emit_clonea(ti, ti2);
-			chunk.emit_storea(ti, lir::Immediate(static_cast<int>(i)), t1);
+			chunk.emit(lir::Opcode::LOADA, ti2, lir::Immediate(0), variables.at(a));
+			chunk.emit(lir::Opcode::CLONEA, ti, ti2);
+			chunk.emit(
+				lir::Opcode::STOREA, ti, lir::Immediate(static_cast<int>(i)), t1
+			);
 			clinfo.offsets[a] = i;
 			i++;
 		}
 	}
 	const auto t4 = make_register();
-	chunk.emit_enclose(t4, func_name, t1);
-	chunk.emit_alloca(t2, lir::Immediate(1));
-	chunk.emit_storea(t4, lir::Immediate(0), t2);
+	chunk.emit(lir::Opcode::ENCLOSE, t4, c0.entry, t1);
+	chunk.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(1));
+	chunk.emit(lir::Opcode::STOREA, t4, lir::Immediate(0), t2);
 
 	const Context body_ctx {
 		.handlers = ctx.handlers,
@@ -1081,104 +1065,85 @@ Result2 Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 		.current_resumption = ctx.current_resumption,
 	};
 
-	const auto r0 = compile(body_idx, body_ctx);
+	auto r0 = compile(body_idx, body_ctx);
 
 	{
-		lir::Chunk func {};
-		func.add_label(func_name);
-		func.emit(Opcode::FUNC);
-		func.emit(Opcode::POP, t3);
+		c0.emit(Opcode::FUNC);
+		c0.emit(Opcode::POP, t3);
 		for (auto param_idx : params_node) {
 			const auto& param_node = ast.at(param_idx);
 			assert(param_node.type == NodeType::PARAM);
 			const auto& param_name = ast.at(param_node[1]);
 			assert(param_name.type == NodeType::GUID);
 			const auto arg = variables.at(param_name.guid);
-			func.emit(Opcode::POP, arg);
+			c0.emit(Opcode::POP, arg);
 		}
-		{
-			const auto l = make_label();
-			func += r0.block.and_then(l);
-			func.add_label(l);
-		}
-		func.emit(Opcode::PUSH, r0.opnd);
-		func.emit(Opcode::RET);
-		functions.push_back(func);
+		c0.emit(lir::Opcode::JMP, r0.block.entry);
+		c0.finalize();
+
+		auto c1 = make_chunk();
+
+		r0.block.and_then(chunks, c1.entry);
+
+		c1.emit(Opcode::PUSH, r0.opnd);
+		c1.emit(Opcode::RET);
+		c1.finalize();
 	}
 
 	const auto name =
 		std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
 	logger.log(
-		LogLevel::INFO, node.loc, "Compiled {} into entry point {}", name, func_name
+		LogLevel::INFO, node.loc, "Compiled {} into entry point {}", name, c0.entry
 	);
 
-	return {lir::Block::defer_last_jump(chunk, entry), t2};
+	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), t2};
 }
 
-Result2 Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_ass(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
-	const auto r0 = compile_lvalue(node[0], ctx);
-	const auto r1 = compile(node[1], ctx);
+	auto r0 = compile_lvalue(node[0], ctx);
+	auto r1 = compile(node[1], ctx);
+	auto r2 = make_chunk();
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	{
-		const auto l1 = make_label();
-		chunk += r0.block.and_then(l1);
-		chunk.add_label(l1);
-	}
-	{
-		const auto l2 = make_label();
-		chunk += r1.block.and_then(l2);
-		chunk.add_label(l2);
-	}
-	chunk.emit_storea(r1.opnd, lir::Immediate(0), r0.opnd);
+	r0.block.and_then(chunks, r1.block.entry);
+	r1.block.and_then(chunks, r2.entry);
+	r2.emit(lir::Opcode::STOREA, r1.opnd, lir::Immediate(0), r0.opnd);
 
-	return {lir::Block::defer_last_jump(chunk, entry), r1.opnd};
+	return {lir::Block::defer_last_jump(r0.block.entry, r2.index), r1.opnd};
 }
 
-Result2 Compiler::compile_let(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_let(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto decls_idx = node[0];
 	const auto exp_idx = node[1];
 	const auto& decls_node = ast.at(decls_idx);
 	Context exp_ctx {ctx};
-	const auto l = make_label();
-	const auto r0 = compile(exp_idx, exp_ctx);
+	auto r0 = compile(exp_idx, exp_ctx);
+	auto exit = make_chunk();
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
+	std::vector<lir::Block> blocks {};
 	for (const auto decl_idx : decls_node) {
 		const auto& decl = ast.at(decl_idx);
 		if (decl.type == NodeType::HANDLER_DECL) {
-			const auto ri = compile_handler_decl(decl_idx, exp_ctx, l);
-			{
-				const auto li = make_label();
-				chunk += ri.and_then(li);
-				chunk.add_label(li);
-			}
+			const auto ri = compile_handler_decl(decl_idx, exp_ctx, exit.entry);
+			blocks.push_back(ri);
 		} else {
 			const auto ri = compile(decl_idx, exp_ctx);
-			{
-				const auto li = make_label();
-				chunk += ri.block.and_then(li);
-				chunk.add_label(li);
-			}
+			blocks.push_back(ri.block);
 		}
 	}
-	{
-		const auto l_ = make_label();
-		chunk += r0.block.and_then(l_);
-		chunk.add_label(l_);
+	blocks.push_back(r0.block);
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+		a.and_then(chunks, b.entry);
 	}
-	chunk.add_label(l);
+	blocks.back().and_then(chunks, exit.entry);
 
-	return {lir::Block::defer_last_jump(chunk, entry), r0.opnd};
+	return {
+		lir::Block::defer_last_jump(blocks.front().entry, exit.index), r0.opnd
+	};
 }
 
-Result2 Compiler::compile_str(NodeIndex node_idx, Context) {
+Result Compiler::compile_str(NodeIndex node_idx, Context) {
 	//
 	// str : "bbbbbbb" n
 	// t2  : *---> [*, n $]
@@ -1191,39 +1156,33 @@ Result2 Compiler::compile_str(NodeIndex node_idx, Context) {
 	const auto t1 = make_register();
 	const auto t2 = make_register();
 
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	chunk.emit_alloca(t1, lir::Immediate((int)str.size()));
+	auto chunk = make_chunk();
+	chunk.emit(lir::Opcode::ALLOCA, t1, lir::Immediate((int)str.size()));
 	chunk.emit(Opcode::INITA, t1, lir::ByteString {std::string(str)});
-	chunk.emit_alloca(t2, lir::Immediate(2));
-	chunk.emit_storea(t1, lir::Immediate(0), t2);
-	chunk.emit_storea(
-		lir::Immediate(static_cast<int>(str.size())), lir::Immediate(1), t2
+	chunk.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
+	chunk.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
+	chunk.emit(
+		lir::Opcode::STOREA,
+		lir::Immediate(static_cast<int>(str.size())),
+		lir::Immediate(1),
+		t2
 	);
-	chunk.result_opnd = t2;
 
-	return {lir::Block::defer_last_jump(chunk, entry), t2};
+	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), t2};
 }
 
-Result2 Compiler::compile_at(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 	//
 	// res : *---> value
 	// tmp : value
 	//
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	const auto res = compile_lvalue(node_idx, ctx);
-	{
-		const auto l = make_label();
-		chunk += res.block.and_then(l);
-		chunk.add_label(l);
-	}
+	auto res = compile_lvalue(node_idx, ctx);
+	auto c1 = make_chunk();
 	auto res_opnd = res.opnd;
 	auto tmp = make_register();
-	chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
-	return {lir::Block::defer_last_jump(chunk, entry), tmp};
+	res.block.and_then(chunks, c1.entry);
+	c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
+	return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 }
 
 // FIXME: Temporary workaround
@@ -1242,7 +1201,7 @@ Result2 Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 		return {chunk, res.opnd};             \
 	}
 
-Result2 Compiler::compile_block(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_block(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	lir::Chunk chunk {};
 	const auto entry = make_label();
@@ -1253,69 +1212,59 @@ Result2 Compiler::compile_block(NodeIndex node_idx, Context ctx) {
 		.current_closure = ctx.current_closure,
 		.current_resumption = ctx.current_resumption,
 	};
+	std::vector<lir::Block> blocks {};
 	for (const auto stmt_idx : node) {
 		const auto ri = compile(stmt_idx, inner_ctx);
-		{
-			const auto li = make_label();
-			chunk += ri.block.and_then(li);
-			chunk.add_label(li);
-		}
+		blocks.push_back(ri.block);
 		opnd = ri.opnd;
 	}
-	return {lir::Block::defer_last_jump(chunk, entry), opnd};
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+		a.and_then(chunks, b.entry);
+	}
+	assert(blocks.size() >= 1);
+	lir::Block blk {
+		.entry = blocks.front().entry,
+		.patches = blocks.back().patches,
+	};
+	return {blk, opnd};
 }
 
-Result2 Compiler::compile_break(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_break(NodeIndex node_idx, Context ctx) {
 	assert(ctx.handlers.has_break_handler);
 	const auto res = ctx.handlers.break_handler.result_register;
 	const auto dest = ctx.handlers.break_handler.destination_label;
 	const auto& node = ast.at(node_idx);
 	assert(node.branch.children_count == 1);
-	const auto r0 = compile(node[0], ctx);
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	{
-		const auto l = make_label();
-		chunk += r0.block.and_then(l);
-		chunk.add_label(l);
-	}
-	chunk.emit(Opcode::MOV, res, r0.opnd);
-	chunk.emit(Opcode::JMP, dest);
-	return {lir::Block::defer_last_jump(chunk, entry), {}};
+	auto r0 = compile(node[0], ctx);
+	auto c1 = make_chunk();
+	r0.block.and_then(chunks, c1.entry);
+	c1.emit(Opcode::MOV, res, r0.opnd);
+	c1.emit(Opcode::JMP, dest);
+	return {lir::Block::defer_last_jump(r0.block.entry, c1.index), {}};
 }
 
-Result2 Compiler::compile_continue(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile_continue(NodeIndex node_idx, Context ctx) {
 	assert(ctx.handlers.has_continue_handler);
 	const auto res = ctx.handlers.continue_handler.result_register;
 	const auto dest = ctx.handlers.continue_handler.destination_label;
 	const auto& node = ast.at(node_idx);
 	assert(node.branch.children_count == 1);
-	const auto r0 = compile(node[0], ctx);
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	{
-		const auto l = make_label();
-		chunk += r0.block.and_then(l);
-		chunk.add_label(l);
-	}
-	chunk.emit(Opcode::MOV, res, r0.opnd);
-	chunk.emit(Opcode::JMP, dest);
-	return {lir::Block::defer_last_jump(chunk, entry), {}};
+	auto r0 = compile(node[0], ctx);
+	auto c1 = make_chunk();
+	r0.block.and_then(chunks, c1.entry);
+	c1.emit(Opcode::MOV, res, r0.opnd);
+	c1.emit(Opcode::JMP, dest);
+	return {lir::Block::defer_last_jump(r0.block.entry, c1.index), {}};
 }
 
-Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
+Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
 		case NodeType::NUM: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
+			auto chunk = make_chunk();
 			auto opnd = lir::Immediate(node.num);
-			chunk.result_opnd = opnd;
-			return {lir::Block::defer_last_jump(chunk, entry), opnd};
+			return {lir::Block::defer_last_jump(chunk.entry, chunk.index), opnd};
 		}
 		case NodeType::BLK: COMPILE_WITH_HANDLER(compile_block)
 		case NodeType::IF: COMPILE_WITH_HANDLER(compile_if)
@@ -1326,87 +1275,76 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::CONTINUE: COMPILE_WITH_HANDLER(compile_continue)
 		case NodeType::ASS: COMPILE_WITH_HANDLER(compile_ass)
 
-#define BINARY_ARITH(OPCODE)                                 \
-	{                                                          \
-		const auto left_node = node[0];                          \
-		const auto right_node = node[1];                         \
-		const auto r0 = compile(left_node, ctx);                 \
-		const auto r1 = compile(right_node, ctx);                \
-		const auto res = make_register();                        \
-                                                             \
-		lir::Chunk chunk {};                                     \
-		const auto entry = make_label();                         \
-		chunk.add_label(entry);                                  \
-		{                                                        \
-			const auto l1 = make_label();                          \
-			chunk += r0.block.and_then(l1);                        \
-			chunk.add_label(l1);                                   \
-		}                                                        \
-		{                                                        \
-			const auto l2 = make_label();                          \
-			chunk += r1.block.and_then(l2);                        \
-			chunk.add_label(l2);                                   \
-		}                                                        \
-		chunk.emit(OPCODE, res, r0.opnd, r1.opnd);               \
-		chunk.result_opnd = res;                                 \
-		return {lir::Block::defer_last_jump(chunk, entry), res}; \
+#define BINARY_ARITH(OPCODE)                                             \
+	{                                                                      \
+		const auto left_node = node[0];                                      \
+		const auto right_node = node[1];                                     \
+		auto r0 = compile(left_node, ctx);                                   \
+		auto r1 = compile(right_node, ctx);                                  \
+		auto c2 = make_chunk();                                              \
+		const auto res = make_register();                                    \
+                                                                         \
+		r0.block.and_then(chunks, r1.block.entry);                           \
+		r1.block.and_then(chunks, c2.entry);                                 \
+		c2.emit(OPCODE, res, r0.opnd, r1.opnd);                              \
+		return {lir::Block::defer_last_jump(r0.block.entry, c2.index), res}; \
 	}
 
 		case NodeType::OR: {
 			const auto left_node = node[0];
 			const auto right_node = node[1];
-			const auto r0 = compile(left_node, ctx);
-			const auto r1 = compile(right_node, ctx);
+			auto r0 = compile(left_node, ctx);
+			auto r1 = compile(right_node, ctx);
+			auto c2 = make_chunk();
+			auto c3 = make_chunk();
 			const auto res = make_register();
-			const auto l1 = make_label();
 
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l2 = make_label();
-				chunk += r0.block.and_then(l2);
-				chunk.add_label(l2);
-			}
-			chunk.emit_mov(res, r0.opnd);
-			chunk.emit(Opcode::JMP_TRUE, res, l1);
-			{
-				const auto l3 = make_label();
-				chunk += r1.block.and_then(l3);
-				chunk.add_label(l3);
-			}
-			chunk.emit_mov(res, r1.opnd);
-			chunk.add_label(l1);
-			chunk.result_opnd = res;
-			return {lir::Block::defer_last_jump(chunk, entry), res};
+			r0.block.and_then(chunks, c2.entry);
+
+			c2.emit(lir::Opcode::MOV, res, r0.opnd);
+			c2.emit(Opcode::JMP_FALSE, res, r1.block.entry);
+
+			r1.block.and_then(chunks, c3.entry);
+
+			c3.emit(lir::Opcode::MOV, res, r1.opnd);
+
+			lir::Block blk {
+				.entry = r0.block.entry,
+				.patches = {
+					lir::AppendFinalJump {.block_id = c2.index},
+					lir::AppendFinalJump {.block_id = c3.index},
+				},
+			};
+
+			return {blk, res};
 		}
 		case NodeType::AND: {
 			const auto left_node = node[0];
 			const auto right_node = node[1];
-			const auto r0 = compile(left_node, ctx);
-			const auto r1 = compile(right_node, ctx);
+			auto r0 = compile(left_node, ctx);
+			auto r1 = compile(right_node, ctx);
+			auto c2 = make_chunk();
+			auto c3 = make_chunk();
 			const auto res = make_register();
-			const auto l1 = make_label();
 
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l2 = make_label();
-				chunk += r0.block.and_then(l2);
-				chunk.add_label(l2);
-			}
-			chunk.emit_mov(res, r0.opnd);
-			chunk.emit(Opcode::JMP_FALSE, res, l1);
-			{
-				const auto l3 = make_label();
-				chunk += r1.block.and_then(l3);
-				chunk.add_label(l3);
-			}
-			chunk.emit_mov(res, r1.opnd);
-			chunk.add_label(l1);
-			chunk.result_opnd = res;
-			return {lir::Block::defer_last_jump(chunk, entry), res};
+			r0.block.and_then(chunks, c2.entry);
+
+			c2.emit(lir::Opcode::MOV, res, r0.opnd);
+			c2.emit(Opcode::JMP_TRUE, res, r1.block.entry);
+
+			r1.block.and_then(chunks, c3.entry);
+
+			c3.emit(lir::Opcode::MOV, res, r1.opnd);
+
+			lir::Block blk {
+				.entry = r0.block.entry,
+				.patches = {
+					lir::AppendFinalJump {.block_id = c2.index},
+					lir::AppendFinalJump {.block_id = c3.index},
+				},
+			};
+
+			return {blk, res};
 		}
 		case NodeType::GTN: BINARY_ARITH(Opcode::GREATER);
 		case NodeType::LTN: BINARY_ARITH(Opcode::LESS);
@@ -1426,15 +1364,14 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 			const auto entry = make_label();
 			chunk.add_label(entry);
 			lir::Operand res = make_register();
-			const auto inverse_res = compile(node[0], ctx);
-			{
-				const auto l = make_label();
-				chunk += inverse_res.block.and_then(l);
-				chunk.add_label(l);
-			}
+			auto inverse_res = compile(node[0], ctx);
+			auto c1 = make_chunk();
+			inverse_res.block.and_then(chunks, c1.entry);
 			lir::Operand inverse = inverse_res.opnd;
-			chunk.emit(Opcode::NOT, res, inverse);
-			return {lir::Block::defer_last_jump(chunk, entry), res};
+			c1.emit(Opcode::NOT, res, inverse);
+			return {
+				lir::Block::defer_last_jump(inverse_res.block.entry, c1.index), res
+			};
 		}
 		case NodeType::AT: COMPILE_WITH_HANDLER(compile_at)
 		case NodeType::ID: assert(false);
@@ -1442,79 +1379,53 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
 		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
 		case NodeType::NIL: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			return {lir::Block::defer_last_jump(chunk, entry), lir::Immediate(0)};
+			return compile_constant(lir::Immediate(0));
 		}
 		case NodeType::TRUE: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			return {lir::Block::defer_last_jump(chunk, entry), lir::Immediate(1)};
+			return compile_constant(lir::Immediate(1));
 		}
 		case NodeType::FALSE: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			return {lir::Block::defer_last_jump(chunk, entry), lir::Immediate(0)};
+			return compile_constant(lir::Immediate(0));
 		}
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
 		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			auto opnd = lir::Immediate(node.character);
-			chunk.result_opnd = opnd;
-			return {lir::Block::defer_last_jump(chunk, entry), opnd};
+			return compile_constant(lir::Immediate(node.character));
 		}
 		case NodeType::PATH: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			const auto res = compile_lvalue(node_idx, ctx);
-			{
-				const auto l = make_label();
-				chunk += res.block.and_then(l);
-				chunk.add_label(l);
-			}
+			auto res = compile_lvalue(node_idx, ctx);
+			auto c1 = make_chunk();
+			res.block.and_then(chunks, c1.entry);
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
-			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
-			chunk.result_opnd = tmp;
-			return {lir::Block::defer_last_jump(chunk, entry), tmp};
+			c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
+			return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 		}
 		case NodeType::INSTANCE: assert(false);
 		case NodeType::AS: return compile(node[0], ctx);
 		case NodeType::METALIST: assert(false);
 		case NodeType::GUID: {
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			const auto res = compile_lvalue(node_idx, ctx);
-			{
-				const auto l = make_label();
-				chunk += res.block.and_then(l);
-				chunk.add_label(l);
-			}
+			auto res = compile_lvalue(node_idx, ctx);
+			auto c1 = make_chunk();
+			res.block.and_then(chunks, c1.entry);
 			auto res_opnd = res.opnd;
 			auto tmp = make_register();
-			chunk.emit_loada(tmp, lir::Immediate(0), res_opnd);
-			return {lir::Block::defer_last_jump(chunk, entry), tmp};
+			c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
+			return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 		}
 		case NodeType::MODE: assert(false);
 		case NodeType::PARAM: assert(false);
 		case NodeType::RECORD_LITERAL: {
 			const auto field_count = node.size();
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
 			const auto record_datatype = std::dynamic_pointer_cast<Record>(
 				tpc.node_to_type.at(node_idx)->datatype
 			);
 			const auto t1 = make_register();
-			chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(field_count)));
+			auto c0 = make_chunk();
+			c0.emit(
+				lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(field_count))
+			);
+			std::vector<lir::Block> blocks {};
 			for (auto i = 0ul; i < field_count; i++) {
 				const auto& field_node = ast.at(node[i]);
 				assert(field_node.type == NodeType::FIELD);
@@ -1529,18 +1440,27 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 				assert(found != record_datatype->fields.end());
 				const auto offset =
 					std::distance(record_datatype->fields.begin(), found);
-				const auto ri = compile(field_node[1], ctx);
-				{
-					const auto l = make_label();
-					chunk += ri.block.and_then(l);
-					chunk.add_label(l);
-				}
-				chunk.emit_storea(
-					ri.opnd, lir::Immediate(static_cast<int>(offset)), t1
+				auto ri = compile(field_node[1], ctx);
+				auto c2 = make_chunk();
+				ri.block.and_then(chunks, c2.entry);
+				c2.emit(
+					lir::Opcode::STOREA,
+					ri.opnd,
+					lir::Immediate(static_cast<int>(offset)),
+					t1
 				);
+				blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
 			}
-			chunk.result_opnd = t1;
-			return {lir::Block::defer_last_jump(chunk, entry), t1};
+			c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
+			c0.finalize();
+			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+				a.and_then(chunks, b.entry);
+			}
+			lir::Block blk {
+				.entry = c0.entry,
+				.patches = blocks.back().patches,
+			};
+			return {blk, t1};
 		}
 		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: assert(false);
@@ -1555,28 +1475,38 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 			//             |
 			//             +---> [r1, r2, ..., rn]
 			//
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
 			const auto t1 = make_register();
-			chunk.emit_alloca(t1, lir::Immediate(static_cast<int>(node.size())));
+			auto c0 = make_chunk();
+			c0.emit(
+				lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(node.size()))
+			);
+			std::vector<lir::Block> blocks {};
 			for (const auto& [i, elt_idx] : std::ranges::views::enumerate(node)) {
-				const auto ri = compile(elt_idx, ctx);
-				{
-					const auto li = make_label();
-					chunk += ri.block.and_then(li);
-					chunk.add_label(li);
-				}
-				chunk.emit_storea(ri.opnd, lir::Immediate(static_cast<int>(i)), t1);
+				auto ri = compile(elt_idx, ctx);
+				auto c2 = make_chunk();
+				ri.block.and_then(chunks, c2.entry);
+				c2.emit(
+					lir::Opcode::STOREA, ri.opnd, lir::Immediate(static_cast<int>(i)), t1
+				);
+				blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
+			}
+			c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
+			c0.finalize();
+			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+				a.and_then(chunks, b.entry);
 			}
 			const auto t2 = make_register();
-			chunk.emit_alloca(t2, lir::Immediate(2));
-			chunk.emit_storea(t1, lir::Immediate(0), t2);
-			chunk.emit_storea(
-				lir::Immediate(static_cast<int>(node.size())), lir::Immediate(1), t2
+			auto c3 = make_chunk();
+			blocks.back().and_then(chunks, c3.entry);
+			c3.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
+			c3.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
+			c3.emit(
+				lir::Opcode::STOREA,
+				lir::Immediate(static_cast<int>(node.size())),
+				lir::Immediate(1),
+				t2
 			);
-			chunk.result_opnd = t2;
-			return {lir::Block::defer_last_jump(chunk, entry), t2};
+			return {lir::Block::defer_last_jump(c0.entry, c3.index), t2};
 		}
 		case NodeType::REPEAT: {
 			//
@@ -1586,29 +1516,18 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 			//             |
 			//             +---> [value, value, ...] (amnt times)
 			//
-			const auto r0 = compile(node[0], ctx);
-			const auto r1 = compile(node[1], ctx);
+			auto r0 = compile(node[0], ctx);
+			auto r1 = compile(node[1], ctx);
+			auto c2 = make_chunk();
 			const auto t1 = make_register();
 			const auto t2 = make_register();
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l0 = make_label();
-				chunk += r0.block.and_then(l0);
-				chunk.add_label(l0);
-			}
-			{
-				const auto l1 = make_label();
-				chunk += r1.block.and_then(l1);
-				chunk.add_label(l1);
-			}
-			chunk.emit(Opcode::REPEAT, t1, r0.opnd, r1.opnd);
-			chunk.emit_alloca(t2, lir::Immediate(2));
-			chunk.emit_storea(t1, lir::Immediate(0), t2);
-			chunk.emit_storea(r1.opnd, lir::Immediate(1), t2);
-			chunk.result_opnd = t2;
-			return {lir::Block::defer_last_jump(chunk, entry), t2};
+			r0.block.and_then(chunks, r1.block.entry);
+			r1.block.and_then(chunks, c2.entry);
+			c2.emit(Opcode::REPEAT, t1, r0.opnd, r1.opnd);
+			c2.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
+			c2.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
+			c2.emit(lir::Opcode::STOREA, r1.opnd, lir::Immediate(1), t2);
+			return {lir::Block::defer_last_jump(r0.block.entry, c2.index), t2};
 		}
 		case NodeType::LEN: {
 			//
@@ -1618,27 +1537,18 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 			// t1 : len $
 			//
 
-			const auto c0 = compile(node[0], ctx);
+			auto c0 = compile(node[0], ctx);
+			auto c1 = make_chunk();
 			const auto t1 = make_register();
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l = make_label();
-				chunk += c0.block.and_then(l);
-				chunk.add_label(l);
-			}
-			chunk.emit_loada(t1, lir::Immediate(1), c0.opnd);
-			chunk.result_opnd = t1;
-			return {lir::Block::defer_last_jump(chunk, entry), t1};
+			c0.block.and_then(chunks, c1.entry);
+			c1.emit(lir::Opcode::LOADA, t1, lir::Immediate(1), c0.opnd);
+			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), t1};
 		}
 		case NodeType::MODULE_BODY: {
 			const auto& decl_list = ast.at(node[0]);
 			assert(decl_list.type == NodeType::METALIST);
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
 			lir::Operand main {};
+			std::vector<lir::Block> blocks {};
 			for (auto decl : decl_list) {
 				const auto& decl_node = ast.at(decl);
 				if (decl_node.type != NodeType::TYPE_DECL
@@ -1649,15 +1559,18 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 					const auto name2 =
 						std::string_view(pool.find(symtab.name_of(name.guid).value()));
 					const auto ri = compile(decl, ctx);
-					{
-						const auto l = make_label();
-						chunk += ri.block.and_then(l);
-						chunk.add_label(l);
-					}
+					blocks.push_back(ri.block);
 					if (name2 == "main") main = ri.opnd;
 				}
 			}
-			return {lir::Block::defer_last_jump(chunk, entry), main};
+			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+				a.and_then(chunks, b.entry);
+			}
+			lir::Block blk {
+				.entry = blocks.at(0).entry,
+				.patches = blocks.back().patches,
+			};
+			return {blk, main};
 		};
 		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
 		case NodeType::RECORD_TYPE_LITERAL: assert(false);
@@ -1669,45 +1582,32 @@ Result2 Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::PERFORM: COMPILE_WITH_HANDLER(compile_perform)
 		case NodeType::HANDLER_DECL: assert(false);
 		case NodeType::RESUME: {
-			const auto c0 = compile(node[0], ctx);
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			{
-				const auto l = make_label();
-				chunk += c0.block.and_then(l);
-				chunk.add_label(l);
-			}
-			chunk.emit(Opcode::PUSH, c0.opnd);
-			chunk.emit(Opcode::RESUME, ctx.current_resumption.value());
-			return {lir::Block::defer_last_jump(chunk, entry), {}};
+			auto c0 = compile(node[0], ctx);
+			auto c1 = make_chunk();
+			c0.block.and_then(chunks, c1.entry);
+			c1.emit(Opcode::PUSH, c0.opnd);
+			c1.emit(Opcode::RESUME, ctx.current_resumption.value());
+			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), {}};
 		}
 		case NodeType::UNION_TYPE_LITERAL: assert(false);
 		case NodeType::UNION_CONSTRUCTOR: assert(false);
 		case NodeType::MATCH: {
 			const auto r0 = make_register();
-			const auto l0 = make_label();
 			const auto ty = tpc.node_to_type.at(node[0]);
 			const auto dty = ty->datatype;
-			lir::Chunk chunk {};
-			const auto entry = make_label();
-			chunk.add_label(entry);
-			const auto c0 = compile(node[0], ctx);
-			{
-				const auto l1 = make_label();
-				chunk += c0.block.and_then(l1);
-				chunk.add_label(l1);
-			}
+			auto c0 = compile(node[0], ctx);
+			auto c2 = make_chunk();
+			std::vector<lir::Block> blocks {};
 			for (const auto case_idx : ast.at(node[1])) {
-				const auto ci = compile_case(case_idx, ctx, l0, r0, dty, c0.opnd);
-				{
-					const auto li = make_label();
-					chunk += ci.and_then(li);
-					chunk.add_label(li);
-				}
+				const auto ci = compile_case(case_idx, ctx, c2.entry, r0, dty, c0.opnd);
+				blocks.push_back(ci);
 			}
-			chunk.add_label(l0);
-			return {lir::Block::defer_last_jump(chunk, entry), r0};
+			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+				a.and_then(chunks, b.entry);
+			}
+			c0.block.and_then(chunks, blocks.at(0).entry);
+			blocks.back().and_then(chunks, c2.entry);
+			return {lir::Block::defer_last_jump(c0.block.entry, c2.index), r0};
 		}
 		case NodeType::CASE: assert(false);
 		case NodeType::CTOR_PATTERN: assert(false);
@@ -1720,43 +1620,50 @@ lir::Block Compiler::compile_handler_decl(
 ) {
 	const auto& node = ast.at(node_idx);
 	const auto k = make_register();
-	const auto l4 = make_label();
 	const auto id_idx = node[0];
 	const auto& id_node = ast.at(id_idx);
 	const auto param_list_idx = node[1];
 	const auto& param_list_node = ast.at(param_list_idx);
 	const auto tag = effect_tags.at(id_node.guid);
-	lir::Chunk chunk {};
-	const auto entry = make_label();
-	chunk.add_label(entry);
-	chunk.emit(Opcode::CATCH, tag, l4);
-	chunk.emit(Opcode::POP, k);
+	auto c1 = make_chunk();
+	auto c3 = make_chunk();
+	c1.emit(Opcode::CATCH, tag, c3.entry);
+	c1.emit(Opcode::POP, k);
 	for (auto param_idx : param_list_node) {
 		const auto& param_node = ast.at(param_idx);
 		const auto& param_name = ast.at(param_node[1]);
-		chunk.emit(Opcode::POP, variables.at(param_name.guid));
+		c1.emit(Opcode::POP, variables.at(param_name.guid));
 	}
 	Context handler_ctx {
 		.handlers = ctx.handlers,
 		.current_closure = ctx.current_closure,
 		.current_resumption = k,
 	};
-	const auto c0 = compile(node[3], handler_ctx);
-	{
-		const auto l = make_label();
-		chunk += c0.block.and_then(l);
-		chunk.add_label(l);
-	}
-	chunk.emit_jmp(exit);
-	chunk.add_label(l4);
-	return lir::Block::defer_last_jump(chunk, entry);
+	auto c0 = compile(node[3], handler_ctx);
+	c1.emit(lir::Opcode::JMP, c0.block.entry);
+	c1.finalize();
+	auto c2 = make_chunk();
+	c0.block.and_then(chunks, c2.entry);
+	c2.emit(lir::Opcode::JMP, exit);
+	c2.finalize();
+	return lir::Block::defer_last_jump(c1.entry, c3.index);
 }
 
-template<class F>
-lir::Block Compiler::with_chunk(const F& f) {
+Result Compiler::compile_constant(lir::Operand opnd) {
+	auto c0 = make_chunk();
+	return {lir::Block::defer_last_jump(c0.entry, c0.index), opnd};
+}
+
+lir::ChunkRef Compiler::make_chunk() {
+	auto l = make_label();
 	lir::Chunk chunk {};
-	f(chunk);
-	return lir::Block::defer_last_jump(chunk, make_label());
+	chunk.add_label(l);
+	chunks.push_back(chunk);
+	return lir::ChunkRef {
+		.chunks = chunks,
+		.index = chunks.size() - 1,
+		.entry = l,
+	};
 }
 
 } // namespace compiler
