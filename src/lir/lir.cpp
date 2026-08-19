@@ -454,7 +454,13 @@ ChunkRef ChunkRef::emit(
 }
 
 void ChunkRef::finalize() {
-	// TODO: valid chunk
+	auto& chunk = chunks.at(index);
+	assert(chunk.m_vec.size() >= 1);
+	auto opcode = chunk.m_vec.back().opcode;
+	assert(
+		opcode == Opcode::JMP or opcode == Opcode::JMP_TRUE
+		or opcode == Opcode::JMP_FALSE or opcode == Opcode::RET
+	);
 }
 
 } // namespace lir
