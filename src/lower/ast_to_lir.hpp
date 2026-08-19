@@ -96,6 +96,9 @@ struct Compiler {
 	DECLARE_NODE_HANDLER(continue);
 	DECLARE_NODE_HANDLER(break);
 	DECLARE_NODE_HANDLER(perform);
+	DECLARE_NODE_HANDLER(match);
+	DECLARE_NODE_HANDLER(array_literal);
+	DECLARE_NODE_HANDLER(record_literal);
 
 #undef DECLARE_NODE_HANDLER
 

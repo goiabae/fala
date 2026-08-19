@@ -676,24 +676,6 @@ static bool fits_in_register(const Datatype& d) {
 Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case NodeType::EMPTY: assert(false);
-		case NodeType::APP: assert(false);
-		case NodeType::NUM: assert(false);
-		case NodeType::BLK: assert(false);
-		case NodeType::IF: assert(false);
-		case NodeType::WHEN: assert(false);
-		case NodeType::FOR: assert(false);
-		case NodeType::WHILE: assert(false);
-		case NodeType::BREAK: assert(false);
-		case NodeType::CONTINUE: assert(false);
-		case NodeType::ASS: assert(false);
-		case NodeType::OR: assert(false);
-		case NodeType::AND: assert(false);
-		case NodeType::GTN: assert(false);
-		case NodeType::LTN: assert(false);
-		case NodeType::GTE: assert(false);
-		case NodeType::LTE: assert(false);
-		case NodeType::EQ: assert(false);
 		case NodeType::AT: {
 			//                   +---> [... v]
 			//                   |
@@ -717,27 +699,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 
 			return {lir::Block::defer_last_jump(c0.block.entry, c2.index), r0};
 		}
-		case NodeType::ADD: assert(false);
-		case NodeType::SUB: assert(false);
-		case NodeType::MUL: assert(false);
-		case NodeType::DIV: assert(false);
-		case NodeType::MOD: assert(false);
-		case NodeType::NOT: assert(false);
-		case NodeType::ID: assert(false);
-		case NodeType::STR: assert(false);
-		case NodeType::VAR_DECL: assert(false);
-		case NodeType::FUN_DECL: assert(false);
-		case NodeType::NIL: assert(false);
-		case NodeType::TRUE: assert(false);
-		case NodeType::FALSE: assert(false);
-		case NodeType::LET: assert(false);
-		case NodeType::CHAR: assert(false);
-		case NodeType::PATH: {
-			return compile_lvalue(node[0], ctx);
-		}
-		case NodeType::AS: assert(false);
-		case NodeType::INSTANCE: assert(false);
-		case NodeType::METALIST: assert(false);
+		case NodeType::PATH: return compile_lvalue(node[0], ctx);
 		case NodeType::GUID: {
 			const auto maybe_rel = symtab.relative_scope_of(node.guid, node_idx);
 			assert(maybe_rel.has_value());
@@ -801,10 +763,6 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 				};
 			}
 		}
-		case NodeType::MODE: assert(false);
-		case NodeType::PARAM: assert(false);
-		case NodeType::RECORD_LITERAL: assert(false);
-		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: {
 			auto c0 = compile_lvalue(node[0], ctx);
 			auto c1 = make_chunk();
@@ -827,27 +785,12 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			c1.emit(lir::Opcode::SHIFTA, t1, lir::Immediate(static_cast<int>(d)), t3);
 			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), t1};
 		}
-		case NodeType::ARRAY_LITERAL: assert(false);
-		case NodeType::REPEAT: assert(false);
-		case NodeType::LEN: assert(false);
-		case NodeType::MODULE_BODY: assert(false);
-		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
-		case NodeType::RECORD_TYPE_LITERAL: assert(false);
-		case NodeType::FIELD_TYPE: assert(false);
-		case NodeType::TYPE_DECL: assert(false);
-		case NodeType::EFF_DECL: assert(false);
-		case NodeType::EFF_ALIAS: assert(false);
-		case NodeType::EFF_UNION: assert(false);
-		case NodeType::PERFORM: assert(false);
-		case NodeType::HANDLER_DECL: assert(false);
-		case NodeType::RESUME: assert(false);
-		case NodeType::UNION_TYPE_LITERAL: assert(false);
-		case NodeType::UNION_CONSTRUCTOR: assert(false);
-		case NodeType::MATCH: assert(false);
-		case NodeType::CASE: assert(false);
-		case NodeType::CTOR_PATTERN: assert(false);
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type: {}", node_type_repr(node.type))
+			);
+		}
 	}
-	assert(false);
 }
 
 lir::Block Compiler::compile_case(
@@ -1185,22 +1128,6 @@ Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 	return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 }
 
-// FIXME: Temporary workaround
-#define COMPILE_WITH_HANDLER(METH) return METH(node_idx, ctx);
-#define COMPILE_WITH_HANDLER2(METH)       \
-	{                                       \
-		lir::Chunk chunk {};                  \
-		const auto entry = make_label();      \
-		chunk.add_label(entry);               \
-		const auto res = METH(node_idx, ctx); \
-		{                                     \
-			const auto l = make_label();        \
-			chunk += res.block.and_then(l);     \
-			chunk.add_label(l);                 \
-		}                                     \
-		return {chunk, res.opnd};             \
-	}
-
 Result Compiler::compile_block(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	lir::Chunk chunk {};
@@ -1258,6 +1185,7 @@ Result Compiler::compile_continue(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile(NodeIndex node_idx, Context ctx) {
+#define COMPILE_WITH_HANDLER(METH) return METH(node_idx, ctx);
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
 		case NodeType::APP: COMPILE_WITH_HANDLER(compile_app)
@@ -1374,21 +1302,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			};
 		}
 		case NodeType::AT: COMPILE_WITH_HANDLER(compile_at)
-		case NodeType::ID: assert(false);
 		case NodeType::STR: COMPILE_WITH_HANDLER(compile_str)
 		case NodeType::VAR_DECL: COMPILE_WITH_HANDLER(compile_var_decl)
 		case NodeType::FUN_DECL: COMPILE_WITH_HANDLER(compile_fun_decl)
-		case NodeType::NIL: {
-			return compile_constant(lir::Immediate(0));
-		}
-		case NodeType::TRUE: {
-			return compile_constant(lir::Immediate(1));
-		}
-		case NodeType::FALSE: {
-			return compile_constant(lir::Immediate(0));
-		}
+		case NodeType::NIL: return compile_constant(lir::Immediate(0));
+		case NodeType::TRUE: return compile_constant(lir::Immediate(1));
+		case NodeType::FALSE: return compile_constant(lir::Immediate(0));
 		case NodeType::LET: COMPILE_WITH_HANDLER(compile_let)
-		case NodeType::EMPTY: assert(false && "unreachable");
 		case NodeType::CHAR: {
 			return compile_constant(lir::Immediate(node.character));
 		}
@@ -1401,9 +1321,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
 			return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 		}
-		case NodeType::INSTANCE: assert(false);
 		case NodeType::AS: return compile(node[0], ctx);
-		case NodeType::METALIST: assert(false);
 		case NodeType::GUID: {
 			auto res = compile_lvalue(node_idx, ctx);
 			auto c1 = make_chunk();
@@ -1413,101 +1331,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
 			return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 		}
-		case NodeType::MODE: assert(false);
-		case NodeType::PARAM: assert(false);
-		case NodeType::RECORD_LITERAL: {
-			const auto field_count = node.size();
-			const auto record_datatype = std::dynamic_pointer_cast<Record>(
-				tpc.node_to_type.at(node_idx)->datatype
-			);
-			const auto t1 = make_register();
-			auto c0 = make_chunk();
-			c0.emit(
-				lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(field_count))
-			);
-			std::vector<lir::Block> blocks {};
-			for (auto i = 0ul; i < field_count; i++) {
-				const auto& field_node = ast.at(node[i]);
-				assert(field_node.type == NodeType::FIELD);
-				const auto& field_name_node = ast.at(field_node[0]);
-				assert(field_name_node.type == NodeType::ID);
-				const auto field_name = std::string(pool.find(field_name_node.str_id));
-				const auto found = std::ranges::find(
-					record_datatype->fields, field_name, [](const auto& x) {
-						return x.first;
-					}
-				);
-				assert(found != record_datatype->fields.end());
-				const auto offset =
-					std::distance(record_datatype->fields.begin(), found);
-				auto ri = compile(field_node[1], ctx);
-				auto c2 = make_chunk();
-				ri.block.and_then(chunks, c2.entry);
-				c2.emit(
-					lir::Opcode::STOREA,
-					ri.opnd,
-					lir::Immediate(static_cast<int>(offset)),
-					t1
-				);
-				blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
-			}
-			c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
-			c0.finalize();
-			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
-				a.and_then(chunks, b.entry);
-			}
-			lir::Block blk {
-				.entry = c0.entry,
-				.patches = blocks.back().patches,
-			};
-			return {blk, t1};
-		}
-		case NodeType::FIELD: assert(false);
-		case NodeType::FIELD_ACCESS: assert(false);
-		case NodeType::ARRAY_LITERAL: {
-			//
-			// r1 : v1
-			// r2 : v2
-			// ...
-			// rn : vn
-			//
-			// t2 : *---> [*, n $]
-			//             |
-			//             +---> [r1, r2, ..., rn]
-			//
-			const auto t1 = make_register();
-			auto c0 = make_chunk();
-			c0.emit(
-				lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(node.size()))
-			);
-			std::vector<lir::Block> blocks {};
-			for (const auto& [i, elt_idx] : std::ranges::views::enumerate(node)) {
-				auto ri = compile(elt_idx, ctx);
-				auto c2 = make_chunk();
-				ri.block.and_then(chunks, c2.entry);
-				c2.emit(
-					lir::Opcode::STOREA, ri.opnd, lir::Immediate(static_cast<int>(i)), t1
-				);
-				blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
-			}
-			c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
-			c0.finalize();
-			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
-				a.and_then(chunks, b.entry);
-			}
-			const auto t2 = make_register();
-			auto c3 = make_chunk();
-			blocks.back().and_then(chunks, c3.entry);
-			c3.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
-			c3.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
-			c3.emit(
-				lir::Opcode::STOREA,
-				lir::Immediate(static_cast<int>(node.size())),
-				lir::Immediate(1),
-				t2
-			);
-			return {lir::Block::defer_last_jump(c0.entry, c3.index), t2};
-		}
+		case NodeType::RECORD_LITERAL: COMPILE_WITH_HANDLER(compile_record_literal)
+		case NodeType::ARRAY_LITERAL: COMPILE_WITH_HANDLER(compile_array_literal)
 		case NodeType::REPEAT: {
 			//
 			// r0 : value
@@ -1572,15 +1397,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			};
 			return {blk, main};
 		};
-		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
-		case NodeType::RECORD_TYPE_LITERAL: assert(false);
-		case NodeType::FIELD_TYPE: assert(false);
-		case NodeType::TYPE_DECL: assert(false);
-		case NodeType::EFF_DECL: assert(false);
-		case NodeType::EFF_ALIAS: assert(false);
-		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: COMPILE_WITH_HANDLER(compile_perform)
-		case NodeType::HANDLER_DECL: assert(false);
 		case NodeType::RESUME: {
 			auto c0 = compile(node[0], ctx);
 			auto c1 = make_chunk();
@@ -1589,30 +1406,128 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			c1.emit(Opcode::RESUME, ctx.current_resumption.value());
 			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), {}};
 		}
-		case NodeType::UNION_TYPE_LITERAL: assert(false);
-		case NodeType::UNION_CONSTRUCTOR: assert(false);
-		case NodeType::MATCH: {
-			const auto r0 = make_register();
-			const auto ty = tpc.node_to_type.at(node[0]);
-			const auto dty = ty->datatype;
-			auto c0 = compile(node[0], ctx);
-			auto c2 = make_chunk();
-			std::vector<lir::Block> blocks {};
-			for (const auto case_idx : ast.at(node[1])) {
-				const auto ci = compile_case(case_idx, ctx, c2.entry, r0, dty, c0.opnd);
-				blocks.push_back(ci);
-			}
-			for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
-				a.and_then(chunks, b.entry);
-			}
-			c0.block.and_then(chunks, blocks.at(0).entry);
-			blocks.back().and_then(chunks, c2.entry);
-			return {lir::Block::defer_last_jump(c0.block.entry, c2.index), r0};
+		case NodeType::MATCH: COMPILE_WITH_HANDLER(compile_match)
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled not type: {}", node_type_repr(node.type))
+			);
 		}
-		case NodeType::CASE: assert(false);
-		case NodeType::CTOR_PATTERN: assert(false);
 	}
 	assert(false);
+}
+
+Result Compiler::compile_array_literal(NodeIndex node_idx, Context ctx) {
+	//
+	// r1 : v1
+	// r2 : v2
+	// ...
+	// rn : vn
+	//
+	// t2 : *---> [*, n $]
+	//             |
+	//             +---> [r1, r2, ..., rn]
+	//
+	const auto& node = ast.at(node_idx);
+	const auto t1 = make_register();
+	auto c0 = make_chunk();
+	c0.emit(
+		lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(node.size()))
+	);
+	std::vector<lir::Block> blocks {};
+	for (const auto& [i, elt_idx] : std::ranges::views::enumerate(node)) {
+		auto ri = compile(elt_idx, ctx);
+		auto c2 = make_chunk();
+		ri.block.and_then(chunks, c2.entry);
+		c2.emit(
+			lir::Opcode::STOREA, ri.opnd, lir::Immediate(static_cast<int>(i)), t1
+		);
+		blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
+	}
+	c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
+	c0.finalize();
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+		a.and_then(chunks, b.entry);
+	}
+	const auto t2 = make_register();
+	auto c3 = make_chunk();
+	blocks.back().and_then(chunks, c3.entry);
+	c3.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
+	c3.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
+	c3.emit(
+		lir::Opcode::STOREA,
+		lir::Immediate(static_cast<int>(node.size())),
+		lir::Immediate(1),
+		t2
+	);
+	return {lir::Block::defer_last_jump(c0.entry, c3.index), t2};
+}
+
+Result Compiler::compile_record_literal(NodeIndex node_idx, Context ctx) {
+	const auto& node = ast.at(node_idx);
+	const auto field_count = node.size();
+	const auto record_datatype =
+		std::dynamic_pointer_cast<Record>(tpc.node_to_type.at(node_idx)->datatype);
+	const auto t1 = make_register();
+	auto c0 = make_chunk();
+	c0.emit(
+		lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(field_count))
+	);
+	std::vector<lir::Block> blocks {};
+	for (auto i = 0ul; i < field_count; i++) {
+		const auto& field_node = ast.at(node[i]);
+		assert(field_node.type == NodeType::FIELD);
+		const auto& field_name_node = ast.at(field_node[0]);
+		assert(field_name_node.type == NodeType::ID);
+		const auto field_name = std::string(pool.find(field_name_node.str_id));
+		const auto found = std::ranges::find(
+			record_datatype->fields, field_name, [](const auto& x) { return x.first; }
+		);
+		assert(found != record_datatype->fields.end());
+		const auto offset = std::distance(record_datatype->fields.begin(), found);
+		auto ri = compile(field_node[1], ctx);
+		auto c2 = make_chunk();
+		ri.block.and_then(chunks, c2.entry);
+		c2.emit(
+			lir::Opcode::STOREA, ri.opnd, lir::Immediate(static_cast<int>(offset)), t1
+		);
+		blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
+	}
+	c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
+	c0.finalize();
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+		a.and_then(chunks, b.entry);
+	}
+	lir::Block blk {
+		.entry = c0.entry,
+		.patches = blocks.back().patches,
+	};
+	return {blk, t1};
+}
+
+Result Compiler::compile_match(NodeIndex node_idx, Context ctx) {
+	const auto& node = ast.at(node_idx);
+	const auto r0 = make_register();
+	const auto ty = tpc.node_to_type.at(node[0]);
+	const auto dty = ty->datatype;
+	auto c0 = compile(node[0], ctx);
+	auto c2 = make_chunk();
+	std::vector<lir::Block> blocks {};
+	for (const auto case_idx : ast.at(node[1])) {
+		const auto ci = compile_case(case_idx, ctx, c2.entry, r0, dty, c0.opnd);
+		blocks.push_back(ci);
+	}
+
+	//         +-------+-------+-------+------+
+	//         |       |       |       |      |
+	//         |       |       |       |      v
+	// c0 --> ci0 --> ci1 --> ... --> cin --> c2 --> *
+	//
+	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
+		a.and_then(chunks, b.entry);
+	}
+	c0.block.and_then(chunks, blocks.at(0).entry);
+	blocks.back().and_then(chunks, c2.entry);
+	return {lir::Block::defer_last_jump(c0.block.entry, c2.index), r0};
 }
 
 lir::Block Compiler::compile_handler_decl(
@@ -1622,30 +1537,44 @@ lir::Block Compiler::compile_handler_decl(
 	const auto k = make_register();
 	const auto id_idx = node[0];
 	const auto& id_node = ast.at(id_idx);
+	assert(id_node.type == NodeType::GUID);
 	const auto param_list_idx = node[1];
 	const auto& param_list_node = ast.at(param_list_idx);
+	assert(param_list_node.type == NodeType::METALIST);
 	const auto tag = effect_tags.at(id_node.guid);
-	auto c1 = make_chunk();
-	auto c3 = make_chunk();
-	c1.emit(Opcode::CATCH, tag, c3.entry);
-	c1.emit(Opcode::POP, k);
-	for (auto param_idx : param_list_node) {
-		const auto& param_node = ast.at(param_idx);
-		const auto& param_name = ast.at(param_node[1]);
-		c1.emit(Opcode::POP, variables.at(param_name.guid));
-	}
-	Context handler_ctx {
+	const Context handler_ctx {
 		.handlers = ctx.handlers,
 		.current_closure = ctx.current_closure,
 		.current_resumption = k,
 	};
+
 	auto c0 = compile(node[3], handler_ctx);
+	auto c1 = make_chunk();
+	auto c2 = make_chunk();
+	auto c3 = make_chunk();
+
+	// c1 --> c0 --> c2 --> exit
+	// |
+	// v
+	// c3 --> *
+
+	c1.emit(Opcode::CATCH, tag, c3.entry);
+	c1.emit(Opcode::POP, k);
+	for (auto param_idx : param_list_node) {
+		const auto& param_node = ast.at(param_idx);
+		assert(param_node.type == NodeType::PARAM);
+		const auto& param_name = ast.at(param_node[1]);
+		assert(param_name.type == NodeType::GUID);
+		c1.emit(Opcode::POP, variables.at(param_name.guid));
+	}
 	c1.emit(lir::Opcode::JMP, c0.block.entry);
 	c1.finalize();
-	auto c2 = make_chunk();
+
 	c0.block.and_then(chunks, c2.entry);
+
 	c2.emit(lir::Opcode::JMP, exit);
 	c2.finalize();
+
 	return lir::Block::defer_last_jump(c1.entry, c3.index);
 }
 
