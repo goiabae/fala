@@ -23,9 +23,6 @@
 
 namespace compiler {
 
-using lir::Opcode;
-using std::vector;
-
 static NodeIndex decl_name(const Node& node) {
 	if (node.type == NodeType::VAR_DECL) {
 		return node[1];
@@ -59,14 +56,14 @@ constexpr auto builtins = {
 Result read_int(Compiler& comp, vector<lir::Operand>) {
 	lir::Operand tmp = comp.make_register();
 	auto chunk = comp.make_chunk();
-	chunk.emit(Opcode::READV, tmp);
+	chunk.emit(lir::Opcode::READV, tmp);
 	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), tmp};
 }
 
 Result read_char(Compiler& comp, vector<lir::Operand>) {
 	lir::Operand tmp = comp.make_register();
 	auto chunk = comp.make_chunk();
-	chunk.emit(Opcode::READC, tmp);
+	chunk.emit(lir::Opcode::READC, tmp);
 	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), tmp};
 }
 
@@ -145,55 +142,55 @@ lir::Chunk Compiler::compile() {
 		const auto r8 = make_register();
 		const auto r9 = make_register();
 
-		chunk.emit(Opcode::JMP, start.entry);
+		chunk.emit(lir::Opcode::JMP, start.entry);
 		chunk.finalize();
 
-		start.emit(Opcode::JMP, module.block.entry);
+		start.emit(lir::Opcode::JMP, module.block.entry);
 		start.finalize();
 
 		module.block.and_then(chunks, write_char_handler.entry);
 
 		write_char_handler.emit(
-			Opcode::CATCH, write_char_tag, write_str_handler.entry
+			lir::Opcode::CATCH, write_char_tag, write_str_handler.entry
 		);
-		write_char_handler.emit(Opcode::POP, r4);
-		write_char_handler.emit(Opcode::POP, r8);
-		write_char_handler.emit(Opcode::LOADA, r9, lir::Immediate(0), r8);
-		write_char_handler.emit(Opcode::PRINTC, r9);
-		write_char_handler.emit(Opcode::PUSH, lir::Immediate(0));
-		write_char_handler.emit(Opcode::RESUME, r4);
-		write_char_handler.emit(Opcode::JMP, exit.entry);
+		write_char_handler.emit(lir::Opcode::POP, r4);
+		write_char_handler.emit(lir::Opcode::POP, r8);
+		write_char_handler.emit(lir::Opcode::LOADA, r9, lir::Immediate(0), r8);
+		write_char_handler.emit(lir::Opcode::PRINTC, r9);
+		write_char_handler.emit(lir::Opcode::PUSH, lir::Immediate(0));
+		write_char_handler.emit(lir::Opcode::RESUME, r4);
+		write_char_handler.emit(lir::Opcode::JMP, exit.entry);
 		write_char_handler.finalize();
 
 		write_str_handler.emit(
-			Opcode::CATCH, write_str_tag, write_int_handler.entry
+			lir::Opcode::CATCH, write_str_tag, write_int_handler.entry
 		);
-		write_str_handler.emit(Opcode::POP, r4);
-		write_str_handler.emit(Opcode::POP, r8);
-		write_str_handler.emit(Opcode::LOADA, r9, lir::Immediate(0), r8);
-		write_str_handler.emit(Opcode::PRINTF, r8);
-		write_str_handler.emit(Opcode::PUSH, lir::Immediate(0));
-		write_str_handler.emit(Opcode::RESUME, r4);
-		write_str_handler.emit(Opcode::JMP, exit.entry);
+		write_str_handler.emit(lir::Opcode::POP, r4);
+		write_str_handler.emit(lir::Opcode::POP, r8);
+		write_str_handler.emit(lir::Opcode::LOADA, r9, lir::Immediate(0), r8);
+		write_str_handler.emit(lir::Opcode::PRINTF, r8);
+		write_str_handler.emit(lir::Opcode::PUSH, lir::Immediate(0));
+		write_str_handler.emit(lir::Opcode::RESUME, r4);
+		write_str_handler.emit(lir::Opcode::JMP, exit.entry);
 		write_str_handler.finalize();
 
-		write_int_handler.emit(Opcode::CATCH, write_int_tag, start2.entry);
-		write_int_handler.emit(Opcode::POP, r4);
-		write_int_handler.emit(Opcode::POP, r8);
-		write_int_handler.emit(Opcode::LOADA, r9, lir::Immediate(0), r8);
+		write_int_handler.emit(lir::Opcode::CATCH, write_int_tag, start2.entry);
+		write_int_handler.emit(lir::Opcode::POP, r4);
+		write_int_handler.emit(lir::Opcode::POP, r8);
+		write_int_handler.emit(lir::Opcode::LOADA, r9, lir::Immediate(0), r8);
 		write_int_handler.emit(lir::Opcode::PRINTV, r9);
-		write_int_handler.emit(Opcode::PUSH, lir::Immediate(0));
-		write_int_handler.emit(Opcode::RESUME, r4);
-		write_int_handler.emit(Opcode::JMP, exit.entry);
+		write_int_handler.emit(lir::Opcode::PUSH, lir::Immediate(0));
+		write_int_handler.emit(lir::Opcode::RESUME, r4);
+		write_int_handler.emit(lir::Opcode::JMP, exit.entry);
 		write_int_handler.finalize();
 
-		start2.emit(Opcode::LOADA, r2, lir::Immediate(0), main);
-		start2.emit(Opcode::ALLOCA, r3, lir::Immediate(1));
-		start2.emit(Opcode::STOREA, lir::Immediate(0), lir::Immediate(0), r3);
-		start2.emit(Opcode::PUSH, r3);
-		start2.emit(Opcode::CALL, r2);
-		start2.emit(Opcode::POP, r1);
-		start2.emit(Opcode::JMP, exit.entry);
+		start2.emit(lir::Opcode::LOADA, r2, lir::Immediate(0), main);
+		start2.emit(lir::Opcode::ALLOCA, r3, lir::Immediate(1));
+		start2.emit(lir::Opcode::STOREA, lir::Immediate(0), lir::Immediate(0), r3);
+		start2.emit(lir::Opcode::PUSH, r3);
+		start2.emit(lir::Opcode::CALL, r2);
+		start2.emit(lir::Opcode::POP, r1);
+		start2.emit(lir::Opcode::JMP, exit.entry);
 		start2.finalize();
 	} else {
 		const SignalHandlers handlers {};
@@ -207,7 +204,7 @@ lir::Chunk Compiler::compile() {
 		auto c0 = compile(ast.root_index, ctx);
 		auto exit = make_chunk();
 
-		start.emit(Opcode::JMP, c0.block.entry);
+		start.emit(lir::Opcode::JMP, c0.block.entry);
 		start.finalize();
 
 		c0.block.and_then(chunks, exit.entry);
@@ -231,8 +228,8 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 		auto load_lvalue = make_chunk();
 		const auto t1 = make_register();
 		c0.block.and_then(chunks, load_lvalue.entry);
-		load_lvalue.emit(Opcode::ALLOCA, t1, lir::Immediate(1));
-		load_lvalue.emit(Opcode::STOREA, c0.opnd, lir::Immediate(0), t1);
+		load_lvalue.emit(lir::Opcode::ALLOCA, t1, lir::Immediate(1));
+		load_lvalue.emit(lir::Opcode::STOREA, c0.opnd, lir::Immediate(0), t1);
 		return {lir::Block::defer_last_jump(c0.block.entry, load_lvalue.index), t1};
 	}
 }
@@ -304,26 +301,26 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 				arg_blocks.back().and_then(chunks, call.entry);
 			}
 			call.emit(
-				Opcode::ALLOCA,
+				lir::Opcode::ALLOCA,
 				r0,
 				lir::Immediate(static_cast<int>((*found).arguments.size()))
 			);
 			auto i = 0;
 			for (const auto& arg : args) {
 				const auto ri = make_register();
-				call.emit(Opcode::LOADA, ri, lir::Immediate(0), arg);
-				call.emit(Opcode::STOREA, ri, lir::Immediate(i), r0);
+				call.emit(lir::Opcode::LOADA, ri, lir::Immediate(0), arg);
+				call.emit(lir::Opcode::STOREA, ri, lir::Immediate(i), r0);
 				i++;
 			}
 			const auto r1 = make_register();
-			call.emit(Opcode::ALLOCA, r1, lir::Immediate(2));
+			call.emit(lir::Opcode::ALLOCA, r1, lir::Immediate(2));
 			call.emit(
-				Opcode::STOREA,
+				lir::Opcode::STOREA,
 				lir::Immediate(static_cast<int>(index)),
 				lir::Immediate(0),
 				r1
 			);
-			call.emit(Opcode::STOREA, r0, lir::Immediate(1), r1);
+			call.emit(lir::Opcode::STOREA, r0, lir::Immediate(1), r1);
 			auto entry =
 				(arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
 			return {lir::Block::defer_last_jump(entry, call.index), r1};
@@ -355,11 +352,11 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			const auto convention = passing_convention_for(param_mode, arg_mode);
 
 			if (convention == PassingConvention::ALIAS) {
-				call.emit(Opcode::PUSH, arg);
+				call.emit(lir::Opcode::PUSH, arg);
 			} else if (convention == PassingConvention::CLONE) {
 				const auto t = make_register();
-				call.emit(Opcode::CLONEA, t, arg);
-				call.emit(Opcode::PUSH, t);
+				call.emit(lir::Opcode::CLONEA, t, arg);
+				call.emit(lir::Opcode::PUSH, t);
 			} else if (convention == PassingConvention::INVALID) {
 				throw std::runtime_error("cannot call function. conflicting modes");
 			} else {
@@ -369,7 +366,7 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 
 		auto func = compile(func_idx, ctx);
 
-		call.emit(Opcode::JMP, func.block.entry);
+		call.emit(lir::Opcode::JMP, func.block.entry);
 		call.finalize();
 
 		auto call2 = make_chunk();
@@ -377,8 +374,8 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		func.block.and_then(chunks, call2.entry);
 
 		const auto res = make_register();
-		call2.emit(Opcode::CALL, func.opnd);
-		call2.emit(Opcode::POP, res);
+		call2.emit(lir::Opcode::CALL, func.opnd);
+		call2.emit(lir::Opcode::POP, res);
 
 		auto entry = (arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
 
@@ -428,11 +425,11 @@ Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 		const auto convention = passing_convention_for(param_mode, arg_mode);
 
 		if (convention == PassingConvention::ALIAS) {
-			call.emit(Opcode::PUSH, arg);
+			call.emit(lir::Opcode::PUSH, arg);
 		} else if (convention == PassingConvention::CLONE) {
 			const auto t = make_register();
-			call.emit(Opcode::CLONEA, t, arg);
-			call.emit(Opcode::PUSH, t);
+			call.emit(lir::Opcode::CLONEA, t, arg);
+			call.emit(lir::Opcode::PUSH, t);
 		} else if (convention == PassingConvention::INVALID) {
 			throw std::runtime_error("cannot call function. conflicting modes");
 		} else {
@@ -441,10 +438,12 @@ Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 	}
 
 	call.emit(
-		Opcode::THROW, effect_tag, lir::Immediate(static_cast<int>(args.size()))
+		lir::Opcode::THROW,
+		effect_tag,
+		lir::Immediate(static_cast<int>(args.size()))
 	);
 	const auto res = make_register();
-	call.emit(Opcode::POP, res);
+	call.emit(lir::Opcode::POP, res);
 
 	auto entry = (arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
 
@@ -474,13 +473,13 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	c1.block.and_then(chunks, c4.entry);
 	c2.block.and_then(chunks, c5.entry);
 
-	c3.emit(Opcode::JMP_FALSE, c0.opnd, c2.block.entry);
-	c3.emit(Opcode::JMP, c1.block.entry);
+	c3.emit(lir::Opcode::JMP_FALSE, c0.opnd, c2.block.entry);
+	c3.emit(lir::Opcode::JMP, c1.block.entry);
 	c3.finalize();
 
-	c4.emit(Opcode::MOV, res, c1.opnd);
+	c4.emit(lir::Opcode::MOV, res, c1.opnd);
 
-	c5.emit(Opcode::MOV, res, c2.opnd);
+	c5.emit(lir::Opcode::MOV, res, c2.opnd);
 
 	lir::Block blk {
 		.entry = c0.block.entry,
@@ -556,16 +555,16 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 	c3.block.and_then(chunks, cmov.entry);
 
 	cbeg.emit(lir::Opcode::LOADA, t1, lir::Immediate(0), c1.opnd);
-	cbeg.emit(Opcode::EQ, cmp, t1, c2.opnd);
-	cbeg.emit(Opcode::JMP_FALSE, cmp, c3.block.entry);
+	cbeg.emit(lir::Opcode::EQ, cmp, t1, c2.opnd);
+	cbeg.emit(lir::Opcode::JMP_FALSE, cmp, c3.block.entry);
 	cbeg.emit(lir::Opcode::JMP, cend.entry);
 	cbeg.finalize();
 
-	cmov.emit(Opcode::MOV, result, c3.opnd);
+	cmov.emit(lir::Opcode::MOV, result, c3.opnd);
 	cmov.emit(lir::Opcode::JMP, cinc.entry);
 	cmov.finalize();
 
-	cinc.emit(Opcode::ADD, t2, t1, c0.opnd);
+	cinc.emit(lir::Opcode::ADD, t2, t1, c0.opnd);
 	cinc.emit(lir::Opcode::STOREA, t2, lir::Immediate(0), c1.opnd);
 	cinc.emit(lir::Opcode::JMP, cbeg.entry);
 	cinc.finalize();
@@ -598,12 +597,12 @@ Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
 
 	c0.block.and_then(chunks, c2.entry);
 
-	c2.emit(Opcode::MOV, r, {});
-	c2.emit(Opcode::JMP_TRUE, c0.opnd, c1.block.entry);
+	c2.emit(lir::Opcode::MOV, r, {});
+	c2.emit(lir::Opcode::JMP_TRUE, c0.opnd, c1.block.entry);
 
 	c1.block.and_then(chunks, c3.entry);
 
-	c3.emit(Opcode::MOV, r, c1.opnd);
+	c3.emit(lir::Opcode::MOV, r, c1.opnd);
 
 	// c0 --> c2 --> c1
 	//        |      |
@@ -649,12 +648,12 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 
 	c0.block.and_then(chunks, c2.entry);
 
-	c2.emit(Opcode::JMP_TRUE, c0.opnd, c1.block.entry);
+	c2.emit(lir::Opcode::JMP_TRUE, c0.opnd, c1.block.entry);
 
 	c1.block.and_then(chunks, c3.entry);
 
-	c3.emit(Opcode::MOV, result_register, c1.opnd);
-	c3.emit(Opcode::JMP, c0.block.entry);
+	c3.emit(lir::Opcode::MOV, result_register, c1.opnd);
+	c3.emit(lir::Opcode::JMP, c0.block.entry);
 	c3.finalize();
 
 	lir::Block blk {
@@ -836,8 +835,8 @@ lir::Block Compiler::compile_pattern_match(
 				const auto r2 = make_register();
 				auto c0 = make_chunk();
 				c0.emit(lir::Opcode::LOADA, r0, lir::Immediate(0), expr);
-				c0.emit(Opcode::EQ, r1, r0, lir::Immediate(static_cast<int>(tag)));
-				c0.emit(Opcode::JMP_FALSE, r1, if_fail);
+				c0.emit(lir::Opcode::EQ, r1, r0, lir::Immediate(static_cast<int>(tag)));
+				c0.emit(lir::Opcode::JMP_FALSE, r1, if_fail);
 				c0.emit(lir::Opcode::LOADA, r2, lir::Immediate(1), expr);
 				std::vector<lir::Block> blocks {lir::Block {
 					.entry = c0.entry,
@@ -1011,15 +1010,15 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	auto r0 = compile(body_idx, body_ctx);
 
 	{
-		c0.emit(Opcode::FUNC);
-		c0.emit(Opcode::POP, t3);
+		c0.emit(lir::Opcode::FUNC);
+		c0.emit(lir::Opcode::POP, t3);
 		for (auto param_idx : params_node) {
 			const auto& param_node = ast.at(param_idx);
 			assert(param_node.type == NodeType::PARAM);
 			const auto& param_name = ast.at(param_node[1]);
 			assert(param_name.type == NodeType::GUID);
 			const auto arg = variables.at(param_name.guid);
-			c0.emit(Opcode::POP, arg);
+			c0.emit(lir::Opcode::POP, arg);
 		}
 		c0.emit(lir::Opcode::JMP, r0.block.entry);
 		c0.finalize();
@@ -1028,8 +1027,8 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 
 		r0.block.and_then(chunks, c1.entry);
 
-		c1.emit(Opcode::PUSH, r0.opnd);
-		c1.emit(Opcode::RET);
+		c1.emit(lir::Opcode::PUSH, r0.opnd);
+		c1.emit(lir::Opcode::RET);
 		c1.finalize();
 	}
 
@@ -1101,7 +1100,7 @@ Result Compiler::compile_str(NodeIndex node_idx, Context) {
 
 	auto chunk = make_chunk();
 	chunk.emit(lir::Opcode::ALLOCA, t1, lir::Immediate((int)str.size()));
-	chunk.emit(Opcode::INITA, t1, lir::ByteString {std::string(str)});
+	chunk.emit(lir::Opcode::INITA, t1, lir::ByteString {std::string(str)});
 	chunk.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
 	chunk.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
 	chunk.emit(
@@ -1165,8 +1164,8 @@ Result Compiler::compile_break(NodeIndex node_idx, Context ctx) {
 	auto r0 = compile(node[0], ctx);
 	auto c1 = make_chunk();
 	r0.block.and_then(chunks, c1.entry);
-	c1.emit(Opcode::MOV, res, r0.opnd);
-	c1.emit(Opcode::JMP, dest);
+	c1.emit(lir::Opcode::MOV, res, r0.opnd);
+	c1.emit(lir::Opcode::JMP, dest);
 	return {lir::Block::defer_last_jump(r0.block.entry, c1.index), {}};
 }
 
@@ -1179,8 +1178,8 @@ Result Compiler::compile_continue(NodeIndex node_idx, Context ctx) {
 	auto r0 = compile(node[0], ctx);
 	auto c1 = make_chunk();
 	r0.block.and_then(chunks, c1.entry);
-	c1.emit(Opcode::MOV, res, r0.opnd);
-	c1.emit(Opcode::JMP, dest);
+	c1.emit(lir::Opcode::MOV, res, r0.opnd);
+	c1.emit(lir::Opcode::JMP, dest);
 	return {lir::Block::defer_last_jump(r0.block.entry, c1.index), {}};
 }
 
@@ -1230,7 +1229,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			r0.block.and_then(chunks, c2.entry);
 
 			c2.emit(lir::Opcode::MOV, res, r0.opnd);
-			c2.emit(Opcode::JMP_FALSE, res, r1.block.entry);
+			c2.emit(lir::Opcode::JMP_FALSE, res, r1.block.entry);
 
 			r1.block.and_then(chunks, c3.entry);
 
@@ -1258,7 +1257,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			r0.block.and_then(chunks, c2.entry);
 
 			c2.emit(lir::Opcode::MOV, res, r0.opnd);
-			c2.emit(Opcode::JMP_TRUE, res, r1.block.entry);
+			c2.emit(lir::Opcode::JMP_TRUE, res, r1.block.entry);
 
 			r1.block.and_then(chunks, c3.entry);
 
@@ -1274,16 +1273,16 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			return {blk, res};
 		}
-		case NodeType::GTN: BINARY_ARITH(Opcode::GREATER);
-		case NodeType::LTN: BINARY_ARITH(Opcode::LESS);
-		case NodeType::GTE: BINARY_ARITH(Opcode::GREATER_EQ);
-		case NodeType::LTE: BINARY_ARITH(Opcode::LESS_EQ);
-		case NodeType::EQ: BINARY_ARITH(Opcode::EQ);
-		case NodeType::ADD: BINARY_ARITH(Opcode::ADD);
-		case NodeType::SUB: BINARY_ARITH(Opcode::SUB);
-		case NodeType::MUL: BINARY_ARITH(Opcode::MUL);
-		case NodeType::DIV: BINARY_ARITH(Opcode::DIV);
-		case NodeType::MOD: BINARY_ARITH(Opcode::MOD);
+		case NodeType::GTN: BINARY_ARITH(lir::Opcode::GREATER);
+		case NodeType::LTN: BINARY_ARITH(lir::Opcode::LESS);
+		case NodeType::GTE: BINARY_ARITH(lir::Opcode::GREATER_EQ);
+		case NodeType::LTE: BINARY_ARITH(lir::Opcode::LESS_EQ);
+		case NodeType::EQ: BINARY_ARITH(lir::Opcode::EQ);
+		case NodeType::ADD: BINARY_ARITH(lir::Opcode::ADD);
+		case NodeType::SUB: BINARY_ARITH(lir::Opcode::SUB);
+		case NodeType::MUL: BINARY_ARITH(lir::Opcode::MUL);
+		case NodeType::DIV: BINARY_ARITH(lir::Opcode::DIV);
+		case NodeType::MOD: BINARY_ARITH(lir::Opcode::MOD);
 
 #undef BINARY_ARITH
 
@@ -1296,7 +1295,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto c1 = make_chunk();
 			inverse_res.block.and_then(chunks, c1.entry);
 			lir::Operand inverse = inverse_res.opnd;
-			c1.emit(Opcode::NOT, res, inverse);
+			c1.emit(lir::Opcode::NOT, res, inverse);
 			return {
 				lir::Block::defer_last_jump(inverse_res.block.entry, c1.index), res
 			};
@@ -1348,7 +1347,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			const auto t2 = make_register();
 			r0.block.and_then(chunks, r1.block.entry);
 			r1.block.and_then(chunks, c2.entry);
-			c2.emit(Opcode::REPEAT, t1, r0.opnd, r1.opnd);
+			c2.emit(lir::Opcode::REPEAT, t1, r0.opnd, r1.opnd);
 			c2.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
 			c2.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), t2);
 			c2.emit(lir::Opcode::STOREA, r1.opnd, lir::Immediate(1), t2);
@@ -1402,8 +1401,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto c0 = compile(node[0], ctx);
 			auto c1 = make_chunk();
 			c0.block.and_then(chunks, c1.entry);
-			c1.emit(Opcode::PUSH, c0.opnd);
-			c1.emit(Opcode::RESUME, ctx.current_resumption.value());
+			c1.emit(lir::Opcode::PUSH, c0.opnd);
+			c1.emit(lir::Opcode::RESUME, ctx.current_resumption.value());
 			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), {}};
 		}
 		case NodeType::MATCH: COMPILE_WITH_HANDLER(compile_match)
@@ -1469,9 +1468,6 @@ Result Compiler::compile_record_literal(NodeIndex node_idx, Context ctx) {
 		std::dynamic_pointer_cast<Record>(tpc.node_to_type.at(node_idx)->datatype);
 	const auto t1 = make_register();
 	auto c0 = make_chunk();
-	c0.emit(
-		lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(field_count))
-	);
 	std::vector<lir::Block> blocks {};
 	for (auto i = 0ul; i < field_count; i++) {
 		const auto& field_node = ast.at(node[i]);
@@ -1492,11 +1488,21 @@ Result Compiler::compile_record_literal(NodeIndex node_idx, Context ctx) {
 		);
 		blocks.push_back(lir::Block::defer_last_jump(ri.block.entry, c2.index));
 	}
+
+	c0.emit(
+		lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(field_count))
+	);
 	c0.emit(lir::Opcode::JMP, blocks.at(0).entry);
 	c0.finalize();
+
 	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
 		a.and_then(chunks, b.entry);
 	}
+
+	//
+	// c0 --> (ri --> c2)0 --> (ri --> c2)1 --> ... --> *
+	//
+
 	lir::Block blk {
 		.entry = c0.entry,
 		.patches = blocks.back().patches,
@@ -1558,14 +1564,14 @@ lir::Block Compiler::compile_handler_decl(
 	// v
 	// c3 --> *
 
-	c1.emit(Opcode::CATCH, tag, c3.entry);
-	c1.emit(Opcode::POP, k);
+	c1.emit(lir::Opcode::CATCH, tag, c3.entry);
+	c1.emit(lir::Opcode::POP, k);
 	for (auto param_idx : param_list_node) {
 		const auto& param_node = ast.at(param_idx);
 		assert(param_node.type == NodeType::PARAM);
 		const auto& param_name = ast.at(param_node[1]);
 		assert(param_name.type == NodeType::GUID);
-		c1.emit(Opcode::POP, variables.at(param_name.guid));
+		c1.emit(lir::Opcode::POP, variables.at(param_name.guid));
 	}
 	c1.emit(lir::Opcode::JMP, c0.block.entry);
 	c1.finalize();
