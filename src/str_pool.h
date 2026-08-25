@@ -4,9 +4,7 @@
 #include <cstddef>
 #include <ostream>
 
-#include "index.hpp"
-
-using StrID = Index<3>;
+#include "indexes.hpp"
 
 // Interns strings and returns lightweight handles.
 // Handy for avoiding error-prone handling of owned strings

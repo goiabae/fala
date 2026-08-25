@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "index.hpp"
+#include "indexes.hpp"
 #include "location.hpp"
 #include "str_pool.h"
 
@@ -131,8 +131,6 @@ typedef struct BranchNode {
 	size_t children_count;
 	NodeIndex* children;
 } BranchNode;
-
-using Guid = Index<7>;
 
 struct Node {
 	NodeType type;

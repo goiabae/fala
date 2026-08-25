@@ -7,8 +7,7 @@
 #include <unordered_set>
 
 #include "ast.hpp"
-#include "index.hpp"
-#include "str_pool.h"
+#include "indexes.hpp"
 
 enum class RelativeScope {
 	GLOBAL,
@@ -16,10 +15,6 @@ enum class RelativeScope {
 	BUILTIN,
 	FREE,
 };
-
-using ScopeIndex = Index<5>;
-using FunctionIndex = Index<6>;
-using Namespace = Index<8>;
 
 class SymbolTable {
  public:
