@@ -57,11 +57,13 @@ static bool cast_to(M, M);
 static bool cast_to(D, D);
 static bool cast_to(T from, T to);
 
-D Typechecker::make_datavar() { return ::make_datavar(next_var_id++); }
+std::shared_ptr<TypeVariable> Typechecker::make_datavar() {
+	return std::dynamic_pointer_cast<TypeVariable>(::make_datavar(next_var_id++));
+}
 
 M Typechecker::make_modevar() { return ::make_modevar(next_modevar_id++); }
 
-D Typechecker::make_genvar() {
+std::shared_ptr<TypeVariable> Typechecker::make_genvar() {
 	auto x = std::dynamic_pointer_cast<TypeVariable>(make_datavar());
 	x->is_generalized = true;
 	return x;
@@ -644,8 +646,8 @@ bool Typechecker::unify(D a, D b) {
 
 	// a is unbound. bind a to b
 	if (auto va = to<TypeVariable>(a))
-		if (not va->is_bound) {
-			if (not va->is_generalized) va->bind_to(b);
+		if (not va->is_bound and not va->is_generalized) {
+			va->bind_to(b);
 			return true;
 		}
 
@@ -1524,7 +1526,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 					if (opt_type_node.type != NodeType::EMPTY) {
 						return eval(opt_type_idx);
 					} else {
-						return make_datavar();
+						return std::dynamic_pointer_cast<Datatype>(make_datavar());
 					}
 				}();
 
@@ -2160,6 +2162,79 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 	}
 }
 
+D Typechecker::substitute_bind(const std::map<std::size_t, V>& subst, D data) {
+	return visit(
+		*data,
+		overloaded {
+			[&](Integer&&) -> D { return data; },
+			[&](Nil&&) -> D { return data; },
+			[&](Void&&) -> D { return data; },
+			[&](Function&& f) -> D {
+				std::vector<T> inputs {};
+				for (auto& input : f.inputs)
+					inputs.push_back(
+						make_type(input->mode, substitute_bind(subst, input->datatype))
+					);
+				auto output = substitute_bind(subst, f.output);
+				// FIXME: traverse f.effects!
+				return make_function(inputs, output, f.effects);
+			},
+			[&](Closure&& c) -> D {
+				std::vector<T> inputs {};
+				for (auto& input : c.inputs)
+					inputs.push_back(
+						make_type(input->mode, substitute_bind(subst, input->datatype))
+					);
+				auto output = substitute_bind(subst, c.output);
+				std::map<Guid, D> captures {};
+				for (auto& [guid, capture] : c.captures)
+					captures[guid] = substitute_bind(subst, capture);
+				// FIXME: traverse c.effects!
+				return make_closure(inputs, output, c.effects, captures);
+			},
+			[&](Record&& r) -> D {
+				decltype(r.fields) fields {};
+				for (const auto& [name, data] : r.fields)
+					fields.push_back(std::make_pair(name, substitute_bind(subst, data)));
+				return make_record(fields);
+			},
+			[&](RowSet&& rs) -> D {
+				decltype(rs.rows) rows {};
+				for (const auto& [name, data] : rs.rows)
+					rows[name] = substitute_bind(subst, data);
+				return make_row_set(rows);
+			},
+			[&](Array&& a) -> D {
+				return make_array(substitute_bind(subst, a.item_type));
+			},
+			[&](Union&& u) -> D {
+				std::vector<Union::Constructor> ctors {};
+				for (const auto& ctor : u.constructors) {
+					std::vector<D> arguments {};
+					for (const auto& argument : ctor.arguments) {
+						arguments.push_back(substitute_bind(subst, argument));
+					}
+					ctors.push_back(
+						Union::Constructor {
+							.name = ctor.name,
+							.arguments = arguments,
+						}
+					);
+				}
+				return std::make_shared<Union>(ctors);
+			},
+			[&](TypeVariable&& a) -> D {
+				if (a.is_bound) return substitute_bind(subst, a.bound_type);
+				auto t = std::dynamic_pointer_cast<TypeVariable>(data);
+				if (subst.contains(a.name)) {
+					unify(data, subst.at(a.name));
+				}
+				return data;
+			},
+		}
+	);
+}
+
 D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 	return visit(
 		*data,
@@ -2222,11 +2297,6 @@ D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 				return std::make_shared<Union>(ctors);
 			},
 			[&](TypeVariable&& a) -> D {
-				if (a.is_bound
-		        and subst.contains(
-							std::dynamic_pointer_cast<TypeVariable>(data)->name
-						))
-					assert(false);
 				if (a.is_bound) return substitute(subst, a.bound_type);
 				auto t = std::dynamic_pointer_cast<TypeVariable>(data);
 				if (subst.contains(a.name))
@@ -2281,7 +2351,7 @@ P Typechecker::generalize(T ty, std::unordered_set<V> to_bind) {
 
 	logger.log(LogLevel::INFO, "Free {}", ss.str());
 	logger.log(LogLevel::INFO, "Before {}", *ty->datatype);
-	const auto s = make_scheme(binders, substitute(subst, ty->datatype));
+	const auto s = make_scheme(binders, substitute_bind(subst, ty->datatype));
 	logger.log(LogLevel::INFO, "After {}", *ty->datatype);
 	const auto p = make_polytype(ty->mode, s);
 

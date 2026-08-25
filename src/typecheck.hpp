@@ -42,8 +42,8 @@ struct Typechecker {
 	void mismatch_error(
 		Location, std::format_string<Args...>, T, T, Args... args
 	);
-	D make_datavar();
-	D make_genvar();
+	std::shared_ptr<TypeVariable> make_datavar();
+	std::shared_ptr<TypeVariable> make_genvar();
 	M make_modevar();
 	E make_effsetvar();
 	T deref(T);
@@ -54,6 +54,7 @@ struct Typechecker {
 	std::unordered_set<V> free_type_variables(ScopeIndex);
 	std::unordered_set<V> free_type_variables(D);
 	T instantiate(P);
+	D substitute_bind(const std::map<std::size_t, V>&, D);
 	D substitute(const std::map<std::size_t, V>&, D);
 
 	AST& ast;

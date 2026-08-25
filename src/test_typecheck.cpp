@@ -2,9 +2,11 @@
 
 #include <memory>
 
+#include "ast.hpp"
 #include "parser.hpp"
 #include "scope_analyser.hpp"
 #include "string_reader.hpp"
+#include "symbol_table.hpp"
 #include "type.hpp"
 #include "typecheck.hpp"
 
@@ -34,4 +36,62 @@ TEST(TypecheckTest, function_application) {
 		const auto pcmode = pmode->to_concrete();
 		EXPECT_TRUE(pcmode.has_value());
 	};
+}
+
+TEST(TypecheckerTest, unifying_quantified_variable_with_inference) {
+	StringPool pool {};
+	AST ast {};
+	SymbolTable symtab {};
+	Typechecker checker {ast, pool, symtab};
+	auto gen = std::dynamic_pointer_cast<TypeVariable>(checker.make_genvar());
+	auto inf = std::dynamic_pointer_cast<TypeVariable>(checker.make_datavar());
+	EXPECT_TRUE(not inf->is_bound);
+	EXPECT_TRUE(checker.unify(gen, inf));
+	EXPECT_TRUE(inf->is_bound);
+	EXPECT_EQ(std::dynamic_pointer_cast<TypeVariable>(inf->bound_type), gen);
+}
+
+TEST(TypecheckerTest, unifying_inference_variable_with_quantified) {
+	StringPool pool {};
+	AST ast {};
+	SymbolTable symtab {};
+	Typechecker checker {ast, pool, symtab};
+	auto gen = std::dynamic_pointer_cast<TypeVariable>(checker.make_genvar());
+	auto inf = std::dynamic_pointer_cast<TypeVariable>(checker.make_datavar());
+	EXPECT_TRUE(not inf->is_bound);
+	EXPECT_TRUE(checker.unify(inf, gen));
+	EXPECT_TRUE(inf->is_bound);
+	EXPECT_EQ(std::dynamic_pointer_cast<TypeVariable>(inf->bound_type), gen);
+}
+
+TEST(TypecheckerTest, instantiate_polymorphic_function) {
+	StringPool pool {};
+	AST ast {};
+	SymbolTable symtab {};
+	Typechecker checker {ast, pool, symtab};
+	auto g19 = checker.make_genvar();
+	auto g20 = checker.make_genvar();
+	auto VAL_ = std::make_shared<Mode>(Mode::Concrete::VAL);
+	const auto EMPTY_EFFSET = []() {
+		std::vector<std::shared_ptr<Effect>> effs {};
+		return std::make_shared<EffectSet>(effs);
+	}();
+	auto a = make_function({make_type(VAL_, g19)}, g20, EMPTY_EFFSET);
+	auto b = make_function(
+		{make_type(VAL_, make_array(g19)),
+	   make_type(checker.make_modevar(), g20),
+	   make_type(checker.make_modevar(), a)},
+		make_array(g20),
+		EMPTY_EFFSET
+	);
+	auto c = make_polytype(VAL_, make_scheme({g19, g20}, b));
+	EXPECT_EQ(
+		std::format("{}", *c),
+		"val ∀'g0 'g1 . (val Array<'g0>, m0 'g1, m1 (val 'g0) -> 'g1) -> Array<'g1>"
+	);
+	auto d = checker.instantiate(c);
+	auto expected =
+		"val (val Array<'t2>, m0 't3, m1 (val 't2) -> 't3) -> Array<'t3>";
+	auto actual = std::format("{}", *d);
+	EXPECT_EQ(actual, expected);
 }
