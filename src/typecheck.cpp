@@ -10,12 +10,12 @@
 #include <functional>
 #include <memory>
 #include <ranges>
-#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 
 #include "ast.hpp"
 #include "logger.hpp"
@@ -40,6 +40,7 @@ using T = std::shared_ptr<Type>;
 using P = std::shared_ptr<PolyType>;
 using V = std::shared_ptr<TypeVariable>;
 using E = std::shared_ptr<EffectSet>;
+using TE = std::pair<T, E>;
 
 const auto VAR_ = std::make_shared<Mode>(Mode::Concrete::VAR);
 const auto VAL_ = std::make_shared<Mode>(Mode::Concrete::VAL);
@@ -53,10 +54,6 @@ const auto EMPTY_EFFSET = []() {
 	return std::make_shared<EffectSet>(effs);
 }();
 
-static bool cast_to(M, M);
-static bool cast_to(D, D);
-static bool cast_to(T from, T to);
-
 std::shared_ptr<TypeVariable> Typechecker::make_datavar() {
 	return std::dynamic_pointer_cast<TypeVariable>(::make_datavar(next_var_id++));
 }
@@ -64,7 +61,7 @@ std::shared_ptr<TypeVariable> Typechecker::make_datavar() {
 M Typechecker::make_modevar() { return ::make_modevar(next_modevar_id++); }
 
 std::shared_ptr<TypeVariable> Typechecker::make_genvar() {
-	auto x = std::dynamic_pointer_cast<TypeVariable>(make_datavar());
+	auto x = make_datavar();
 	x->is_generalized = true;
 	return x;
 }
@@ -139,61 +136,6 @@ static NodeIndex decl_name(const Node& node) {
 	}
 }
 
-// m t !> ERROR
-// out t -> val t
-// var t -> val t
-// val t -> val t
-//
-std::shared_ptr<Type> Typechecker::deref(std::shared_ptr<Type> typ) {
-	auto om = typ->mode->to_concrete();
-	if (om.has_value()) {
-		auto m = om.value();
-		if (m == Mode::Concrete::OUT || m == Mode::Concrete::VAR) {
-			return std::make_shared<Type>(Type {
-				.mode = std::make_shared<Mode>(Mode {.data = Mode::Concrete::VAL}),
-				.datatype = typ->datatype,
-			});
-		} else {
-			assert(m == Mode::Concrete::VAL);
-			return typ;
-		}
-	} else {
-		throw std::runtime_error(
-			"cannot dereference type because mode variable has not been "
-			"instatiated "
-			"into a concrete mode"
-		);
-	}
-}
-
-bool cast_to(M from_, M to_) {
-	return std::visit(
-		overloaded {
-			[&from_]([[maybe_unused]] Mode::Concrete& from, Variable<Mode>& to) {
-				to.bind_to(from_);
-				return true;
-			},
-			[&to_](Variable<Mode>& from, [[maybe_unused]] Mode::Concrete& to) {
-				from.bind_to(to_);
-				return true;
-			},
-
-			[&to_](Variable<Mode>& from, [[maybe_unused]] Variable<Mode>& to) {
-				from.bind_to(to_);
-				return true;
-			},
-			[](Mode::Concrete& from, Mode::Concrete& to) {
-				if (from == Mode::Concrete::VAL and to == Mode::Concrete::OUT)
-					return false;
-				else
-					return true;
-			},
-		},
-		from_->data,
-		to_->data
-	);
-}
-
 static bool contains(
 	std::vector<std::shared_ptr<Effect>> set, std::shared_ptr<Effect> eff
 ) {
@@ -220,20 +162,6 @@ static bool set_equal(
 }
 
 static std::vector<std::shared_ptr<Effect>> difference(
-	std::vector<std::shared_ptr<Effect>> sup,
-	std::vector<std::shared_ptr<Effect>> sub
-) {
-	if (not contained_in(sub, sup)) throw std::runtime_error("");
-	std::vector<std::shared_ptr<Effect>> diff {};
-	for (auto eff : sup) {
-		if (not contains(sub, eff)) {
-			diff.push_back(eff);
-		}
-	}
-	return diff;
-}
-
-static std::vector<std::shared_ptr<Effect>> difference2(
 	std::vector<std::shared_ptr<Effect>> sup,
 	std::vector<std::shared_ptr<Effect>> sub
 ) {
@@ -269,86 +197,6 @@ static E normalize(E set) {
 	}
 }
 
-static bool unify(E a, E b) {
-	if (a->variable == nullptr and b->variable == nullptr) {
-		return set_equal(a->concrete, b->concrete);
-	}
-
-	if (a->variable == nullptr) {
-		auto c = difference2(a->concrete, b->concrete);
-		b->variable->bind_to(std::make_shared<EffectSet>(c));
-		return true;
-	}
-
-	if (b->variable == nullptr) {
-		auto c = difference2(b->concrete, a->concrete);
-		a->variable->bind_to(std::make_shared<EffectSet>(c));
-		return true;
-	}
-
-	if (a->variable->is_bound()) {
-		return unify(normalize(a), b);
-	}
-
-	if (b->variable->is_bound()) {
-		return unify(a, normalize(b));
-	}
-
-	if (not b->variable->is_bound() and not a->variable->is_bound()) {
-		if (contained_in(a->concrete, b->concrete)) {
-			auto c = difference(b->concrete, a->concrete);
-			a->variable->bind_to(std::make_shared<EffectSet>(c, b->variable));
-			return true;
-		} else {
-			auto c = difference(a->concrete, b->concrete);
-			b->variable->bind_to(std::make_shared<EffectSet>(c, a->variable));
-			return true;
-		}
-	}
-
-	return false;
-}
-
-static bool cast_to(E from, E to) {
-	if (from->variable == nullptr and to->variable == nullptr) {
-		return contained_in(from->concrete, to->concrete);
-	}
-
-	if (from->variable == nullptr) {
-		auto c = difference2(from->concrete, to->concrete);
-		to->variable->bind_to(std::make_shared<EffectSet>(c));
-		return true;
-	}
-
-	if (to->variable == nullptr) {
-		auto c = difference2(to->concrete, from->concrete);
-		from->variable->bind_to(std::make_shared<EffectSet>(c));
-		return true;
-	}
-
-	if (from->variable->is_bound()) {
-		return unify(normalize(from), to);
-	}
-
-	if (to->variable->is_bound()) {
-		return unify(from, normalize(to));
-	}
-
-	if (not to->variable->is_bound() and not from->variable->is_bound()) {
-		if (contained_in(from->concrete, to->concrete)) {
-			auto c = difference(to->concrete, from->concrete);
-			from->variable->bind_to(std::make_shared<EffectSet>(c, to->variable));
-			return true;
-		} else {
-			auto c = difference(from->concrete, to->concrete);
-			to->variable->bind_to(std::make_shared<EffectSet>(c, from->variable));
-			return true;
-		}
-	}
-
-	return false;
-}
-
 static E union_of(E a, E b) {
 	auto x = normalize(a);
 	auto y = normalize(b);
@@ -372,89 +220,6 @@ static E union_of(E a, E b) {
 	}
 }
 
-bool cast_to(D from, D to) {
-	if (from == to) return true;
-
-	// a is bound to 'a. unify a' and b
-	if (auto va = ::to<TypeVariable>(from); va and va->is_bound)
-		return cast_to(va->bound_type, to);
-
-	// b is bound to 'b. unify a and b'
-	if (auto vb = ::to<TypeVariable>(to); vb and vb->is_bound)
-		return cast_to(from, vb->bound_type);
-
-	// a is unbound. bind a to b
-	if (auto va = ::to<TypeVariable>(from)) {
-		if (va->is_generalized) return true;
-		if (not va->is_bound) return va->bind_to(to), true;
-	}
-
-	// b is unbound typevar. bind b to a
-	if (auto vb = ::to<TypeVariable>(to)) {
-		if (vb->is_generalized) return true;
-		if (not vb->is_bound) return vb->bind_to(from), true;
-	}
-
-	// a and b are arrays. unify element types
-	if (auto aa = ::to<Array>(from), ab = ::to<Array>(to); aa and ab)
-		return cast_to(aa->item_type, ab->item_type);
-
-	if (auto ifrom = ::to<Integer>(from), ito = ::to<Integer>(to);
-	    ifrom and ito) {
-		return ito->bit_count >= ifrom->bit_count;
-	}
-
-	if (is<Nil>(from) and is<Nil>(to)) return true;
-	if (is<Void>(from) and is<Void>(to)) return true;
-
-	if (auto cfrom = ::to<Closure>(from)) {
-		if (auto fto = ::to<Function>(to)) {
-			auto t1 = make_function(cfrom->inputs, cfrom->output, cfrom->effects);
-			return cast_to(t1, fto);
-		}
-	}
-
-	if (auto ffrom = ::to<Function>(from)) {
-		if (auto cto = ::to<Closure>(to)) {
-			auto t1 = make_function(cto->inputs, cto->output, cto->effects);
-			auto no_captures = cto->captures.size() == 0;
-			return no_captures and cast_to(ffrom, t1);
-		}
-	}
-
-	// a and b are functions of same arity.
-	// unify their inputs. unify their outputs
-	if (auto fa = ::to<Function>(from), fb = ::to<Function>(to); fa and fb) {
-		if (fa->inputs.size() != fb->inputs.size()) return false;
-		auto unified_inputs = std::ranges::all_of(
-			std::ranges::views::zip(fa->inputs, fb->inputs), [&](const auto& p) {
-				const auto& [a, b] = p;
-				// FIXME: might be wrong
-				return cast_to(a, b);
-			}
-		);
-		auto unified_outputs = cast_to(fa->output, fb->output);
-		auto equal_effects = unify(fa->effects, fb->effects);
-		return unified_inputs and unified_outputs and equal_effects;
-	}
-
-	if (auto cfrom = ::to<Closure>(from)) {
-		if (auto cto = ::to<Closure>(to)) {
-			auto same_captures = cfrom->captures == cto->captures;
-			auto ffrom = make_function(cfrom->inputs, cfrom->output, cfrom->effects);
-			auto fto = make_function(cto->inputs, cto->output, cto->effects);
-			return same_captures and cast_to(ffrom, fto);
-		}
-	}
-
-	return false;
-}
-
-bool cast_to(T from, T to) {
-	return cast_to(from->mode, to->mode)
-	   and cast_to(from->datatype, to->datatype);
-}
-
 template<typename... Args>
 void Typechecker::mismatch_error(
 	Location loc, std::format_string<Args...> fmt, T got, T expected, Args... args
@@ -469,9 +234,6 @@ void Typechecker::mismatch_error(
 		*got
 	);
 }
-
-#define BIND_FUNC(NAME, TYP) \
-	env.insert(scope_id, pool.intern(strdup(NAME)), TYP)
 
 bool Typechecker::typecheck() {
 	auto uint8_typ = make_integer(8, Integer::Sign::UNSIGNED);
@@ -592,169 +354,6 @@ bool Typechecker::typecheck() {
 	return true;
 }
 
-bool Typechecker::unify(std::shared_ptr<Mode> a, std::shared_ptr<Mode> b) {
-	auto a_is_concrete = std::holds_alternative<Mode::Concrete>(a->data);
-	auto b_is_concrete = std::holds_alternative<Mode::Concrete>(b->data);
-	if (a_is_concrete and not b_is_concrete) {
-		auto& bv = std::get<Variable<Mode>>(b->data);
-		if (bv.is_bound()) {
-			return unify(a, bv.get_bound());
-		} else {
-			bv.bind_to(a);
-			return true;
-		}
-	} else if (b_is_concrete and not a_is_concrete) {
-		auto& av = std::get<Variable<Mode>>(a->data);
-		if (av.is_bound()) {
-			return unify(b, av.get_bound());
-		} else {
-			av.bind_to(b);
-			return true;
-		}
-	} else if (a_is_concrete and b_is_concrete) {
-		// FIXME: how to deal with submoding when creating new variables?
-		return true;
-	} else if ((not a_is_concrete) and (not b_is_concrete)) {
-		auto& bv = std::get<Variable<Mode>>(b->data);
-		auto& av = std::get<Variable<Mode>>(a->data);
-		if (bv.is_bound() and av.is_bound()) {
-			return unify(av.get_bound(), bv.get_bound());
-		} else if (bv.is_bound()) {
-			av.bind_to(b);
-			return true;
-		} else if (av.is_bound()) {
-			bv.bind_to(a);
-			return true;
-		} else {
-			bv.bind_to(a);
-			return true;
-		}
-	}
-	assert(false);
-}
-
-bool Typechecker::unify(D a, D b) {
-	if (a == b) return true;
-
-	// a is bound to 'a. unify a' and b
-	if (auto va = to<TypeVariable>(a); va and va->is_bound)
-		return unify(va->bound_type, b);
-
-	// b is bound to 'b. unify a and b'
-	if (auto vb = to<TypeVariable>(b); vb and vb->is_bound)
-		return unify(a, vb->bound_type);
-
-	// a is unbound. bind a to b
-	if (auto va = to<TypeVariable>(a))
-		if (not va->is_bound and not va->is_generalized) {
-			va->bind_to(b);
-			return true;
-		}
-
-	// b is unbound typevar. bind b to a
-	if (auto vb = to<TypeVariable>(b))
-		if (not vb->is_bound) {
-			if (not vb->is_generalized) vb->bind_to(a);
-			return true;
-		}
-
-	// a and b are functions of same arity.
-	// unify their inputs. unify their outputs
-	if (auto fa = to<Function>(a), fb = to<Function>(b); fa and fb) {
-		if (fa->inputs.size() != fb->inputs.size()) return false;
-		auto unified_inputs = std::ranges::all_of(
-			std::ranges::views::zip(fa->inputs, fb->inputs), [&](const auto& p) {
-				const auto& [a, b] = p;
-				return unify(a, b);
-			}
-		);
-		return unified_inputs and unify(fa->output, fb->output);
-	}
-
-	// a and b are arrays. unify element types
-	if (auto aa = to<Array>(a), ab = to<Array>(b); aa and ab)
-		return unify(aa->item_type, ab->item_type);
-
-	if (auto ia = to<Integer>(a), ib = to<Integer>(b); ia and ib)
-		return ia->bit_count == ib->bit_count and ia->sign == ib->sign;
-
-	if (is<Nil>(a) and is<Nil>(b)) return true;
-	if (is<Void>(a) and is<Void>(b)) return true;
-
-	if (auto ra = to<Record>(a), rb = to<Record>(b); ra and rb) {
-		if (ra->fields.size() != rb->fields.size()) return false;
-		return std::ranges::all_of(
-			std::ranges::views::zip(ra->fields, rb->fields), [&](const auto& p) {
-				const auto& [a, b] = p;
-				return a.first == b.first and unify(a.second, b.second);
-			}
-		);
-	}
-
-	if (auto ra = to<Record>(a)) {
-		if (auto sb = to<RowSet>(b)) {
-			for (const auto& [n, d] : sb->rows) {
-				static constexpr const auto get_first = [](const auto& x) {
-					return x.first;
-				};
-				auto found = std::ranges::find(ra->fields, n, get_first);
-				if (found != ra->fields.end()) {
-					if (not unify((*found).second, d)) return false;
-				} else {
-					return false;
-				}
-			}
-			return true;
-		}
-	}
-
-	if (auto sa = to<RowSet>(a)) {
-		if (auto rb = to<Record>(b)) {
-			return unify(rb, sa);
-		}
-	}
-
-	if (auto sa = to<RowSet>(a), sb = to<RowSet>(b); sa and sb) {
-		std::map<std::string, D> new_rows = sa->rows;
-		for (const auto& [nb, db] : sb->rows) {
-			if (new_rows.contains(nb)) {
-				if (not unify(new_rows.at(nb), db)) return false;
-			} else {
-				new_rows[nb] = db;
-			}
-		}
-		return true;
-	}
-
-	if (auto ua = to<Union>(a)) {
-		if (auto ub = to<Union>(b)) {
-			if (ua->constructors.size() != ub->constructors.size()) return false;
-			auto ctors = ua->constructors;
-			for (const auto& ctor : ctors) {
-				if (auto found = std::ranges::find(
-							ub->constructors, ctor.name, [](const auto& x) { return x.name; }
-						);
-				    found != ub->constructors.end()) {
-					if (ctor.arguments.size() != (*found).arguments.size()) return false;
-					for (const auto& [arga, argb] :
-					     std::ranges::views::zip(ctor.arguments, (*found).arguments)) {
-						if (not unify(arga, argb)) return false;
-					}
-				} else {
-					return false;
-				}
-			}
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool Typechecker::unify(T a, T b) {
-	return unify(a->mode, b->mode) and unify(a->datatype, b->datatype);
-}
-
 bool Typechecker::submode(M sub, M sup) {
 	auto sub_is_concrete = std::holds_alternative<Mode::Concrete>(sub->data);
 	auto sup_is_concrete = std::holds_alternative<Mode::Concrete>(sup->data);
@@ -777,9 +376,7 @@ bool Typechecker::submode(M sub, M sup) {
 	} else if (sub_is_concrete and sup_is_concrete) {
 		auto subc = std::get<Mode::Concrete>(sub->data);
 		auto supc = std::get<Mode::Concrete>(sup->data);
-		std::ostringstream ss {};
-		ss << subc << ", " << supc;
-		logger.log(LogLevel::INFO, {}, "submode: {}", ss.str());
+		logger.log(LogLevel::INFO, {}, "submode: {} <: {}", subc, supc);
 		if (subc == Mode::Concrete::VAL
 		    and (supc == Mode::Concrete::OUT or supc == Mode::Concrete::VAR))
 			return false;
@@ -813,43 +410,6 @@ bool Typechecker::submode(M sub, M sup) {
 E Typechecker::eval_effset(NodeIndex node_idx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case NodeType::EMPTY: assert(false);
-		case NodeType::APP: assert(false);
-		case NodeType::NUM: assert(false);
-		case NodeType::BLK: assert(false);
-		case NodeType::IF: assert(false);
-		case NodeType::WHEN: assert(false);
-		case NodeType::FOR: assert(false);
-		case NodeType::WHILE: assert(false);
-		case NodeType::BREAK: assert(false);
-		case NodeType::CONTINUE: assert(false);
-		case NodeType::ASS: assert(false);
-		case NodeType::OR: assert(false);
-		case NodeType::AND: assert(false);
-		case NodeType::GTN: assert(false);
-		case NodeType::LTN: assert(false);
-		case NodeType::GTE: assert(false);
-		case NodeType::LTE: assert(false);
-		case NodeType::EQ: assert(false);
-		case NodeType::AT: assert(false);
-		case NodeType::ADD: assert(false);
-		case NodeType::SUB: assert(false);
-		case NodeType::MUL: assert(false);
-		case NodeType::DIV: assert(false);
-		case NodeType::MOD: assert(false);
-		case NodeType::NOT: assert(false);
-		case NodeType::ID: assert(false);
-		case NodeType::STR: assert(false);
-		case NodeType::VAR_DECL: assert(false);
-		case NodeType::FUN_DECL: assert(false);
-		case NodeType::NIL: assert(false);
-		case NodeType::TRUE: assert(false);
-		case NodeType::FALSE: assert(false);
-		case NodeType::LET: assert(false);
-		case NodeType::CHAR: assert(false);
-		case NodeType::PATH: assert(false);
-		case NodeType::AS: assert(false);
-		case NodeType::INSTANCE: assert(false);
 		case NodeType::METALIST: {
 			auto joined = EMPTY_EFFSET;
 			for (auto idx : node) {
@@ -862,36 +422,17 @@ E Typechecker::eval_effset(NodeIndex node_idx) {
 			assert(effset_names.contains(node.guid));
 			return effset_names.at(node.guid);
 		}
-		case NodeType::MODE: assert(false);
-		case NodeType::PARAM: assert(false);
-		case NodeType::RECORD_LITERAL: assert(false);
-		case NodeType::FIELD: assert(false);
-		case NodeType::FIELD_ACCESS: assert(false);
-		case NodeType::ARRAY_LITERAL: assert(false);
-		case NodeType::REPEAT: assert(false);
-		case NodeType::LEN: assert(false);
-		case NodeType::MODULE_BODY: assert(false);
-		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
-		case NodeType::RECORD_TYPE_LITERAL: assert(false);
-		case NodeType::FIELD_TYPE: assert(false);
-		case NodeType::TYPE_DECL: assert(false);
-		case NodeType::EFF_DECL: assert(false);
-		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: {
 			const auto left = eval_effset(node[0]);
 			const auto right = eval_effset(node[1]);
 			return union_of(left, right);
 		}
-		case NodeType::PERFORM: assert(false);
-		case NodeType::HANDLER_DECL: assert(false);
-		case NodeType::RESUME: assert(false);
-		case NodeType::UNION_TYPE_LITERAL: assert(false);
-		case NodeType::UNION_CONSTRUCTOR: assert(false);
-		case NodeType::MATCH: assert(false);
-		case NodeType::CASE: assert(false);
-		case NodeType::CTOR_PATTERN: assert(false);
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type {}", node_type_repr(node.type))
+			);
+		}
 	}
-	assert(false);
 }
 
 static std::shared_ptr<Effect> singleton_effset(E a) {
@@ -902,7 +443,7 @@ static std::shared_ptr<Effect> singleton_effset(E a) {
 
 static E remove_effect(E x, std::shared_ptr<Effect> effect) {
 	if (x->variable != nullptr) throw std::runtime_error("");
-	return std::make_shared<EffectSet>(difference2(x->concrete, {effect}));
+	return std::make_shared<EffectSet>(difference(x->concrete, {effect}));
 }
 
 static std::pair<T, E> remove_effect(
@@ -911,28 +452,12 @@ static std::pair<T, E> remove_effect(
 	return std::make_pair(x.first, remove_effect(x.second, effect));
 }
 
-// If an expression has type of lvalue, it can also be used as an rvalue
-
-// | e1 : Ref<t1>
-// +------------
-// | |- e1 : t1
-
 TE Typechecker::typecheck(NodeIndex node_idx) {
 	auto int64_typ = make_integer(64, Integer::Sign::SIGNED);
 	auto uint8_typ = make_integer(8, Integer::Sign::UNSIGNED);
 
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-			// |
-			// +------
-			// | |- Void
-
-		case NodeType::EMPTY: {
-			auto t = make_type(VAL_, VOID_);
-			ASSOC_TYPE(node_idx, t);
-			return std::make_pair(t, EMPTY_EFFSET);
-		}
-
 			// | f : _ (m1 t1, m2 t2, ..., mn tn) -> t0
 			// |
 			// | a1 : m1' t1
@@ -973,7 +498,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				*func_type.first
 			);
 
-			if (not cast_to(func_type.first, expected_func_type)) {
+			if (not cast(func_type.first, expected_func_type)) {
 				mismatch_error(
 					node.loc,
 					"Function and arguments don't match",
@@ -1134,7 +659,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 
 			const auto t1 = make_type(VAL_, int64_typ);
 
-			if (not cast_to(var_typ.first, t1)) {
+			if (not cast(var_typ.first, t1)) {
 				mismatch_error(
 					node.loc,
 					"Cannot cast loop variable type into integer",
@@ -1143,13 +668,13 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				);
 			}
 
-			if (not cast_to(to_typ.first, t1)) {
+			if (not cast(to_typ.first, t1)) {
 				mismatch_error(
 					node.loc, "Cannot cast loop bound type into integer", to_typ.first, t1
 				);
 			}
 
-			if (not cast_to(step_typ, t1)) {
+			if (not cast(step_typ, t1)) {
 				mismatch_error(
 					node.loc, "Cannot cast loop step type into integer", step_typ, t1
 				);
@@ -1298,8 +823,8 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto left = typecheck(node[0]);
 			const auto right = typecheck(node[1]);
 			if (not(
-						cast_to(left.first, make_type(VAL_, int64_typ))
-						and cast_to(right.first, make_type(VAL_, int64_typ))
+						cast(left.first, make_type(VAL_, int64_typ))
+						and cast(right.first, make_type(VAL_, int64_typ))
 					))
 				logger.err(
 					node.loc, "Comparison operator arguments must be of numeric type"
@@ -1319,9 +844,9 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto num = make_type(VAL_, int64_typ);
 			const auto& left_node = ast.at(node[0]);
 			const auto& right_node = ast.at(node[1]);
-			if (not cast_to(left.first, num))
+			if (not cast(left.first, num))
 				logger.err(left_node.loc, "Left-hand side of operator is not numeric");
-			if (not cast_to(right.first, num))
+			if (not cast(right.first, num))
 				logger.err(
 					right_node.loc,
 					"Arithmetic operator arguments must be of numeric type"
@@ -1381,9 +906,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			ASSOC_TYPE(node_idx, exp_typ.first);
 			return exp_typ;
 		}
-
-		case NodeType::ID:
-			assert(false);
 
 			// |
 			// +------
@@ -1550,7 +1072,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 						make_type(VAL_, output)
 					);
 
-				if (not ::cast_to(body_type.second, effset)) {
+				if (not cast(body_type.second, effset)) {
 					logger.log(
 						LogLevel::ERROR,
 						node.loc,
@@ -1683,7 +1205,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 		case NodeType::AS: {
 			auto exp = typecheck(node[0]);
 			auto typ_ = make_type(make_modevar(), eval(node[1]));
-			if (cast_to(exp.first, typ_)) {
+			if (cast(exp.first, typ_)) {
 				ASSOC_TYPE(node_idx, typ_);
 				return std::make_pair(typ_, exp.second);
 			} else {
@@ -1691,10 +1213,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				break;
 			}
 		}
-
-		case NodeType::INSTANCE: assert(false);
-		case NodeType::METALIST:
-			assert(false);
 
 			// If a variable of name x of type t was previously declared, then x
 			// is a reference to a t
@@ -1718,8 +1236,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			ASSOC_TYPE(node_idx, t1);
 			return std::make_pair(t1, EMPTY_EFFSET);
 		}
-		case NodeType::MODE: assert(false);
-		case NodeType::PARAM: assert(false);
 		case NodeType::RECORD_LITERAL: {
 			auto joined = EMPTY_EFFSET;
 			std::vector<std::pair<std::string, D>> field_tys {};
@@ -1745,7 +1261,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			ASSOC_TYPE(node_idx, t2);
 			return std::make_pair(t2, joined);
 		}
-		case NodeType::FIELD: assert(false);
 		case NodeType::FIELD_ACCESS: {
 			const auto t1 = typecheck(node[0]);
 			const auto& field_node = ast.at(node[1]);
@@ -1800,7 +1315,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto t1 = typecheck(node[1]);
 			const auto t2 =
 				make_type(make_modevar(), make_integer(64, Integer::Sign::UNSIGNED));
-			if (not cast_to(t1.first, t2)) {
+			if (not cast(t1.first, t2)) {
 				logger.err(
 					node.loc, "array expansion second argument must be an integer"
 				);
@@ -1850,9 +1365,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			}
 			return std::make_pair(make_type(VAL_, VOID_), joined);
 		}
-		case NodeType::ARRAY_TYPE_LITERAL: assert(false);
-		case NodeType::RECORD_TYPE_LITERAL: assert(false);
-		case NodeType::FIELD_TYPE: assert(false);
 		case NodeType::TYPE_DECL: {
 			const auto& id_node = ast.at(node[0]);
 			assert(id_node.type == NodeType::GUID);
@@ -1918,7 +1430,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			effset_names[id_node.guid] = effset;
 			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
-		case NodeType::EFF_UNION: assert(false);
 		case NodeType::PERFORM: {
 			auto effect_idx = node[0];
 			const auto& effect_node = ast.at(effect_idx);
@@ -1987,8 +1498,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			auto p = typecheck(node[0]);
 			return std::make_pair(make_type(VAL_, VOID_), p.second);
 		}
-		case NodeType::UNION_TYPE_LITERAL: assert(false);
-		case NodeType::UNION_CONSTRUCTOR: assert(false);
 		case NodeType::MATCH: {
 			const auto p = typecheck(node[0]);
 			auto joined = p.second;
@@ -2007,8 +1516,11 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			}
 			return std::make_pair(make_type(VAL_, d), joined);
 		}
-		case NodeType::CASE: assert(false);
-		case NodeType::CTOR_PATTERN: assert(false);
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type {}", node_type_repr(node.type))
+			);
+		}
 	}
 	assert(false && "unreachable");
 }
@@ -2055,16 +1567,6 @@ void Typechecker::typecheck_pattern(NodeIndex node_idx, D data) {
 std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
-		case NodeType::ID: {
-			if (node.str_id == pool.intern(strdup("Bool"))) {
-				return make_bool();
-			}
-			if (node.str_id == pool.intern(strdup("Nil"))) {
-				return NIL_;
-			}
-			assert(false);
-		}
-
 			// | x : type
 			// | x = forall (x1, x2, ..., x2). t
 			// | e1 : type
@@ -2158,7 +1660,11 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 			}
 			return union_dty;
 		}
-		default: assert(false);
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type {}", node_type_repr(node.type))
+			);
+		}
 	}
 }
 
@@ -2225,10 +1731,7 @@ D Typechecker::substitute_bind(const std::map<std::size_t, V>& subst, D data) {
 			},
 			[&](TypeVariable&& a) -> D {
 				if (a.is_bound) return substitute_bind(subst, a.bound_type);
-				auto t = std::dynamic_pointer_cast<TypeVariable>(data);
-				if (subst.contains(a.name)) {
-					unify(data, subst.at(a.name));
-				}
+				if (subst.contains(a.name)) unify(data, subst.at(a.name));
 				return data;
 			},
 		}
@@ -2314,20 +1817,17 @@ std::unordered_set<T, Hash, Eq> set_difference(
 	const std::unordered_set<T, Hash, Eq>& b
 ) {
 	std::unordered_set<T, Hash, Eq> result;
-
 	for (const auto& x : a)
-		if (!b.contains(x)) result.insert(x);
-
+		if (not b.contains(x)) result.insert(x);
 	return result;
 }
 
 P Typechecker::generalize(T ty, ScopeIndex scope) {
 	const auto type_free = free_type_variables(ty->datatype);
-	const auto context_free = symtab.parent_of(scope)
-	                            .and_then([&](const auto& x) {
-																return std::optional(free_type_variables(x));
-															})
-	                            .value_or(std::unordered_set<V> {});
+	const auto context_free =
+		symtab.parent_of(scope)
+			.transform([&](const auto& x) { return free_type_variables(x); })
+			.value_or(std::unordered_set<V> {});
 	const auto to_bind = set_difference(type_free, context_free);
 	return generalize(ty, to_bind);
 }
@@ -2336,7 +1836,7 @@ P Typechecker::generalize(T ty, std::unordered_set<V> to_bind) {
 	std::map<std::size_t, V> subst {};
 	std::vector<V> binders {};
 	for (auto x : to_bind) {
-		const auto g = std::dynamic_pointer_cast<TypeVariable>(make_genvar());
+		const auto g = make_genvar();
 		subst[x->name] = g;
 		binders.push_back(g);
 	}
@@ -2349,10 +1849,7 @@ P Typechecker::generalize(T ty, std::unordered_set<V> to_bind) {
 	}
 	ss << ']';
 
-	logger.log(LogLevel::INFO, "Free {}", ss.str());
-	logger.log(LogLevel::INFO, "Before {}", *ty->datatype);
 	const auto s = make_scheme(binders, substitute_bind(subst, ty->datatype));
-	logger.log(LogLevel::INFO, "After {}", *ty->datatype);
 	const auto p = make_polytype(ty->mode, s);
 
 	logger.log(
@@ -2449,3 +1946,245 @@ std::unordered_set<V> Typechecker::free_type_variables(D data) {
 P Typechecker::dont_generalize(T ty, ScopeIndex) {
 	return make_polytype(ty->mode, make_scheme({}, ty->datatype));
 }
+
+bool Typechecker::unify_aux(D a, D b, bool should_cast) {
+	if (a == b) return true;
+
+	// a is bound to 'a. unify a' and b
+	if (auto va = ::to<TypeVariable>(a); va and va->is_bound)
+		return unify_aux(va->bound_type, b, should_cast);
+
+	// b is bound to 'b. unify a and b'
+	if (auto vb = ::to<TypeVariable>(b); vb and vb->is_bound)
+		return unify_aux(a, vb->bound_type, should_cast);
+
+	// a is unbound. bind a to b
+	if (auto va = to<TypeVariable>(a))
+		if (not va->is_bound and not va->is_generalized)
+			return va->bind_to(b), true;
+
+	// b is unbound typevar. bind b to a
+	if (auto vb = to<TypeVariable>(b))
+		if (not vb->is_bound and not vb->is_generalized)
+			return vb->bind_to(a), true;
+
+	// a and b are arrays. unify element types
+	if (auto aa = to<Array>(a), ab = to<Array>(b); aa and ab)
+		return unify_aux(aa->item_type, ab->item_type, should_cast);
+
+	if (is<Nil>(a) and is<Nil>(b)) return true;
+	if (is<Void>(a) and is<Void>(b)) return true;
+
+	if (auto ia = ::to<Integer>(a), ib = ::to<Integer>(b); ia and ib) {
+		if (should_cast)
+			return ib->bit_count >= ia->bit_count;
+		else
+			return ia->bit_count == ib->bit_count and ia->sign == ib->sign;
+	}
+
+	if (auto ra = to<Record>(a), rb = to<Record>(b); ra and rb) {
+		if (ra->fields.size() != rb->fields.size()) return false;
+		return std::ranges::all_of(
+			std::ranges::views::zip(ra->fields, rb->fields), [&](const auto& p) {
+				const auto& [a, b] = p;
+				return a.first == b.first and unify(a.second, b.second);
+			}
+		);
+	}
+
+	if (auto ra = to<Record>(a)) {
+		if (auto sb = to<RowSet>(b)) {
+			for (const auto& [n, d] : sb->rows) {
+				static constexpr const auto get_first = [](const auto& x) {
+					return x.first;
+				};
+				auto found = std::ranges::find(ra->fields, n, get_first);
+				if (found == ra->fields.end()) return false;
+				if (not unify((*found).second, d)) return false;
+			}
+			return true;
+		}
+	}
+
+	if (auto sa = to<RowSet>(a))
+		if (auto rb = to<Record>(b)) return unify(rb, sa);
+
+	if (auto sa = to<RowSet>(a), sb = to<RowSet>(b); sa and sb) {
+		std::map<std::string, D> new_rows = sa->rows;
+		for (const auto& [nb, db] : sb->rows)
+			if (new_rows.contains(nb) and not unify(new_rows.at(nb), db))
+				return false;
+			else
+				new_rows[nb] = db;
+		return true;
+	}
+
+	if (auto ua = to<Union>(a)) {
+		if (auto ub = to<Union>(b)) {
+			if (ua->constructors.size() != ub->constructors.size()) return false;
+			auto ctors = ua->constructors;
+			for (const auto& ctor : ctors) {
+				if (auto found = std::ranges::find(
+							ub->constructors, ctor.name, [](const auto& x) { return x.name; }
+						);
+				    found != ub->constructors.end()) {
+					if (ctor.arguments.size() != (*found).arguments.size()) return false;
+					for (const auto& [arga, argb] :
+					     std::ranges::views::zip(ctor.arguments, (*found).arguments)) {
+						if (not unify(arga, argb)) return false;
+					}
+				} else {
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+
+	// a and b are functions of same arity.
+	// unify their inputs. unify their outputs. unify their effects
+	if (auto fa = to<Function>(a), fb = to<Function>(b); fa and fb) {
+		if (fa->inputs.size() != fb->inputs.size()) return false;
+		auto unified_inputs = std::ranges::all_of(
+			std::ranges::views::zip(fa->inputs, fb->inputs), [&](const auto& p) {
+				const auto& [a, b] = p;
+				return unify_aux(a, b, should_cast);
+			}
+		);
+		auto unified_outputs = unify_aux(fa->output, fb->output, should_cast);
+		auto unified_effects = unify_aux(fa->effects, fb->effects, should_cast);
+		return unified_inputs and unified_outputs and unified_effects;
+	}
+
+	if (should_cast) {
+		if (auto cfrom = ::to<Closure>(a)) {
+			if (auto fto = ::to<Function>(b)) {
+				auto t1 = make_function(cfrom->inputs, cfrom->output, cfrom->effects);
+				return cast(t1, fto);
+			}
+		}
+
+		if (auto ffrom = ::to<Function>(a)) {
+			if (auto cto = ::to<Closure>(b)) {
+				auto t1 = make_function(cto->inputs, cto->output, cto->effects);
+				auto no_captures = cto->captures.size() == 0;
+				return no_captures and cast(ffrom, t1);
+			}
+		}
+	}
+
+	if (auto cfrom = ::to<Closure>(a)) {
+		if (auto cto = ::to<Closure>(b)) {
+			auto same_captures = cfrom->captures == cto->captures;
+			auto ffrom = make_function(cfrom->inputs, cfrom->output, cfrom->effects);
+			auto fto = make_function(cto->inputs, cto->output, cto->effects);
+			return same_captures and unify_aux(ffrom, fto, should_cast);
+		}
+	}
+
+	return false;
+}
+
+bool Typechecker::unify_aux(M a, M b, bool should_cast) {
+	return std::visit(
+		overloaded {
+			[&]([[maybe_unused]] Mode::Concrete&, Variable<Mode>& bv) {
+				if (bv.is_bound()) {
+					return unify_aux(a, bv.get_bound(), should_cast);
+				} else {
+					bv.bind_to(a);
+					return true;
+				}
+			},
+			[&](Variable<Mode>& av, [[maybe_unused]] Mode::Concrete&) {
+				if (av.is_bound()) {
+					return unify_aux(av.get_bound(), b, should_cast);
+				} else {
+					av.bind_to(b);
+					return true;
+				}
+			},
+
+			[&](Variable<Mode>& av, [[maybe_unused]] Variable<Mode>& bv) {
+				if (bv.is_bound() and av.is_bound()) {
+					return unify_aux(av.get_bound(), bv.get_bound(), should_cast);
+				} else if (bv.is_bound()) {
+					av.bind_to(b);
+					return true;
+				} else if (av.is_bound()) {
+					bv.bind_to(a);
+					return true;
+				} else {
+					bv.bind_to(a);
+					return true;
+				}
+			},
+			[&](Mode::Concrete& from, Mode::Concrete& to) {
+				if (should_cast and from == Mode::Concrete::VAL
+		        and to == Mode::Concrete::OUT)
+					return false;
+				else
+					return true;
+			},
+		},
+		a->data,
+		b->data
+	);
+}
+
+bool Typechecker::unify_aux(T a, T b, bool should_cast) {
+	return unify_aux(a->mode, b->mode, should_cast)
+	   and unify_aux(a->datatype, b->datatype, should_cast);
+}
+
+bool Typechecker::unify_aux(E a, E b, bool should_cast) {
+	if (a->variable == nullptr and b->variable == nullptr) {
+		if (should_cast)
+			return contained_in(a->concrete, b->concrete);
+		else
+			return set_equal(a->concrete, b->concrete);
+	}
+
+	if (a->variable == nullptr) {
+		auto c = difference(a->concrete, b->concrete);
+		b->variable->bind_to(std::make_shared<EffectSet>(c));
+		return true;
+	}
+
+	if (b->variable == nullptr) {
+		auto c = difference(b->concrete, a->concrete);
+		a->variable->bind_to(std::make_shared<EffectSet>(c));
+		return true;
+	}
+
+	if (a->variable->is_bound()) {
+		return unify_aux(normalize(a), b, should_cast);
+	}
+
+	if (b->variable->is_bound()) {
+		return unify_aux(a, normalize(b), should_cast);
+	}
+
+	if (not b->variable->is_bound() and not a->variable->is_bound()) {
+		if (contained_in(a->concrete, b->concrete)) {
+			auto c = difference(b->concrete, a->concrete);
+			a->variable->bind_to(std::make_shared<EffectSet>(c, b->variable));
+			return true;
+		} else {
+			auto c = difference(a->concrete, b->concrete);
+			b->variable->bind_to(std::make_shared<EffectSet>(c, a->variable));
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool Typechecker::unify(E a, E b) { return unify_aux(a, b, false); }
+bool Typechecker::unify(M a, M b) { return unify_aux(a, b, false); }
+bool Typechecker::unify(D a, D b) { return unify_aux(a, b, false); }
+bool Typechecker::unify(T a, T b) { return unify_aux(a, b, false); }
+bool Typechecker::cast(E a, E b) { return unify_aux(a, b, true); }
+bool Typechecker::cast(M a, M b) { return unify_aux(a, b, true); }
+bool Typechecker::cast(D a, D b) { return unify_aux(a, b, true); }
+bool Typechecker::cast(T a, T b) { return unify_aux(a, b, true); }
