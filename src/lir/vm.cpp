@@ -6,10 +6,12 @@
 #include <cstring>
 #include <format>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <utility>
 
 #include "lir/lir.hpp"
 
@@ -57,6 +59,20 @@ static void err(const char* msg);
 void err(const char* msg) {
 	fprintf(stderr, "VM ERROR: %s\n", msg);
 	exit(1);
+}
+
+static std::size_t line_for(
+	const lir::Chunk& chunk, std::size_t program_counter
+) {
+	std::size_t i = 0;
+	std::multimap<std::size_t, std::size_t> index_labels {};
+	for (const auto& [lab, idx] : chunk.label_indexes) {
+		index_labels.insert(std::make_pair(idx, lab));
+	}
+	for (auto j = 0ul; j <= (program_counter + 1); j++, i++) {
+		i += index_labels.count(j);
+	}
+	return i + 1;
 }
 
 std::size_t VM::address_of_label(const Chunk& code, lir::Label label) {
@@ -290,8 +306,9 @@ void VM::run(const lir::Chunk& code) {
 				if (not t1.is_pointer())
 					throw std::runtime_error(
 						std::format(
-							"(pc={}) loada base operand was not a pointer: {}",
+							"(pc={}, line={}) loada base operand was not a pointer: {}",
 							program_counter,
+							line_for(code, program_counter),
 							serialize(t1)
 						)
 					);
