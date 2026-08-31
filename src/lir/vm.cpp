@@ -400,6 +400,7 @@ void VM::run(const lir::Chunk& code) {
 			}
 			case Opcode::RESUME: {
 				const auto top = stack.back();
+				stack.pop();
 				const auto k = fetch(inst.operands[0]).as_continuation();
 				restore_continuation(*k);
 				stack.push(top);
