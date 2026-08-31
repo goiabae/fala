@@ -141,7 +141,6 @@ exp
 	| loop
 	| jump
 	| let
-	| app
 	| ass
 	| op
 	| perform_effect
@@ -396,6 +395,7 @@ term : "(" nls exp nls ")" { $$ = $exp; }
      | CHAR        { $$ = new_char_node(ast, @$, $1); }
      | record_literal
      | array_literal
+     | app
      ;
 
 record_literal
