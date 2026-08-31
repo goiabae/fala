@@ -348,7 +348,7 @@ args
   | args "," arg { $$ = list_append_node(ast, $$, $3); }
   ;
 
-arg : term ;
+arg : exp ;
 
 /* Assignment */
 ass : path "=" nls exp { $$ = NODE(NodeType::ASS, $1, $exp); } ;
