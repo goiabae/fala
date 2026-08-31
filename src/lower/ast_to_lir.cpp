@@ -54,14 +54,14 @@ constexpr auto builtins = {
 };
 
 Result read_int(Compiler& comp, vector<lir::Operand>) {
-	lir::Operand tmp = comp.make_register();
+	lir::Operand tmp = comp.make_register(lir::Type::INTEGER);
 	auto chunk = comp.make_chunk();
 	chunk.emit(lir::Opcode::READV, tmp);
 	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), tmp};
 }
 
 Result read_char(Compiler& comp, vector<lir::Operand>) {
-	lir::Operand tmp = comp.make_register();
+	lir::Operand tmp = comp.make_register(lir::Type::INTEGER);
 	auto chunk = comp.make_chunk();
 	chunk.emit(lir::Opcode::READC, tmp);
 	return {lir::Block::defer_last_jump(chunk.entry, chunk.index), tmp};
@@ -135,12 +135,12 @@ lir::Chunk Compiler::compile() {
 		auto start2 = make_chunk();
 
 		const auto main = module.opnd;
-		const auto r1 = make_register();
-		const auto r2 = make_register();
-		const auto r3 = make_register();
-		const auto r4 = make_register();
-		const auto r8 = make_register();
-		const auto r9 = make_register();
+		const auto r1 = make_register(lir::Type::INTEGER);
+		const auto r2 = make_register(lir::Type::CLOSURE);
+		const auto r3 = make_register(lir::Type::INTEGER);
+		const auto r4 = make_register(lir::Type::CONTINUATION);
+		const auto r8 = make_register(lir::Type::INTEGER);
+		const auto r9 = make_register(lir::Type::INTEGER);
 
 		chunk.emit(lir::Opcode::JMP, start.entry);
 		chunk.finalize();
@@ -221,7 +221,10 @@ lir::Chunk Compiler::compile() {
 	return result;
 }
 
-lir::Register Compiler::make_register() { return lir::Register(reg_count++); }
+lir::Register Compiler::make_register(lir::Type t) {
+	auto r = lir::Register(reg_count++, t);
+	return r;
+}
 
 lir::Label Compiler::make_label() { return lir::Label(label_count++); }
 
@@ -232,7 +235,7 @@ Result Compiler::compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx) {
 	} else {
 		auto c0 = compile(node_idx, ctx);
 		auto load_lvalue = make_chunk();
-		const auto t1 = make_register();
+		const auto t1 = make_register(lir::Type::POINTER);
 		c0.block.and_then(chunks, load_lvalue.entry);
 		load_lvalue.emit(lir::Opcode::ALLOCA, t1, lir::Immediate(1));
 		load_lvalue.emit(lir::Opcode::STOREA, c0.opnd, lir::Immediate(0), t1);
@@ -301,7 +304,7 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 				);
 		    found != unty->constructors.end()) {
 			auto index = std::distance(unty->constructors.begin(), found);
-			const auto r0 = make_register();
+			const auto r0 = make_register(lir::Type::POINTER);
 			auto call = make_chunk();
 			if (arg_blocks.size() > 0) {
 				arg_blocks.back().and_then(chunks, call.entry);
@@ -313,12 +316,12 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			);
 			auto i = 0;
 			for (const auto& arg : args) {
-				const auto ri = make_register();
+				const auto ri = make_register(lir::Type::UNKNOWN);
 				call.emit(lir::Opcode::LOADA, ri, lir::Immediate(0), arg);
 				call.emit(lir::Opcode::STOREA, ri, lir::Immediate(i), r0);
 				i++;
 			}
-			const auto r1 = make_register();
+			const auto r1 = make_register(lir::Type::POINTER);
 			call.emit(lir::Opcode::ALLOCA, r1, lir::Immediate(2));
 			call.emit(
 				lir::Opcode::STOREA,
@@ -360,7 +363,7 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			if (convention == PassingConvention::ALIAS) {
 				call.emit(lir::Opcode::PUSH, arg);
 			} else if (convention == PassingConvention::CLONE) {
-				const auto t = make_register();
+				const auto t = make_register(lir::Type::UNKNOWN);
 				call.emit(lir::Opcode::CLONEA, t, arg);
 				call.emit(lir::Opcode::PUSH, t);
 			} else if (convention == PassingConvention::INVALID) {
@@ -379,7 +382,7 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 
 		func.block.and_then(chunks, call2.entry);
 
-		const auto res = make_register();
+		const auto res = make_register(lir::Type::UNKNOWN);
 		call2.emit(lir::Opcode::CALL, func.opnd);
 		call2.emit(lir::Opcode::POP, res);
 
@@ -433,7 +436,7 @@ Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 		if (convention == PassingConvention::ALIAS) {
 			call.emit(lir::Opcode::PUSH, arg);
 		} else if (convention == PassingConvention::CLONE) {
-			const auto t = make_register();
+			const auto t = make_register(lir::Type::UNKNOWN);
 			call.emit(lir::Opcode::CLONEA, t, arg);
 			call.emit(lir::Opcode::PUSH, t);
 		} else if (convention == PassingConvention::INVALID) {
@@ -448,7 +451,7 @@ Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 		effect_tag,
 		lir::Immediate(static_cast<int>(args.size()))
 	);
-	const auto res = make_register();
+	const auto res = make_register(lir::Type::UNKNOWN);
 	call.emit(lir::Opcode::POP, res);
 
 	auto entry = (arg_blocks.size() > 0) ? arg_blocks.at(0).entry : call.entry;
@@ -461,7 +464,7 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	const auto cond_idx = node[0];
 	const auto then_idx = node[1];
 	const auto else_idx = node[2];
-	const auto res = make_register();
+	const auto res = make_register(lir::Type::UNKNOWN);
 
 	// c0 ---> c3 ---> c2 ---> c5
 	//         |               |
@@ -512,8 +515,8 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 
 	const auto& step_node = ast.at(step_idx);
 
-	const auto cmp = make_register();
-	const auto result = make_register();
+	const auto cmp = make_register(lir::Type::INTEGER);
+	const auto result = make_register(lir::Type::UNKNOWN);
 
 	auto cend = make_chunk();
 	auto cinc = make_chunk();
@@ -534,8 +537,8 @@ Result Compiler::compile_for(NodeIndex node_idx, Context ctx) {
 		.current_resumption = ctx.current_resumption,
 	};
 
-	const auto t1 = make_register();
-	const auto t2 = make_register();
+	const auto t1 = make_register(lir::Type::INTEGER);
+	const auto t2 = make_register(lir::Type::INTEGER);
 
 	auto c0 = [&]() -> Result {
 		if (step_node.type != NodeType::EMPTY) {
@@ -595,7 +598,7 @@ Result Compiler::compile_when(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto cond_idx = node[0];
 	const auto then_idx = node[1];
-	const auto r = make_register();
+	const auto r = make_register(lir::Type::UNKNOWN);
 	auto c0 = compile(cond_idx, ctx);
 	auto c1 = compile(then_idx, ctx);
 	auto c2 = make_chunk();
@@ -630,7 +633,7 @@ Result Compiler::compile_while(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto beg = make_label();
 	const auto end = make_label();
-	const auto result_register = make_register();
+	const auto result_register = make_register(lir::Type::UNKNOWN);
 
 	SignalHandlers new_handlers {
 		{beg, result_register},
@@ -691,9 +694,9 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			auto c0 = compile_lvalue(node[0], ctx);
 			auto c1 = compile(node[1], ctx);
 			auto c2 = make_chunk();
-			const auto r0 = make_register();
-			const auto r1 = make_register();
-			const auto r2 = make_register();
+			const auto r0 = make_register(lir::Type::POINTER);
+			const auto r1 = make_register(lir::Type::POINTER);
+			const auto r2 = make_register(lir::Type::POINTER);
 
 			c0.block.and_then(chunks, c1.block.entry);
 			c1.block.and_then(chunks, c2.entry);
@@ -714,7 +717,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			if (rel == RelativeScope::FREE) {
 				assert(ctx.current_closure.has_value());
 				const auto& clinfo = ctx.current_closure.value();
-				const auto t1 = make_register();
+				const auto t1 = make_register(lir::Type::POINTER);
 				if (not clinfo.offsets.contains(node.guid)) {
 					std::string s {};
 					s += "[";
@@ -783,8 +786,8 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			assert(found != t0->fields.end());
 			auto d = std::distance(t0->fields.begin(), found);
 			const auto field_ty = found->second;
-			const auto t1 = make_register();
-			const auto t3 = make_register();
+			const auto t1 = make_register(lir::Type::POINTER);
+			const auto t3 = make_register(lir::Type::POINTER);
 			c0.block.and_then(chunks, c1.entry);
 			c1.emit(lir::Opcode::LOADA, t3, lir::Immediate(0), c0.opnd);
 			c1.emit(lir::Opcode::SHIFTA, t1, lir::Immediate(static_cast<int>(d)), t3);
@@ -836,9 +839,9 @@ lir::Block Compiler::compile_pattern_match(
 					);
 			    found != union_ty->constructors.end()) {
 				auto tag = std::distance(union_ty->constructors.begin(), found);
-				const auto r0 = make_register();
-				const auto r1 = make_register();
-				const auto r2 = make_register();
+				const auto r0 = make_register(lir::Type::INTEGER);
+				const auto r1 = make_register(lir::Type::INTEGER);
+				const auto r2 = make_register(lir::Type::POINTER);
 				auto c0 = make_chunk();
 				c0.emit(lir::Opcode::LOADA, r0, lir::Immediate(0), expr);
 				c0.emit(lir::Opcode::EQ, r1, r0, lir::Immediate(static_cast<int>(tag)));
@@ -850,7 +853,7 @@ lir::Block Compiler::compile_pattern_match(
 				}};
 				const auto& arguments_node = ast.at(node[1]);
 				for (auto i = 0ul; i < arguments_node.size(); i++) {
-					const auto ri = make_register();
+					const auto ri = make_register(lir::Type::UNKNOWN);
 					auto ca = make_chunk();
 					const auto ci = compile_pattern_match(
 						arguments_node[i], ctx, if_fail, (*found).arguments.at(i), ri
@@ -940,7 +943,7 @@ void Compiler::allocate_variables() {
 	for (const auto& sym : syms) {
 		const auto scope = symtab.declaration_scope_of(sym).value();
 		if (scope != symtab.builtin_scope) {
-			variables[sym] = make_register();
+			variables[sym] = make_register(lir::Type::UNKNOWN);
 		}
 	}
 	auto i = 0ul;
@@ -968,7 +971,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 
 	auto c0 = make_chunk();
 	const auto t2 = variables.at(id_node.guid);
-	const auto t3 = make_register();
+	const auto t3 = make_register(lir::Type::POINTER);
 
 	const auto ty = tpc.variables.at(id_node.guid);
 	const auto dty = ty->scheme->body;
@@ -977,7 +980,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 
 	auto chunk = make_chunk();
 
-	const auto t1 = make_register();
+	const auto t1 = make_register(lir::Type::POINTER);
 	chunk.emit(
 		lir::Opcode::ALLOCA,
 		t1,
@@ -991,8 +994,8 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 	{
 		auto i = 0ul;
 		for (const auto& [a, b] : cty->captures) {
-			const auto ti = make_register();
-			const auto ti2 = make_register();
+			const auto ti = make_register(lir::Type::UNKNOWN);
+			const auto ti2 = make_register(lir::Type::UNKNOWN);
 			chunk.emit(lir::Opcode::LOADA, ti2, lir::Immediate(0), variables.at(a));
 			chunk.emit(lir::Opcode::CLONEA, ti, ti2);
 			chunk.emit(
@@ -1002,7 +1005,7 @@ Result Compiler::compile_fun_decl(NodeIndex node_idx, Context ctx) {
 			i++;
 		}
 	}
-	const auto t4 = make_register();
+	const auto t4 = make_register(lir::Type::CLOSURE);
 	chunk.emit(lir::Opcode::ENCLOSE, t4, c0.entry, t1);
 	chunk.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(1));
 	chunk.emit(lir::Opcode::STOREA, t4, lir::Immediate(0), t2);
@@ -1101,8 +1104,8 @@ Result Compiler::compile_str(NodeIndex node_idx, Context) {
 
 	const auto& node = ast.at(node_idx);
 	const auto str = std::string_view(pool.find(node.str_id));
-	const auto t1 = make_register();
-	const auto t2 = make_register();
+	const auto t1 = make_register(lir::Type::POINTER);
+	const auto t2 = make_register(lir::Type::POINTER);
 
 	auto chunk = make_chunk();
 	chunk.emit(lir::Opcode::ALLOCA, t1, lir::Immediate((int)str.size()));
@@ -1127,7 +1130,7 @@ Result Compiler::compile_at(NodeIndex node_idx, Context ctx) {
 	auto res = compile_lvalue(node_idx, ctx);
 	auto c1 = make_chunk();
 	auto res_opnd = res.opnd;
-	auto tmp = make_register();
+	auto tmp = make_register(lir::Type::UNKNOWN);
 	res.block.and_then(chunks, c1.entry);
 	c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
 	return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
@@ -1215,7 +1218,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		auto r0 = compile(left_node, ctx);                                   \
 		auto r1 = compile(right_node, ctx);                                  \
 		auto c2 = make_chunk();                                              \
-		const auto res = make_register();                                    \
+		const auto res = make_register(lir::Type::INTEGER);                  \
                                                                          \
 		r0.block.and_then(chunks, r1.block.entry);                           \
 		r1.block.and_then(chunks, c2.entry);                                 \
@@ -1230,7 +1233,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto r1 = compile(right_node, ctx);
 			auto c2 = make_chunk();
 			auto c3 = make_chunk();
-			const auto res = make_register();
+			const auto res = make_register(lir::Type::INTEGER);
 
 			r0.block.and_then(chunks, c2.entry);
 
@@ -1258,7 +1261,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto r1 = compile(right_node, ctx);
 			auto c2 = make_chunk();
 			auto c3 = make_chunk();
-			const auto res = make_register();
+			const auto res = make_register(lir::Type::INTEGER);
 
 			r0.block.and_then(chunks, c2.entry);
 
@@ -1296,7 +1299,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			lir::Chunk chunk {};
 			const auto entry = make_label();
 			chunk.add_label(entry);
-			lir::Operand res = make_register();
+			lir::Operand res = make_register(lir::Type::INTEGER);
 			auto inverse_res = compile(node[0], ctx);
 			auto c1 = make_chunk();
 			inverse_res.block.and_then(chunks, c1.entry);
@@ -1322,7 +1325,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto c1 = make_chunk();
 			res.block.and_then(chunks, c1.entry);
 			auto res_opnd = res.opnd;
-			auto tmp = make_register();
+			auto tmp = make_register(lir::Type::UNKNOWN);
 			c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
 			return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 		}
@@ -1332,7 +1335,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto c1 = make_chunk();
 			res.block.and_then(chunks, c1.entry);
 			auto res_opnd = res.opnd;
-			auto tmp = make_register();
+			auto tmp = make_register(lir::Type::UNKNOWN);
 			c1.emit(lir::Opcode::LOADA, tmp, lir::Immediate(0), res_opnd);
 			return {lir::Block::defer_last_jump(res.block.entry, c1.index), tmp};
 		}
@@ -1349,8 +1352,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto r0 = compile(node[0], ctx);
 			auto r1 = compile(node[1], ctx);
 			auto c2 = make_chunk();
-			const auto t1 = make_register();
-			const auto t2 = make_register();
+			const auto t1 = make_register(lir::Type::POINTER);
+			const auto t2 = make_register(lir::Type::POINTER);
 			r0.block.and_then(chunks, r1.block.entry);
 			r1.block.and_then(chunks, c2.entry);
 			c2.emit(lir::Opcode::REPEAT, t1, r0.opnd, r1.opnd);
@@ -1369,7 +1372,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			auto c0 = compile(node[0], ctx);
 			auto c1 = make_chunk();
-			const auto t1 = make_register();
+			const auto t1 = make_register(lir::Type::INTEGER);
 			c0.block.and_then(chunks, c1.entry);
 			c1.emit(lir::Opcode::LOADA, t1, lir::Immediate(1), c0.opnd);
 			return {lir::Block::defer_last_jump(c0.block.entry, c1.index), t1};
@@ -1433,7 +1436,7 @@ Result Compiler::compile_array_literal(NodeIndex node_idx, Context ctx) {
 	//             +---> [r1, r2, ..., rn]
 	//
 	const auto& node = ast.at(node_idx);
-	const auto t1 = make_register();
+	const auto t1 = make_register(lir::Type::POINTER);
 	auto c0 = make_chunk();
 	c0.emit(
 		lir::Opcode::ALLOCA, t1, lir::Immediate(static_cast<int>(node.size()))
@@ -1453,7 +1456,7 @@ Result Compiler::compile_array_literal(NodeIndex node_idx, Context ctx) {
 	for (const auto& [a, b] : std::ranges::views::adjacent<2>(blocks)) {
 		a.and_then(chunks, b.entry);
 	}
-	const auto t2 = make_register();
+	const auto t2 = make_register(lir::Type::POINTER);
 	auto c3 = make_chunk();
 	blocks.back().and_then(chunks, c3.entry);
 	c3.emit(lir::Opcode::ALLOCA, t2, lir::Immediate(2));
@@ -1472,7 +1475,7 @@ Result Compiler::compile_record_literal(NodeIndex node_idx, Context ctx) {
 	const auto field_count = node.size();
 	const auto record_datatype =
 		std::dynamic_pointer_cast<Record>(tpc.node_to_type.at(node_idx)->datatype);
-	const auto t1 = make_register();
+	const auto t1 = make_register(lir::Type::POINTER);
 	auto c0 = make_chunk();
 	std::vector<lir::Block> blocks {};
 	for (auto i = 0ul; i < field_count; i++) {
@@ -1518,7 +1521,7 @@ Result Compiler::compile_record_literal(NodeIndex node_idx, Context ctx) {
 
 Result Compiler::compile_match(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
-	const auto r0 = make_register();
+	const auto r0 = make_register(lir::Type::UNKNOWN);
 	const auto ty = tpc.node_to_type.at(node[0]);
 	const auto dty = ty->datatype;
 	auto c0 = compile(node[0], ctx);
@@ -1546,7 +1549,7 @@ lir::Block Compiler::compile_handler_decl(
 	NodeIndex node_idx, Context ctx, lir::Label exit
 ) {
 	const auto& node = ast.at(node_idx);
-	const auto k = make_register();
+	const auto k = make_register(lir::Type::CONTINUATION);
 	const auto id_idx = node[0];
 	const auto& id_node = ast.at(id_idx);
 	assert(id_node.type == NodeType::GUID);

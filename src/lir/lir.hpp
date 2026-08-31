@@ -67,29 +67,17 @@ enum class Opcode {
 
 };
 
-class Type;
-
-class Pointer {
- public:
-	std::shared_ptr<Type> pointed_type;
-	bool is_many_pointer;
-	Pointer(std::shared_ptr<Type> pointed_type, bool is_many_pointer)
-	: pointed_type {pointed_type}, is_many_pointer {is_many_pointer} {}
-};
-
-class Integer {};
-
-class Type : public std::variant<Pointer, Integer> {
- public:
-	Type(const Integer& i) : std::variant<Pointer, Integer> {i} {}
-	Type(const Pointer& p) : std::variant<Pointer, Integer> {p} {}
-	static Type make_integer();
-	static Type make_integer_array();
-	static Type make_integer_pointer();
+enum class Type {
+	POINTER,
+	INTEGER,
+	CONTINUATION,
+	CLOSURE,
+	UNKNOWN,
 };
 
 struct Register {
 	size_t index;
+	Type type;
 };
 
 struct Label {
@@ -107,7 +95,7 @@ struct ByteString {
 };
 
 struct Operand {
-	enum class Type {
+	enum class Kind {
 		NOTHING,   // no operand
 		REGISTER,  // variables register
 		LABEL,     // label
@@ -115,14 +103,14 @@ struct Operand {
 		BYTE_STRING,
 	};
 
-	Type type;
+	Kind kind;
 	std::variant<Register, Label, Immediate, ByteString> data;
 
-	Operand() : type {Type::NOTHING}, data {Immediate {0}} {}
-	Operand(Register reg) : type(Type::REGISTER), data {reg} {}
-	Operand(Label lab) : type(Type::LABEL), data {lab} {}
-	Operand(Immediate imm) : type(Type::IMMEDIATE), data(imm) {}
-	Operand(ByteString bs) : type(Type::BYTE_STRING), data(bs) {}
+	Operand() : kind {Kind::NOTHING}, data {Immediate {0}} {}
+	Operand(Register reg) : kind(Kind::REGISTER), data {reg} {}
+	Operand(Label lab) : kind(Kind::LABEL), data {lab} {}
+	Operand(Immediate imm) : kind(Kind::IMMEDIATE), data(imm) {}
+	Operand(ByteString bs) : kind(Kind::BYTE_STRING), data(bs) {}
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
@@ -135,6 +123,8 @@ struct Operand {
 	const ByteString& as_byte_string() const {
 		return std::get<ByteString>(data);
 	}
+
+	std::optional<lir::Type> type() const;
 };
 
 struct Instruction {
@@ -210,11 +200,12 @@ int print_inst(FILE*, const Instruction& inst);
 std::ostream& operator<<(std::ostream&, const Chunk&);
 std::ostream& operator<<(std::ostream& st, const Instruction& inst);
 std::ostream& operator<<(std::ostream& st, const Operand& opnd);
+std::ostream& operator<<(std::ostream& st, const Type& typ);
 
 Chunk operator+(Chunk x, Chunk y);
 Chunk& operator+=(Chunk& x, Chunk y);
 
-const char* operand_type_repr(Operand::Type type);
+const char* operand_type_repr(Operand::Kind type);
 
 } // namespace lir
 
@@ -230,6 +221,7 @@ const char* operand_type_repr(Operand::Type type);
 
 DEFFMT(lir::Operand);
 DEFFMT(lir::Label);
+DEFFMT(lir::Type);
 
 #undef DEFFMT
 

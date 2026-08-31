@@ -7,15 +7,15 @@
 #include "vm.hpp"
 
 static lir::Operand make_integer_register(std::size_t index) {
-	return lir::Operand(lir::Register(index));
+	return lir::Operand(lir::Register(index, lir::Type::INTEGER));
 }
 
 static lir::Operand make_intptr_register(std::size_t index) {
-	return lir::Operand(lir::Register(index));
+	return lir::Operand(lir::Register(index, lir::Type::POINTER));
 }
 
 static lir::Operand make_array_register(std::size_t index) {
-	return lir::Operand(lir::Register(index));
+	return lir::Operand(lir::Register(index, lir::Type::POINTER));
 }
 
 TEST(VMTest, move_immediate) {
@@ -412,11 +412,11 @@ TEST(VMTest, io_operations) {
 	const auto _69 = lir::Immediate(69);
 	const auto _A = lir::Immediate('A');
 
-	const auto r1 = lir::Operand(lir::Register(1));
-	const auto r2 = lir::Operand(lir::Register(2));
-	const auto r3 = lir::Operand(lir::Register(3));
-	const auto r4 = lir::Operand(lir::Register(4));
-	const auto r5 = lir::Operand(lir::Register(5));
+	const auto r1 = lir::Operand(lir::Register(1, lir::Type::UNKNOWN));
+	const auto r2 = lir::Operand(lir::Register(2, lir::Type::UNKNOWN));
+	const auto r3 = lir::Operand(lir::Register(3, lir::Type::UNKNOWN));
+	const auto r4 = lir::Operand(lir::Register(4, lir::Type::UNKNOWN));
+	const auto r5 = lir::Operand(lir::Register(5, lir::Type::UNKNOWN));
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PRINTV, _69);
@@ -454,13 +454,13 @@ TEST(VMTest, io_operations) {
 }
 
 TEST(VMTest, control_operators) {
-	const auto r1 = lir::Operand(lir::Register(1));
-	const auto r2 = lir::Operand(lir::Register(2));
-	const auto r3 = lir::Operand(lir::Register(3));
-	const auto r4 = lir::Operand(lir::Register(4));
-	const auto r5 = lir::Operand(lir::Register(5));
-	const auto r6 = lir::Operand(lir::Register(6));
-	const auto r7 = lir::Operand(lir::Register(7));
+	const auto r1 = lir::Operand(lir::Register(1, lir::Type::UNKNOWN));
+	const auto r2 = lir::Operand(lir::Register(2, lir::Type::UNKNOWN));
+	const auto r3 = lir::Operand(lir::Register(3, lir::Type::UNKNOWN));
+	const auto r4 = lir::Operand(lir::Register(4, lir::Type::UNKNOWN));
+	const auto r5 = lir::Operand(lir::Register(5, lir::Type::UNKNOWN));
+	const auto r6 = lir::Operand(lir::Register(6, lir::Type::UNKNOWN));
+	const auto r7 = lir::Operand(lir::Register(7, lir::Type::UNKNOWN));
 	const auto r8 = make_integer_register(8);
 	const auto r9 = make_integer_register(9);
 	const auto r10 = make_integer_register(10);

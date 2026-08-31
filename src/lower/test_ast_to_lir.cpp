@@ -17,7 +17,6 @@
 static bool compare_maps(
 	const std::map<size_t, size_t>& a, const std::map<size_t, size_t>& b
 );
-static bool operator==(const lir::Type& a, const lir::Type& b);
 static bool operator==(const lir::Register& a, const lir::Register& b);
 static bool operator==(const lir::Label& a, const lir::Label& b);
 static bool operator==(const lir::Immediate& a, const lir::Immediate& b);
@@ -39,23 +38,6 @@ bool compare_maps(
 	return true;
 }
 
-bool operator==(const lir::Type& a, const lir::Type& b) {
-	if (std::holds_alternative<lir::Pointer>(a)
-	    and std::holds_alternative<lir::Pointer>(b)) {
-		const auto pa {std::get<lir::Pointer>(a)};
-		const auto pb {std::get<lir::Pointer>(b)};
-		if (pa.is_many_pointer != pb.is_many_pointer) {
-			throw std::runtime_error("operand types with different many-pointedness");
-		}
-		return *pa.pointed_type == *pb.pointed_type;
-	} else if (std::holds_alternative<lir::Integer>(a)
-	           and std::holds_alternative<lir::Integer>(b)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
 bool operator==(const lir::Register& a, const lir::Register& b) {
 	if (a.index != b.index) return false;
 	return true;
@@ -70,21 +52,21 @@ bool operator==(const lir::Immediate& a, const lir::Immediate& b) {
 }
 
 bool operator==(const lir::Operand& a, const lir::Operand& b) {
-	if (a.type != b.type) {
+	if (a.kind != b.kind) {
 		throw std::runtime_error("operand types not equal");
 	}
-	switch (a.type) {
-		case lir::Operand::Type::NOTHING: return true;
-		case lir::Operand::Type::REGISTER: {
+	switch (a.kind) {
+		case lir::Operand::Kind::NOTHING: return true;
+		case lir::Operand::Kind::REGISTER: {
 			return a.as_register() == b.as_register();
 		}
-		case lir::Operand::Type::LABEL: {
+		case lir::Operand::Kind::LABEL: {
 			return a.as_label() == b.as_label();
 		}
-		case lir::Operand::Type::IMMEDIATE: {
+		case lir::Operand::Kind::IMMEDIATE: {
 			return a.as_immediate() == b.as_immediate();
 		}
-		case lir::Operand::Type::BYTE_STRING: {
+		case lir::Operand::Kind::BYTE_STRING: {
 			return a.as_byte_string().bytes == b.as_byte_string().bytes;
 		}
 	}
@@ -121,7 +103,7 @@ bool operator==(const lir::Chunk& a, const lir::Chunk& b) {
 }
 
 static lir::Operand make_int_reg(size_t idx) {
-	return lir::Operand(lir::Register(idx));
+	return lir::Operand(lir::Register(idx, lir::Type::UNKNOWN));
 }
 
 TEST(LIRTest, emit_binop) {
@@ -129,7 +111,7 @@ TEST(LIRTest, emit_binop) {
 	EXPECT_EQ(chunk.m_vec.size(), 0);
 	chunk.emit_binop(
 		BinaryOperator::PLUS,
-		lir::Operand(lir::Register(1)),
+		lir::Operand(lir::Register(1, lir::Type::UNKNOWN)),
 		lir::Immediate(1),
 		lir::Immediate(1)
 	);
@@ -137,7 +119,7 @@ TEST(LIRTest, emit_binop) {
 	lir::Chunk expected {};
 	lir::Instruction i {};
 	i.opcode = lir::Opcode::ADD;
-	i.operands[0] = lir::Operand(lir::Register(1));
+	i.operands[0] = lir::Operand(lir::Register(1, lir::Type::UNKNOWN));
 	i.operands[1] = lir::Immediate(1);
 	i.operands[2] = lir::Immediate(1);
 	expected.m_vec.push_back(i);
@@ -147,12 +129,14 @@ TEST(LIRTest, emit_binop) {
 TEST(LIRTest, emit_mov) {
 	lir::Chunk chunk {};
 	EXPECT_EQ(chunk.m_vec.size(), 0);
-	chunk.emit_mov(lir::Operand(lir::Register(1)), lir::Immediate(1));
+	chunk.emit_mov(
+		lir::Operand(lir::Register(1, lir::Type::UNKNOWN)), lir::Immediate(1)
+	);
 	EXPECT_EQ(chunk.m_vec.size(), 1);
 	lir::Chunk expected {};
 	lir::Instruction i {};
 	i.opcode = lir::Opcode::MOV;
-	i.operands[0] = lir::Operand(lir::Register(1));
+	i.operands[0] = lir::Operand(lir::Register(1, lir::Type::UNKNOWN));
 	i.operands[1] = lir::Immediate(1);
 	expected.m_vec.push_back(i);
 	EXPECT_TRUE(chunk == expected);
@@ -208,7 +192,7 @@ TEST(ASTToLIRTest, add_integers) {
 			"L002:\n"
 			"    jump L003\n"
 			"L003:\n"
-			"    add %0, 1, 2\n"
+			"    add %0:int, 1, 2\n"
 			"    jump L004\n"
 			"L004:\n"
 			"    halt\n";
@@ -268,14 +252,14 @@ TEST(ASTToLIRTest, let_expression) {
 			"L001:\n"
 			"    jump L002\n"
 			"L002:\n"
-			"    loada %1, 0(%0)\n"
+			"    loada %1:???, 0(%0)\n"
 			"    jump L003\n"
 			"L003:\n"
 			"    jump L006\n"
 			"L004:\n"
 			"    jump L005\n"
 			"L005:\n"
-			"    alloca %0, 1\n"
+			"    alloca %0:???, 1\n"
 			"    storea 3, 0(%0)\n"
 			"    jump L001\n"
 			"L006:\n"

@@ -71,7 +71,7 @@ struct Compiler {
 		NodeIndex node_idx, Context ctx, lir::Label exit,
 		std::shared_ptr<Datatype> expr_type, lir::Operand expr
 	);
-	lir::Register make_register();
+	lir::Register make_register(lir::Type);
 	lir::Label make_label();
 	void allocate_variables();
 	Result compile_constant(lir::Operand);

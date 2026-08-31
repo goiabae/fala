@@ -32,18 +32,18 @@ void assert_oneof(T v, Args&&... args) {
 }
 
 template<>
-struct std::formatter<Operand::Type> {
+struct std::formatter<Operand::Kind> {
 	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
-	auto format(const Operand::Type& opnd_ty, std::format_context& ctx) const {
+	auto format(const Operand::Kind& opnd_ty, std::format_context& ctx) const {
 		switch (opnd_ty) {
-			case lir::Operand::Type::NOTHING:
+			case lir::Operand::Kind::NOTHING:
 				return std::format_to(ctx.out(), "NOTHING");
-			case lir::Operand::Type::REGISTER:
+			case lir::Operand::Kind::REGISTER:
 				return std::format_to(ctx.out(), "REGISTER");
-			case lir::Operand::Type::LABEL: return std::format_to(ctx.out(), "LABEL");
-			case lir::Operand::Type::IMMEDIATE:
+			case lir::Operand::Kind::LABEL: return std::format_to(ctx.out(), "LABEL");
+			case lir::Operand::Kind::IMMEDIATE:
 				return std::format_to(ctx.out(), "IMMEDIATE");
-			case lir::Operand::Type::BYTE_STRING:
+			case lir::Operand::Kind::BYTE_STRING:
 				return std::format_to(ctx.out(), "BYTE_STRING");
 		}
 		assert(false);
@@ -64,23 +64,23 @@ std::size_t VM::address_of_label(const Chunk& code, lir::Label label) {
 }
 
 auto VM::deref(Operand opnd) -> Value& {
-	if (opnd.type == Operand::Type::REGISTER) {
+	if (opnd.kind == Operand::Kind::REGISTER) {
 		return cells[opnd.as_register().index];
 	} else {
-		fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
+		fprintf(stderr, "%s\n", operand_type_repr(opnd.kind));
 		exit(1);
 	}
 };
 
 auto VM::fetch(Operand opnd) -> Value {
-	if (opnd.type == Operand::Type::REGISTER) {
+	if (opnd.kind == Operand::Kind::REGISTER) {
 		return cells[opnd.as_register().index];
-	} else if (opnd.type == Operand::Type::IMMEDIATE) {
+	} else if (opnd.kind == Operand::Kind::IMMEDIATE) {
 		return opnd.as_immediate().number;
-	} else if (opnd.type == Operand::Type::NOTHING) {
+	} else if (opnd.kind == Operand::Kind::NOTHING) {
 		return 0;
 	} else {
-		fprintf(stderr, "%s\n", operand_type_repr(opnd.type));
+		fprintf(stderr, "%s\n", operand_type_repr(opnd.kind));
 		exit(1);
 	}
 };
@@ -121,7 +121,7 @@ void VM::run(const lir::Chunk& code) {
 				std::string line {};
 				if (not std::getline(input, line)) err("Couldn't read input");
 				int num = std::stoi(line);
-				if (inst.operands[0].type != Operand::Type::REGISTER)
+				if (inst.operands[0].kind != Operand::Kind::REGISTER)
 					err("First argument must be a register");
 				deref(inst.operands[0]) = Value::Integer(num);
 				break;
@@ -181,11 +181,11 @@ void VM::run(const lir::Chunk& code) {
 					program_counter++;
 				goto dont_inc;
 			case Opcode::PUSH: {
-				if (inst.operands[0].type == Operand::Type::IMMEDIATE) {
+				if (inst.operands[0].kind == Operand::Kind::IMMEDIATE) {
 					stack.push(Value(inst.operands[0].as_immediate().number));
-				} else if (inst.operands[0].type == Operand::Type::REGISTER) {
+				} else if (inst.operands[0].kind == Operand::Kind::REGISTER) {
 					stack.push(cells[inst.operands[0].as_register().index]);
-				} else if (inst.operands[0].type == Operand::Type::NOTHING) {
+				} else if (inst.operands[0].kind == Operand::Kind::NOTHING) {
 					stack.push(Value(0));
 				} else {
 					throw std::runtime_error("can't push value");
@@ -193,7 +193,7 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::POP: {
-				assert(inst.operands[0].type == Operand::Type::REGISTER);
+				assert(inst.operands[0].kind == Operand::Kind::REGISTER);
 				auto& cell = cells[inst.operands[0].as_register().index];
 				if (stack.size() == 0)
 					throw std::runtime_error("can't pop value. stack was empty");
@@ -228,10 +228,10 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::ALLOCA: {
 				auto result_register = inst.operands[0];
 				auto size_register = inst.operands[1];
-				assert(result_register.type == Operand::Type::REGISTER);
+				assert(result_register.kind == Operand::Kind::REGISTER);
 				assert(
-					size_register.type == Operand::Type::REGISTER
-					or size_register.type == Operand::Type::IMMEDIATE
+					size_register.kind == Operand::Kind::REGISTER
+					or size_register.kind == Operand::Kind::IMMEDIATE
 				);
 				auto a = fetch(size_register);
 				if (not a.is_integer())
@@ -254,15 +254,15 @@ void VM::run(const lir::Chunk& code) {
 				auto offset_register = inst.operands[1];
 				auto base_register = inst.operands[2].as_register();
 				assert_oneof(
-					value_register.type, Operand::Type::REGISTER, Operand::Type::IMMEDIATE
+					value_register.kind, Operand::Kind::REGISTER, Operand::Kind::IMMEDIATE
 				);
 				assert(
-					value_register.type == Operand::Type::REGISTER
-					or value_register.type == Operand::Type::IMMEDIATE
+					value_register.kind == Operand::Kind::REGISTER
+					or value_register.kind == Operand::Kind::IMMEDIATE
 				);
 				assert(
-					offset_register.type == Operand::Type::REGISTER
-					or offset_register.type == Operand::Type::IMMEDIATE
+					offset_register.kind == Operand::Kind::REGISTER
+					or offset_register.kind == Operand::Kind::IMMEDIATE
 				);
 				auto value = fetch(value_register);
 				auto a = fetch(offset_register);
@@ -281,7 +281,7 @@ void VM::run(const lir::Chunk& code) {
 				auto result_register = inst.operands[0];
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2].as_register();
-				assert(result_register.type == Operand::Type::REGISTER);
+				assert(result_register.kind == Operand::Kind::REGISTER);
 				auto a = fetch(offset_register);
 				if (not a.is_integer())
 					throw std::runtime_error("loada offset operand was not an integer");
@@ -305,12 +305,12 @@ void VM::run(const lir::Chunk& code) {
 				auto result_register = inst.operands[0];
 				auto offset_register = inst.operands[1];
 				auto pointer_register = inst.operands[2];
-				assert(result_register.type == Operand::Type::REGISTER);
+				assert(result_register.kind == Operand::Kind::REGISTER);
 				assert(
-					offset_register.type == Operand::Type::REGISTER
-					|| offset_register.type == Operand::Type::IMMEDIATE
+					offset_register.kind == Operand::Kind::REGISTER
+					|| offset_register.kind == Operand::Kind::IMMEDIATE
 				);
-				assert(pointer_register.type == Operand::Type::REGISTER);
+				assert(pointer_register.kind == Operand::Kind::REGISTER);
 				auto t1 = fetch(offset_register);
 				if (not t1.is_integer())
 					throw std::runtime_error("shifta offset operand was not an integer");
@@ -326,8 +326,8 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::CLONEA: {
 				auto result_register = inst.operands[0];
 				auto source_register = inst.operands[1];
-				assert(result_register.type == Operand::Type::REGISTER);
-				assert(source_register.type == Operand::Type::REGISTER);
+				assert(result_register.kind == Operand::Kind::REGISTER);
+				assert(source_register.kind == Operand::Kind::REGISTER);
 				auto source = cells[source_register.as_register().index];
 				auto& destination = cells[result_register.as_register().index];
 				destination = clone(source);
@@ -340,14 +340,14 @@ void VM::run(const lir::Chunk& code) {
 				auto result_register = inst.operands[0];
 				auto element_register = inst.operands[1];
 				auto amount_register = inst.operands[2];
-				assert(result_register.type == Operand::Type::REGISTER);
+				assert(result_register.kind == Operand::Kind::REGISTER);
 				assert(
-					element_register.type == Operand::Type::REGISTER
-					|| element_register.type == Operand::Type::IMMEDIATE
+					element_register.kind == Operand::Kind::REGISTER
+					|| element_register.kind == Operand::Kind::IMMEDIATE
 				);
 				assert(
-					amount_register.type == Operand::Type::REGISTER
-					|| amount_register.type == Operand::Type::IMMEDIATE
+					amount_register.kind == Operand::Kind::REGISTER
+					|| amount_register.kind == Operand::Kind::IMMEDIATE
 				);
 				auto t1 = fetch(element_register);
 				auto amount = fetch(amount_register).as_integer();
@@ -365,8 +365,8 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::INITA: {
 				auto result_register = inst.operands[0];
 				auto element_register = inst.operands[1];
-				assert(result_register.type == Operand::Type::REGISTER);
-				assert(element_register.type == Operand::Type::BYTE_STRING);
+				assert(result_register.kind == Operand::Kind::REGISTER);
+				assert(element_register.kind == Operand::Kind::BYTE_STRING);
 				auto t1 = fetch(result_register).as_pointer();
 				auto i = 0ul;
 				for (auto byte : element_register.as_byte_string().bytes) {
@@ -457,11 +457,11 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::HALT: {
 				if (should_print_result and code.result_opnd.has_value()) {
 					auto result = code.result_opnd.value();
-					if (result.type == Operand::Type::IMMEDIATE) {
+					if (result.kind == Operand::Kind::IMMEDIATE) {
 						auto t1 = fetch(result);
 						assert(t1.is_integer());
 						std::cout << "==> " << t1.as_integer() << '\n';
-					} else if (result.type == Operand::Type::REGISTER) {
+					} else if (result.kind == Operand::Kind::REGISTER) {
 						std::cout << '%' << result.as_register().index << ' ';
 						auto reg = cells[result.as_register().index];
 						if (reg.is_integer()) {

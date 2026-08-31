@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <optional>
 #include <ostream>
 #include <stdexcept>
 
@@ -17,6 +18,18 @@ static int print_inst_indirect(FILE* fd, const Instruction& inst);
 static std::ostream& print_inst_indirect(
 	std::ostream& st, const Instruction& inst
 );
+static int print_type(FILE* fd, Type typ);
+
+static int print_type(FILE* fd, Type typ) {
+	switch (typ) {
+		case Type::POINTER: return fprintf(fd, "ptr");
+		case Type::INTEGER: return fprintf(fd, "int");
+		case Type::CONTINUATION: return fprintf(fd, "cnt");
+		case Type::CLOSURE: return fprintf(fd, "fun");
+		case Type::UNKNOWN: return fprintf(fd, "???");
+	}
+	assert(false);
+}
 
 std::ostream& operator<<(std::ostream& st, const ByteString& bs) {
 	st << '\"';
@@ -35,15 +48,17 @@ std::ostream& operator<<(std::ostream& st, const ByteString& bs) {
 }
 
 std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
-	switch (opnd.type) {
-		case Operand::Type::NOTHING: return st << '0';
-		case Operand::Type::REGISTER:
-			return st << std::format("%{}", opnd.as_register().index);
-		case Operand::Type::LABEL:
+	switch (opnd.kind) {
+		case Operand::Kind::NOTHING: return st << '0';
+		case Operand::Kind::REGISTER:
+			return st << std::format(
+							 "%{}:{}", opnd.as_register().index, opnd.as_register().type
+						 );
+		case Operand::Kind::LABEL:
 			return st << std::format("L{:03}", opnd.as_label().id);
-		case Operand::Type::IMMEDIATE:
+		case Operand::Kind::IMMEDIATE:
 			return st << std::format("{}", opnd.as_immediate().number);
-		case Operand::Type::BYTE_STRING: return st << opnd.as_byte_string();
+		case Operand::Kind::BYTE_STRING: return st << opnd.as_byte_string();
 	}
 	return st;
 }
@@ -152,14 +167,15 @@ std::ostream& operator<<(std::ostream& st, const Chunk& chunk) {
 }
 
 int print_operand(FILE* fd, Operand opnd) {
-	switch (opnd.type) {
-		case Operand::Type::NOTHING: return fprintf(fd, "0");
-		case Operand::Type::REGISTER:
-			return fprintf(fd, "%%%zu", opnd.as_register().index);
-		case Operand::Type::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
-		case Operand::Type::IMMEDIATE:
+	switch (opnd.kind) {
+		case Operand::Kind::NOTHING: return fprintf(fd, "0");
+		case Operand::Kind::REGISTER:
+			return fprintf(fd, "%%%zu", opnd.as_register().index) + fprintf(fd, ":")
+			     + print_type(fd, opnd.as_register().type);
+		case Operand::Kind::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
+		case Operand::Kind::IMMEDIATE:
 			return fprintf(fd, "%d", opnd.as_immediate().number);
-		case Operand::Type::BYTE_STRING: {
+		case Operand::Kind::BYTE_STRING: {
 			int printed = 0;
 			printed += fprintf(fd, "\"");
 			for (auto c : opnd.as_byte_string().bytes) {
@@ -230,38 +246,21 @@ const char* opcode_repr(Opcode op) {
 	assert(false);
 }
 
-Type Type::make_integer() {
-	lir::Type t {lir::Integer {}};
-	return t;
-}
-
-Type Type::make_integer_array() {
-	lir::Type t {
-		lir::Pointer {std::make_shared<lir::Type>(lir::Integer {}), true}
-	};
-	return t;
-}
-
-Type Type::make_integer_pointer() {
-	return lir::Type {
-		lir::Pointer {std::make_shared<lir::Type>(lir::Integer {}), false}
-	};
-}
-
 int print_operand_indirect(FILE* fd, Operand opnd) {
-	if (opnd.type == Operand::Type::IMMEDIATE) {
+	if (opnd.kind == Operand::Kind::IMMEDIATE) {
 		return fprintf(fd, "%d", opnd.as_immediate().number);
-	} else if (opnd.type == Operand::Type::REGISTER) {
-		return fprintf(fd, "%%%zu", opnd.as_register().index);
+	} else if (opnd.kind == Operand::Kind::REGISTER) {
+		return fprintf(fd, "%%%zu", opnd.as_register().index) + fprintf(fd, ":")
+		     + print_type(fd, opnd.as_register().type);
 	} else
 		assert(false && "unreachable");
 	return 0;
 }
 
 static std::ostream& print_operand_indirect(std::ostream& st, Operand opnd) {
-	if (opnd.type == Operand::Type::IMMEDIATE) {
+	if (opnd.kind == Operand::Kind::IMMEDIATE) {
 		st << opnd.as_immediate().number;
-	} else if (opnd.type == Operand::Type::REGISTER) {
+	} else if (opnd.kind == Operand::Kind::REGISTER) {
 		st << std::format("%{}", opnd.as_register().index);
 	} else
 		assert(false && "unreachable");
@@ -352,20 +351,20 @@ Chunk& operator+=(Chunk& x, Chunk y) {
 	return x;
 }
 
-const char* operand_type_repr(Operand::Type type) {
+const char* operand_type_repr(Operand::Kind type) {
 	switch (type) {
-		case Operand::Type::NOTHING: return "Operand::Type::NIL";
-		case Operand::Type::REGISTER: return "Operand::Type::REG";
-		case Operand::Type::LABEL: return "Operand::Type::LAB";
-		case Operand::Type::IMMEDIATE: return "Operand::Type::NUM";
-		case Operand::Type::BYTE_STRING: return "Operand::Type::BYTE_STRING";
+		case Operand::Kind::NOTHING: return "Operand::Type::NIL";
+		case Operand::Kind::REGISTER: return "Operand::Type::REG";
+		case Operand::Kind::LABEL: return "Operand::Type::LAB";
+		case Operand::Kind::IMMEDIATE: return "Operand::Type::NUM";
+		case Operand::Kind::BYTE_STRING: return "Operand::Type::BYTE_STRING";
 	}
 	assert(false);
 }
 
 static bool is_value_operand(const Operand& opnd) {
-	return opnd.type == Operand::Type::REGISTER
-	    or opnd.type == Operand::Type::IMMEDIATE;
+	return opnd.kind == Operand::Kind::REGISTER
+	    or opnd.kind == Operand::Kind::IMMEDIATE;
 }
 
 Chunk& Chunk::emit_binop(
@@ -464,6 +463,27 @@ void ChunkRef::finalize() {
 		or opcode == Opcode::JMP_FALSE or opcode == Opcode::RET
 		or opcode == Opcode::HALT
 	);
+}
+
+std::optional<lir::Type> Operand::type() const {
+	if (kind == Kind::IMMEDIATE) {
+		return Type::INTEGER;
+	} else if (kind == Kind::REGISTER) {
+		return as_register().type;
+	} else {
+		return std::nullopt;
+	}
+}
+
+std::ostream& operator<<(std::ostream& st, const Type& typ) {
+	switch (typ) {
+		case Type::POINTER: return st << "ptr";
+		case Type::INTEGER: return st << "int";
+		case Type::CONTINUATION: return st << "cnt";
+		case Type::CLOSURE: return st << "fun";
+		case Type::UNKNOWN: return st << "???";
+	}
+	assert(false);
 }
 
 } // namespace lir
