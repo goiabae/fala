@@ -43,6 +43,7 @@ struct Context {
 	SignalHandlers handlers;
 	std::optional<ClosureInfo> current_closure;
 	std::optional<lir::Operand> current_resumption;
+	std::vector<lir::Register>& used_registers;
 };
 
 struct Compiler {
@@ -71,7 +72,8 @@ struct Compiler {
 		NodeIndex node_idx, Context ctx, lir::Label exit,
 		std::shared_ptr<Datatype> expr_type, lir::Operand expr
 	);
-	lir::Register make_register(lir::Type);
+	lir::Register make_register(lir::Type, Context);
+	lir::Register alloc_register(lir::Type);
 	lir::Label make_label();
 	void allocate_variables();
 	Result compile_constant(lir::Operand);
