@@ -157,6 +157,9 @@ struct VM {
 	Continuation save_continuation();
 	void restore_continuation(const Continuation&);
 	std::optional<Continuation> find_handler(std::size_t tag);
+
+ private:
+	void print_debug_stack();
 };
 
 } // namespace lir

@@ -478,6 +478,13 @@ void VM::run(const lir::Chunk& code) {
 				}
 				return;
 			}
+			case Opcode::DBGSTK: {
+				std::cerr << "DEBUG STACK ";
+				std::cerr << inst.operands[0].as_byte_string().bytes;
+				std::cerr << ": ";
+				print_debug_stack();
+				break;
+			}
 		}
 		program_counter++;
 	dont_inc:
@@ -551,6 +558,18 @@ std::string VM::serialize(Value value) {
 	} else {
 		return "K";
 	}
+}
+
+void VM::print_debug_stack() {
+	std::cerr << '[';
+	for (auto i = 0ul; i < stack.size(); i++) {
+		std::cerr << serialize(stack.at(i));
+		if (i != (stack.size() - 1)) {
+			std::cerr << " ; ";
+		}
+	}
+	std::cerr << ']';
+	std::cerr << '\n';
 }
 
 } // namespace lir

@@ -65,6 +65,7 @@ enum class Opcode {
 	REPEAT,
 	INITA,
 
+	DBGSTK,
 };
 
 enum class Type {

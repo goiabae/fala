@@ -119,6 +119,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::DROP: return 1;
 		case Opcode::PICK: return 2;
 		case Opcode::HALT: return 0;
+		case Opcode::DBGSTK: return 1;
 	}
 	assert(false);
 };
@@ -242,6 +243,7 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::DROP: return "drop";
 		case Opcode::PICK: return "pick";
 		case Opcode::HALT: return "halt";
+		case Opcode::DBGSTK: return "dbgstk";
 	}
 	assert(false);
 }
