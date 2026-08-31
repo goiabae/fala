@@ -192,6 +192,9 @@ lir::Chunk Compiler::compile() {
 		start2.emit(lir::Opcode::POP, r1);
 		start2.emit(lir::Opcode::JMP, exit.entry);
 		start2.finalize();
+
+		exit.emit(lir::Opcode::HALT);
+		exit.finalize();
 	} else {
 		const SignalHandlers handlers {};
 		const Context ctx {
@@ -206,6 +209,9 @@ lir::Chunk Compiler::compile() {
 
 		start.emit(lir::Opcode::JMP, c0.block.entry);
 		start.finalize();
+
+		exit.emit(lir::Opcode::HALT);
+		exit.finalize();
 
 		c0.block.and_then(chunks, exit.entry);
 	}

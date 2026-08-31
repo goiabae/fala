@@ -103,6 +103,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::BUMP: return 1;
 		case Opcode::DROP: return 1;
 		case Opcode::PICK: return 2;
+		case Opcode::HALT: return 0;
 	}
 	assert(false);
 };
@@ -224,6 +225,7 @@ const char* opcode_repr(Opcode op) {
 		case Opcode::BUMP: return "bump";
 		case Opcode::DROP: return "drop";
 		case Opcode::PICK: return "pick";
+		case Opcode::HALT: return "halt";
 	}
 	assert(false);
 }
@@ -460,6 +462,7 @@ void ChunkRef::finalize() {
 	assert(
 		opcode == Opcode::JMP or opcode == Opcode::JMP_TRUE
 		or opcode == Opcode::JMP_FALSE or opcode == Opcode::RET
+		or opcode == Opcode::HALT
 	);
 }
 

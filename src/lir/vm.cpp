@@ -454,32 +454,35 @@ void VM::run(const lir::Chunk& code) {
 				r = p;
 				break;
 			}
+			case Opcode::HALT: {
+				if (should_print_result and code.result_opnd.has_value()) {
+					auto result = code.result_opnd.value();
+					if (result.type == Operand::Type::IMMEDIATE) {
+						auto t1 = fetch(result);
+						assert(t1.is_integer());
+						std::cout << "==> " << t1.as_integer() << '\n';
+					} else if (result.type == Operand::Type::REGISTER) {
+						std::cout << '%' << result.as_register().index << ' ';
+						auto reg = cells[result.as_register().index];
+						if (reg.is_integer()) {
+							std::cout << "==> " << reg.as_integer() << '\n';
+						} else if (reg.is_pointer()) {
+							std::cout << "==> 0d" << reg.as_pointer().address() << '\n';
+						} else if (reg.is_undefined()) {
+							throw std::runtime_error("undefined result");
+						}
+					} else {
+						std::cout << "VM ERROR: Couldn't print value" << '\n';
+					}
+				}
+				return;
+			}
 		}
 		program_counter++;
 	dont_inc:
 		(void)0;
 	}
-
-	if (should_print_result and code.result_opnd.has_value()) {
-		auto result = code.result_opnd.value();
-		if (result.type == Operand::Type::IMMEDIATE) {
-			auto t1 = fetch(result);
-			assert(t1.is_integer());
-			std::cout << "==> " << t1.as_integer() << '\n';
-		} else if (result.type == Operand::Type::REGISTER) {
-			std::cout << '%' << result.as_register().index << ' ';
-			auto reg = cells[result.as_register().index];
-			if (reg.is_integer()) {
-				std::cout << "==> " << reg.as_integer() << '\n';
-			} else if (reg.is_pointer()) {
-				std::cout << "==> 0d" << reg.as_pointer().address() << '\n';
-			} else if (reg.is_undefined()) {
-				throw std::runtime_error("undefined result");
-			}
-		} else {
-			std::cout << "VM ERROR: Couldn't print value" << '\n';
-		}
-	}
+	throw std::runtime_error("out of bounds code access");
 }
 
 static Value clone(Value val) {

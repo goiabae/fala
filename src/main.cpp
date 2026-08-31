@@ -117,7 +117,7 @@ int interpret(Options opts) {
 			try {
 				vm.run(chunk);
 			} catch (std::exception& exn) {
-				std::cerr << "ERROR: " << exn.what() << '\n';
+				std::cout << "ERROR: " << exn.what() << '\n';
 				return 1;
 			}
 		} else {

@@ -210,7 +210,8 @@ TEST(ASTToLIRTest, add_integers) {
 			"L003:\n"
 			"    add %0, 1, 2\n"
 			"    jump L004\n"
-			"L004:\n";
+			"L004:\n"
+			"    halt\n";
 		std::string expected = std::string(b);
 		std::stringstream actualss;
 		actualss << chunk;
@@ -277,7 +278,8 @@ TEST(ASTToLIRTest, let_expression) {
 			"    alloca %0, 1\n"
 			"    storea 3, 0(%0)\n"
 			"    jump L001\n"
-			"L006:\n";
+			"L006:\n"
+			"    halt\n";
 		std::string expected = std::string(b);
 		std::stringstream actualss;
 		actualss << chunk;

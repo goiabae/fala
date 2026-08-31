@@ -47,6 +47,7 @@ enum class Opcode {
 	CATCH,
 	RESUME,
 	THROW,
+	HALT,
 
 	// stack operations
 	BUMP,

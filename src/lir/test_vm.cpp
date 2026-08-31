@@ -23,6 +23,7 @@ TEST(VMTest, move_immediate) {
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Immediate(69));
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -41,6 +42,7 @@ TEST(VMTest, move_integer_register) {
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::MOV, a, lir::Immediate(69));
 	chunk.emit(lir::Opcode::MOV, b, a);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -63,6 +65,7 @@ TEST(VMTest, arithmetic) {
 	chunk.emit(lir::Opcode::MOV, c, lir::Immediate(5));
 	chunk.emit(lir::Opcode::ADD, a, b, c);
 	chunk.emit(lir::Opcode::MUL, c, a, b);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -79,6 +82,7 @@ TEST(VMTest, push_immediate) {
 
 	lir::Chunk chunk {};
 	chunk.emit(lir::Opcode::PUSH, a);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -104,7 +108,8 @@ TEST(VMTest, heap_allocation) {
 		.emit_alloca(r2, _1) //
 		.emit_mov(r3, _69)
 		.emit_storea(r3, _0, r2)
-		.emit_loada(r4, _0, r2);
+		.emit_loada(r4, _0, r2)
+		.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -171,6 +176,7 @@ TEST(VMTest, function_call) {
 	chunk.emit(lir::Opcode::PUSH, imm_three);
 	chunk.emit(lir::Opcode::CALL, r6);
 	chunk.emit(lir::Opcode::POP, r4);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -272,6 +278,7 @@ TEST(VMTest, function_integer_out_parameter) {
 	chunk.emit(lir::Opcode::CALL, r13);
 	chunk.emit(lir::Opcode::POP, r5);
 	chunk.emit(lir::Opcode::LOADA, r6, r3, r2);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -388,6 +395,7 @@ TEST(VMTest, function_integer_array_out_parameter) {
 	chunk.emit(lir::Opcode::CALL, r17);
 	chunk.emit(lir::Opcode::POP, r7);
 	chunk.emit(lir::Opcode::LOADA, r8, r6, r4);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
@@ -428,6 +436,7 @@ TEST(VMTest, io_operations) {
 	chunk.emit(lir::Opcode::READC, r3);
 	chunk.emit(lir::Opcode::PRINTC, r3);
 	chunk.emit(lir::Opcode::PRINTV, r3);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {
 		"32\n"
@@ -509,6 +518,7 @@ TEST(VMTest, control_operators) {
 	chunk.emit(lir::Opcode::POP, r13);
 	chunk.emit(lir::Opcode::PRINTV, r13);
 	chunk.add_label(l3);
+	chunk.emit(lir::Opcode::HALT);
 
 	std::istringstream input {""};
 	std::ostringstream output {};
