@@ -121,6 +121,7 @@ inline bool operator==(const Value::Integer& x, const Value::Integer& y) {
 }
 
 static constexpr const auto register_count = 2048;
+static constexpr const auto stack_size = 4 * 1024;
 
 struct Continuation {
 	std::array<Value, register_count> cells;
@@ -134,7 +135,7 @@ struct Continuation {
 
 struct VM {
 	VM(std::istream& input, std::ostream& output)
-	: input {input}, output {output}, stack(4096) {}
+	: input {input}, output {output}, stack(stack_size) {}
 
 	std::istream& input;
 	std::ostream& output;

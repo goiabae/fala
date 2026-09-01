@@ -197,6 +197,9 @@ void VM::run(const lir::Chunk& code) {
 					program_counter++;
 				goto dont_inc;
 			case Opcode::PUSH: {
+				if (stack.size() == stack.capacity()) {
+					throw std::runtime_error("stack is full. can't push value");
+				}
 				if (inst.operands[0].kind == Operand::Kind::IMMEDIATE) {
 					stack.push(Value(inst.operands[0].as_immediate().number));
 				} else if (inst.operands[0].kind == Operand::Kind::REGISTER) {
