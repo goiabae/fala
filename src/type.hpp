@@ -91,6 +91,7 @@ struct Record final : DERIVE (
 
 struct RowSet final : DERIVE (
 	std::map<std::string, std::shared_ptr<Datatype>> rows;
+	std::shared_ptr<std::optional<std::shared_ptr<Datatype>>> bound_record;
 );
 
 
@@ -178,7 +179,11 @@ D make_closure(
 );
 D make_bool();
 D make_record(std::vector<std::pair<std::string, D>> field_tys);
-D make_row_set(std::map<std::string, std::shared_ptr<Datatype>>);
+D make_row_set(
+	std::map<std::string, std::shared_ptr<Datatype>>,
+	std::shared_ptr<std::optional<std::shared_ptr<Datatype>>> =
+		std::make_shared<std::optional<std::shared_ptr<Datatype>>>(std::nullopt)
+);
 T make_type(M mode, D datatype);
 std::shared_ptr<PolyType> make_polytype(M mode, std::shared_ptr<DataScheme>);
 std::shared_ptr<DataScheme> make_scheme(

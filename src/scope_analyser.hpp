@@ -16,6 +16,7 @@ class ScopeAnalyser {
 	void analyse(NodeIndex, ScopeIndex);
 	void analyse_type(NodeIndex, ScopeIndex);
 	void analyse_pattern(NodeIndex, ScopeIndex);
+	void analyse_declaration(NodeIndex, ScopeIndex);
 	void define_builtin(const char*);
 	void define_builtin_type(const char*);
 	void define_builtin_effset(const char*);

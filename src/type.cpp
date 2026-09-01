@@ -1,5 +1,7 @@
 #include "type.hpp"
 
+#include <memory>
+#include <optional>
 #include <ostream>
 #include <ranges>
 #include <sstream>
@@ -63,6 +65,8 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Datatype> t) {
 			throw std::runtime_error("type variable was not bound");
 		return t2->bound_type;
 	} else if (auto t2 = std::dynamic_pointer_cast<RowSet>(t)) {
+		if (t2->bound_record->has_value())
+			return get_datatype(t2->bound_record->value());
 		throw std::runtime_error("row set is not a concrete record");
 	} else if (auto t2 = std::dynamic_pointer_cast<Record>(t)) {
 		return t2;
@@ -197,6 +201,7 @@ std::ostream& Record::print(std::ostream& st) const {
 size_t RowSet::size_of() { assert(false); }
 
 std::ostream& RowSet::print(std::ostream& st) const {
+	if (bound_record->has_value()) return bound_record->value()->print(st);
 	st << '{';
 	for (const auto& [n, d] : rows) {
 		st << n << ':';
@@ -239,9 +244,13 @@ void TypeVariable::bind_to(std::shared_ptr<Datatype> t) {
 	is_bound = true;
 }
 
-D make_row_set(std::map<std::string, std::shared_ptr<Datatype>> x) {
+D make_row_set(
+	std::map<std::string, std::shared_ptr<Datatype>> x,
+	std::shared_ptr<std::optional<std::shared_ptr<Datatype>>> v
+) {
 	RowSet rs;
 	rs.rows = x;
+	rs.bound_record = v;
 	return std::make_shared<RowSet>(rs);
 }
 

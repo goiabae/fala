@@ -806,8 +806,9 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			auto c0 = compile_lvalue(node[0], ctx);
 			auto c1 = make_chunk();
 			const auto t0 = std::dynamic_pointer_cast<Record>(
-				get_datatype(tpc.node_to_type.at(node[0]))
+				get_datatype(get_datatype(tpc.node_to_type.at(node[0])))
 			);
+			assert(t0 != nullptr);
 			const auto& field_node = ast.at(node[1]);
 			assert(field_node.type == NodeType::ID);
 			const auto field_name = std::string(pool.find(field_node.str_id));

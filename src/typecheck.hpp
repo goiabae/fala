@@ -44,6 +44,7 @@ struct Typechecker {
 	);
 	std::unordered_set<V> free_type_variables(ScopeIndex);
 	std::unordered_set<V> free_type_variables(D);
+	void declare(NodeIndex node_idx);
 
  public:
 	std::map<Guid, P> variables;

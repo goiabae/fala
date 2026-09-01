@@ -23,6 +23,7 @@ SymbolTable ScopeAnalyser::analyse() {
 	define_builtin_type("Int");
 	define_builtin_type("Uint");
 	define_builtin_type("Nil");
+	define_builtin_type("Array");
 	define_builtin_effset("io");
 	define_builtin_effset("write_str");
 	define_builtin_effset("write_int");
@@ -34,49 +35,12 @@ SymbolTable ScopeAnalyser::analyse() {
 void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 	const auto& node = m_ast.at(node_idx);
 	switch (node.type) {
-		case NodeType::EMPTY: {
-			return;
-		}
-		case NodeType::APP: assert(false);
-		case NodeType::NUM: {
-			return;
-		}
-		case NodeType::BLK: assert(false);
-		case NodeType::IF: assert(false);
-		case NodeType::WHEN: assert(false);
-		case NodeType::FOR: assert(false);
-		case NodeType::WHILE: assert(false);
-		case NodeType::BREAK: assert(false);
-		case NodeType::CONTINUE: assert(false);
-		case NodeType::ASS: assert(false);
-		case NodeType::OR: assert(false);
-		case NodeType::AND: assert(false);
-		case NodeType::GTN: assert(false);
-		case NodeType::LTN: assert(false);
-		case NodeType::GTE: assert(false);
-		case NodeType::LTE: assert(false);
-		case NodeType::EQ: assert(false);
-		case NodeType::AT: assert(false);
-		case NodeType::ADD: assert(false);
-		case NodeType::SUB: assert(false);
-		case NodeType::MUL: assert(false);
-		case NodeType::DIV: assert(false);
-		case NodeType::MOD: assert(false);
-		case NodeType::NOT: assert(false);
+		case NodeType::EMPTY: return;
+		case NodeType::NUM: return;
 		case NodeType::ID: {
 			refere(node_idx, scope_idx, m_symtab.type_namespace);
 			return;
 		}
-		case NodeType::STR: assert(false);
-		case NodeType::VAR_DECL: assert(false);
-		case NodeType::FUN_DECL: assert(false);
-		case NodeType::NIL: assert(false);
-		case NodeType::TRUE: assert(false);
-		case NodeType::FALSE: assert(false);
-		case NodeType::LET: assert(false);
-		case NodeType::CHAR: assert(false);
-		case NodeType::PATH: assert(false);
-		case NodeType::AS: assert(false);
 		case NodeType::INSTANCE: {
 			analyse_type(node[0], scope_idx);
 			analyse_type(node[1], scope_idx);
@@ -88,16 +52,6 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			}
 			return;
 		}
-		case NodeType::GUID: assert(false);
-		case NodeType::MODE: assert(false);
-		case NodeType::PARAM: assert(false);
-		case NodeType::RECORD_LITERAL: assert(false);
-		case NodeType::FIELD: assert(false);
-		case NodeType::FIELD_ACCESS: assert(false);
-		case NodeType::ARRAY_LITERAL: assert(false);
-		case NodeType::REPEAT: assert(false);
-		case NodeType::LEN: assert(false);
-		case NodeType::MODULE_BODY: assert(false);
 		case NodeType::ARRAY_TYPE_LITERAL: {
 			analyse_type(node[0], scope_idx);
 			return;
@@ -112,17 +66,11 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			analyse_type(node[1], scope_idx);
 			return;
 		}
-		case NodeType::TYPE_DECL: assert(false);
-		case NodeType::EFF_DECL: assert(false);
-		case NodeType::EFF_ALIAS: assert(false);
 		case NodeType::EFF_UNION: {
 			analyse_type(node[0], scope_idx);
 			analyse_type(node[1], scope_idx);
 			return;
 		}
-		case NodeType::PERFORM: assert(false);
-		case NodeType::HANDLER_DECL: assert(false);
-		case NodeType::RESUME: assert(false);
 		case NodeType::UNION_TYPE_LITERAL: {
 			for (auto constructor_idx : node) {
 				analyse_type(constructor_idx, scope_idx);
@@ -139,9 +87,58 @@ void ScopeAnalyser::analyse_type(NodeIndex node_idx, ScopeIndex scope_idx) {
 			}
 			return;
 		}
-		case NodeType::MATCH: assert(false);
-		case NodeType::CASE: assert(false);
-		case NodeType::CTOR_PATTERN: assert(false);
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type {}", node_type_repr(node.type))
+			);
+		}
+	}
+}
+
+static bool is_declaration(NodeType type) {
+	return type == NodeType::TYPE_DECL or type == NodeType::EFF_DECL
+	    or type == NodeType::FUN_DECL or type == NodeType::HANDLER_DECL
+	    or type == NodeType::VAR_DECL or type == NodeType::EFF_ALIAS;
+}
+
+void ScopeAnalyser::analyse_declaration(
+	NodeIndex node_idx, ScopeIndex scope_idx
+) {
+	const auto& node = m_ast.at(node_idx);
+	switch (node.type) {
+		case NodeType::TYPE_DECL: {
+			define(node[0], scope_idx, m_symtab.type_namespace);
+			return;
+		}
+		case NodeType::EFF_DECL: {
+			const auto id_idx = node[0];
+			const auto& id_node = m_ast.at(id_idx);
+			assert(id_node.type == NodeType::ID);
+			define(id_idx, scope_idx, m_symtab.effset_namespace);
+			return;
+		}
+		case NodeType::FUN_DECL: {
+			const auto id_idx = node[0];
+			define(id_idx, scope_idx, m_symtab.value_namespace);
+			return;
+		}
+		case NodeType::HANDLER_DECL: {
+			return;
+		}
+		case NodeType::VAR_DECL: {
+			const auto id_idx = node[1];
+			define(id_idx, scope_idx, m_symtab.value_namespace);
+			return;
+		}
+		case NodeType::EFF_ALIAS: {
+			define(node[0], scope_idx, m_symtab.effset_namespace);
+			return;
+		}
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type {}", node_type_repr(node.type))
+			);
+		}
 	}
 }
 
@@ -164,6 +161,9 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 				const auto& exp_node = m_ast.at(exp_idx);
 				if (exp_node.type == NodeType::VAR_DECL) {
 					scope = m_symtab.make_child_scope(scope);
+				}
+				if (is_declaration(exp_node.type)) {
+					analyse_declaration(exp_idx, scope);
 				}
 				analyse(exp_idx, scope);
 			}
@@ -191,6 +191,7 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			const auto step_idx = node[2];
 			const auto then_idx = node[3];
 			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
+			analyse_declaration(decl_idx, inner_scope_idx);
 			analyse(decl_idx, inner_scope_idx);
 			analyse(to_idx, inner_scope_idx);
 			const auto& step_node = m_ast.at(step_idx);
@@ -250,21 +251,17 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		}
 		case NodeType::STR: return;
 		case NodeType::VAR_DECL: {
-			const auto id_idx = node[1];
 			const auto opt_type_idx = node[2];
 			const auto exp_idx = node[3];
-			define(id_idx, scope_idx, m_symtab.value_namespace);
 			analyse_type(opt_type_idx, scope_idx);
 			analyse(exp_idx, scope_idx);
 			return;
 		}
 		case NodeType::FUN_DECL: {
-			const auto id_idx = node[0];
 			const auto params_idx = node[1];
 			const auto opt_type_idx = node[2];
 			const auto opt_effset_idx = node[3];
 			const auto body_idx = node[4];
-			define(id_idx, scope_idx, m_symtab.value_namespace);
 			const auto inner_scope_idx =
 				m_symtab.make_function_scope(scope_idx, body_idx);
 			const auto& params_node = m_ast.at(params_idx);
@@ -294,7 +291,10 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
 			const auto& decls_node = m_ast.at(decls_idx);
 			assert(decls_node.type == NodeType::METALIST);
-			for (const auto decl_idx : decls_node) analyse(decl_idx, inner_scope_idx);
+			for (const auto decl_idx : decls_node) {
+				analyse_declaration(decl_idx, inner_scope_idx);
+				analyse(decl_idx, inner_scope_idx);
+			}
 			analyse(exp_idx, inner_scope_idx);
 			return;
 		}
@@ -331,6 +331,7 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		}
 		case NodeType::MODULE_BODY: {
 			const auto& decl_list = m_ast.at(node[0]);
+			for (auto decl : decl_list) analyse_declaration(decl, scope_idx);
 			for (auto decl : decl_list) analyse(decl, scope_idx);
 			return;
 		}
@@ -339,16 +340,11 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 		case NodeType::FIELD_TYPE: assert(false);
 		case NodeType::TYPE_DECL: {
 			analyse_type(node[1], scope_idx);
-			define(node[0], scope_idx, m_symtab.type_namespace);
 			return;
 		}
 		case NodeType::EFF_DECL: {
-			const auto id_idx = node[0];
-			const auto& id_node = m_ast.at(id_idx);
-			assert(id_node.type == NodeType::ID);
 			const auto params_idx = node[1];
 			const auto opt_type_idx = node[2];
-			define(id_idx, scope_idx, m_symtab.effset_namespace);
 			const auto inner_scope_idx = m_symtab.make_child_scope(scope_idx);
 			const auto& params_node = m_ast.at(params_idx);
 			for (const auto param_idx : params_node) {
@@ -361,7 +357,6 @@ void ScopeAnalyser::analyse(NodeIndex node_idx, ScopeIndex scope_idx) {
 			return;
 		}
 		case NodeType::EFF_ALIAS: {
-			define(node[0], scope_idx, m_symtab.effset_namespace);
 			analyse_type(node[1], scope_idx);
 			return;
 		}

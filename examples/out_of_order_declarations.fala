@@ -1,0 +1,9 @@
+
+fun main _ !io =
+	let val x = f(nil) in
+	write_str!(x.s)
+
+fun f _ : S =
+	{ s = "Hello, world!\n" }
+
+type S = { s: Array<Uint<8>> }

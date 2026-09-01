@@ -120,22 +120,6 @@ auto visit(T&& obj, F&& f) {
 	}
 }
 
-static NodeIndex decl_name(const Node& node) {
-	if (node.type == NodeType::VAR_DECL) {
-		return node[1];
-	} else if (node.type == NodeType::FUN_DECL) {
-		return node[0];
-	} else if (node.type == NodeType::TYPE_DECL) {
-		return node[0];
-	} else if (node.type == NodeType::EFF_DECL) {
-		return node[0];
-	} else if (node.type == NodeType::EFF_ALIAS) {
-		return node[0];
-	} else {
-		assert(false);
-	}
-}
-
 static bool contains(
 	std::vector<std::shared_ptr<Effect>> set, std::shared_ptr<Effect> eff
 ) {
@@ -317,7 +301,7 @@ bool Typechecker::typecheck() {
 		} else if (ns == symtab.type_namespace) {
 			if (name == "Nil") {
 				type_names[guid] = NIL_;
-			} else if (name == "Int" || name == "Uint") {
+			} else if (name == "Int" or name == "Uint" or name == "Array") {
 				// TODO: need to be able to have polymorphic types as type names
 			} else {
 				std::cerr << std::format("unexpected builtin type name {}", name)
@@ -349,6 +333,11 @@ bool Typechecker::typecheck() {
 	for (const auto& [guid, p] : variables) {
 		const auto name = pool.find(symtab.name_of(guid).value());
 		std::cerr << "TYPECHECK " << name << " : " << *p << '\n';
+	}
+
+	for (const auto& [guid, d] : type_names) {
+		const auto name = pool.find(symtab.name_of(guid).value());
+		std::cerr << "TYPECHECK " << name << " = " << *d << '\n';
 	}
 
 	return true;
@@ -450,6 +439,201 @@ static std::pair<T, E> remove_effect(
 	std::pair<T, E> x, std::shared_ptr<Effect> effect
 ) {
 	return std::make_pair(x.first, remove_effect(x.second, effect));
+}
+
+void Typechecker::declare(NodeIndex node_idx) {
+	const auto& node = ast.at(node_idx);
+	switch (node.type) {
+		case NodeType::EFF_ALIAS: {
+			const auto id_idx = node[0];
+			const auto& id_node = ast.at(id_idx);
+			assert(id_node.type == NodeType::GUID);
+			assert(not effset_names.contains(id_node.guid));
+			effset_names[id_node.guid] = make_effsetvar();
+			return;
+		}
+		case NodeType::EFF_DECL: {
+			const auto id_idx = node[0];
+			const auto params_idx = node[1];
+			const auto resume_type_idx = node[2];
+			const auto& id_node = ast.at(id_idx);
+			assert(id_node.type == NodeType::GUID);
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+			logger.log(
+				LogLevel::INFO, node.loc, "Declaring effect {}", id_node.guid.index
+			);
+			const auto& params_node = ast.at(params_idx);
+			assert(params_node.type == NodeType::METALIST);
+			std::vector<T> parameter_types {};
+			for (auto param_idx : params_node) {
+				const auto& param_node = ast.at(param_idx);
+				const auto& param_mode_node = ast.at(param_node[0]);
+				const auto mode = [&]() {
+					if (param_mode_node.type == NodeType::EMPTY)
+						throw std::runtime_error(
+							"effect declaration parameter must have mode specified"
+						);
+					else if (param_mode_node.mode == ModeLiteral::VAL)
+						return VAL_;
+					else if (param_mode_node.mode == ModeLiteral::VAR)
+						return VAR_;
+					else if (param_mode_node.mode == ModeLiteral::OUT)
+						return OUT_;
+					else
+						assert(false);
+				}();
+				const auto& param_type_node = ast.at(param_node[2]);
+				assert(param_type_node.type != NodeType::EMPTY);
+				const auto param_datatype = eval(param_node[2]);
+				parameter_types.push_back(make_type(mode, param_datatype));
+			}
+			const auto resume_type = eval(resume_type_idx);
+			const auto effect = std::make_shared<Effect>(Effect {
+				.name = std::string(name),
+				.inputs = parameter_types,
+				.output = resume_type,
+			});
+			std::vector<std::shared_ptr<Effect>> xs {{effect}};
+			const auto effect_set = std::make_shared<EffectSet>(xs);
+			effset_names[id_node.guid] = effect_set;
+			name_to_effect[id_node.guid] = effect;
+			return;
+		}
+		case NodeType::TYPE_DECL: {
+			const auto& id_node = ast.at(node[0]);
+			assert(id_node.type == NodeType::GUID);
+			assert(not type_names.contains(id_node.guid));
+			type_names[id_node.guid] = make_datavar();
+			return;
+		}
+		case NodeType::VAR_DECL: {
+			auto mode_idx = node[0];
+			auto id_idx = node[1];
+			auto opt_type_idx = node[2];
+
+			const auto& mode_node = ast.at(mode_idx);
+			const auto& id_node = ast.at(id_idx);
+			const auto& opt_type_node = ast.at(opt_type_idx);
+			assert(mode_node.type == NodeType::MODE);
+			assert(id_node.type == NodeType::GUID);
+
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+
+			logger.log(LogLevel::INFO, "Declaring \"{}\"", name);
+
+			if (mode_node.mode == ModeLiteral::OUT) {
+				logger.err(node.loc, "Cannot defined variable as out");
+			}
+
+			auto d = std::dynamic_pointer_cast<Datatype>(make_datavar());
+			if (opt_type_node.type != NodeType::EMPTY) {
+				auto annot = eval(opt_type_idx);
+				d = annot;
+			}
+
+			const auto m1 = [&]() {
+				if (mode_node.mode == ModeLiteral::VAL)
+					return VAL_;
+				else if (mode_node.mode == ModeLiteral::VAR)
+					return VAR_;
+				assert(mode_node.mode != ModeLiteral::OUT);
+				return VAL_;
+			}();
+
+			auto t1 = make_type(m1, d);
+			const auto s = symtab.declaration_scope_of(id_node.guid).value();
+			const auto p1 = generalize(t1, s);
+			variables[id_node.guid] = p1;
+			logger.log(LogLevel::INFO, "Declared \"{}\" as ({})", name, *p1);
+			return;
+		}
+		case NodeType::FUN_DECL: {
+			auto opt_effset_idx = node[3];
+
+			const auto& id_node = ast.at(node[0]);
+			const auto& params_node = ast.at(node[1]);
+			const auto& effset_node = ast.at(opt_effset_idx);
+
+			assert(id_node.type == NodeType::GUID);
+
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
+
+			{
+				std::vector<T> param_types {};
+
+				for (auto param_idx : params_node) {
+					const auto& param = ast.at(param_idx);
+					assert(param.type == NodeType::PARAM);
+					const auto& param_name = ast.at(param[1]);
+					assert(param_name.type == NodeType::GUID);
+					const auto parameter_name = std::string_view(
+						pool.find(symtab.name_of(param_name.guid).value())
+					);
+					const auto& param_mode = ast.at(param[0]);
+					assert(
+						param_mode.type == NodeType::MODE
+						|| param_mode.type == NodeType::EMPTY
+					);
+					const auto& param_type_node = ast.at(param[2]);
+					const auto mode = [&]() {
+						if (param_mode.type == NodeType::EMPTY)
+							return make_modevar();
+						else if (param_mode.mode == ModeLiteral::VAL)
+							return VAL_;
+						else if (param_mode.mode == ModeLiteral::VAR)
+							return VAR_;
+						else if (param_mode.mode == ModeLiteral::OUT)
+							return OUT_;
+						else
+							assert(false);
+					}();
+					auto param_datatype = (param_type_node.type == NodeType::EMPTY)
+					                      ? make_datavar()
+					                      : eval(param[2]);
+					auto var = make_type(mode, param_datatype);
+					param_types.push_back(var);
+					const auto p1 = dont_generalize(var, {});
+					logger.log(
+						LogLevel::INFO, param.loc, "Declared {} as {}", parameter_name, *p1
+					);
+					variables[param_name.guid] = p1;
+				}
+
+				auto output = make_datavar();
+
+				const auto effset = (effset_node.type == NodeType::EMPTY)
+				                    ? EMPTY_EFFSET
+				                    : eval_effset(opt_effset_idx);
+
+				auto p2 = dont_generalize(
+					make_type(VAL_, make_function(param_types, output, effset)), {}
+				);
+
+				variables[id_node.guid] = p2;
+
+				auto typ = make_type(VAL_, make_function(param_types, output, effset));
+				const auto s =
+					symtab.declaration_scope_of(ast.at(node[0]).guid).value();
+				const auto p1 = dont_generalize(typ, s);
+				logger.log(
+					LogLevel::INFO, "Function \"{}\" declare as ({})", name, *p1
+				);
+				variables[id_node.guid] = p1;
+				return;
+			}
+		}
+		case NodeType::HANDLER_DECL: {
+			return;
+		}
+		default: {
+			throw std::runtime_error(
+				std::format("unhandled node type {}", node_type_repr(node.type))
+			);
+		}
+	}
 }
 
 TE Typechecker::typecheck(NodeIndex node_idx) {
@@ -966,156 +1150,116 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 
 			auto t1 = make_type(m1, exp.first->datatype);
 			const auto s = symtab.declaration_scope_of(id_node.guid).value();
-			const auto p1 = generalize(t1, s);
+			const auto p1 = dont_generalize(t1, s);
 			variables[id_node.guid] = p1;
 			logger.log(LogLevel::INFO, "Declared \"{}\" as ({})", name, *p1);
 			return exp;
 		}
 			// FIXME: add typing rules
 		case NodeType::FUN_DECL: {
-			auto opt_type_idx = node[2];
-			auto opt_effset_idx = node[3];
 			auto body_idx = node[4];
+			auto opt_type_idx = node[2];
 
 			const auto& id_node = ast.at(node[0]);
 			const auto& params_node = ast.at(node[1]);
 			const auto& opt_type_node = ast.at(opt_type_idx);
-			const auto& effset_node = ast.at(opt_effset_idx);
 
 			assert(id_node.type == NodeType::GUID);
 
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
 
-			// Start with parameters and output types and variables (or concrete
-			// type, if provided)
-			//   [t1, ..., tn] -> t
-			auto typ = [&]() {
-				std::vector<T> inputs {};
-				for ([[maybe_unused]] auto param_idx : params_node) {
-					inputs.push_back(make_type(make_modevar(), make_datavar()));
-				}
-
-				const auto output = (opt_type_node.type == NodeType::EMPTY)
-				                    ? make_datavar()
-				                    : eval(opt_type_idx);
-
-				const auto effset = (effset_node.type == NodeType::EMPTY)
-				                    ? EMPTY_EFFSET
-				                    : eval_effset(opt_effset_idx);
-
-				return make_type(VAL_, make_function(inputs, output, effset));
-			}();
-
-			variables[id_node.guid] = dont_generalize(typ, {});
-
-			{
-				std::vector<T> param_types {};
-
-				for (auto param_idx : params_node) {
-					const auto& param = ast.at(param_idx);
-					assert(param.type == NodeType::PARAM);
-					const auto& param_name = ast.at(param[1]);
-					assert(param_name.type == NodeType::GUID);
-					const auto& param_mode = ast.at(param[0]);
-					assert(
-						param_mode.type == NodeType::MODE
-						|| param_mode.type == NodeType::EMPTY
-					);
-					const auto& param_type_node = ast.at(param[2]);
-					const auto mode = [&]() {
-						if (param_mode.type == NodeType::EMPTY)
-							return make_modevar();
-						else if (param_mode.mode == ModeLiteral::VAL)
-							return VAL_;
-						else if (param_mode.mode == ModeLiteral::VAR)
-							return VAR_;
-						else if (param_mode.mode == ModeLiteral::OUT)
-							return OUT_;
-						else
-							assert(false);
-					}();
-					auto param_datatype = (param_type_node.type == NodeType::EMPTY)
-					                      ? make_datavar()
-					                      : eval(param[2]);
-					auto var = make_type(mode, param_datatype);
-					param_types.push_back(var);
-					const auto p1 = dont_generalize(var, {});
-					variables[param_name.guid] = p1;
-				}
-
-				auto output = [&]() {
-					if (opt_type_node.type != NodeType::EMPTY) {
-						return eval(opt_type_idx);
-					} else {
-						return std::dynamic_pointer_cast<Datatype>(make_datavar());
-					}
-				}();
-
-				const auto effset = (effset_node.type == NodeType::EMPTY)
-				                    ? EMPTY_EFFSET
-				                    : eval_effset(opt_effset_idx);
-
-				auto p2 = dont_generalize(
-					make_type(VAL_, make_function(param_types, output, effset)), {}
+			std::vector<T> param_types {};
+			for (auto param_idx : params_node) {
+				const auto& param = ast.at(param_idx);
+				assert(param.type == NodeType::PARAM);
+				const auto& param_name = ast.at(param[1]);
+				assert(param_name.type == NodeType::GUID);
+				const auto& param_mode = ast.at(param[0]);
+				assert(
+					param_mode.type == NodeType::MODE
+					|| param_mode.type == NodeType::EMPTY
 				);
-
-				variables[id_node.guid] = p2;
-
-				auto body_type = typecheck(body_idx);
-				if (not unify(body_type.first->datatype, output))
-					mismatch_error(
-						node.loc,
-						"Function annotation output type and infered type don't "
-						"match",
-						body_type.first,
-						make_type(VAL_, output)
-					);
-
-				if (not cast(body_type.second, effset)) {
-					logger.log(
-						LogLevel::ERROR,
-						node.loc,
-						"Function \"{}\", declared with ({}) effects, but body had ({})",
-						name,
-						*effset,
-						*body_type.second
-					);
-				}
-
-				const auto captures = [&]() {
-					auto mf = symtab.function_of(body_idx);
-					assert(mf.has_value());
-					auto f = mf.value();
-					auto free_symbols = symtab.free_symbols_in(f, symtab.value_namespace);
-					logger.log(
-						LogLevel::INFO,
-						"Function index {} with {} free symbols",
-						f.index,
-						free_symbols.size()
-					);
-					std::map<Guid, D> captures {};
-					for (auto symbol : free_symbols) {
-						// FIXME: dont know if this is the proper way. should captures be
-						// instantiated or not?
-						const auto capture_name =
-							std::string_view(pool.find(symtab.name_of(symbol).value()));
-						logger.log(
-							LogLevel::INFO,
-							"Variable \"{}\" free in definition of \"{}\"",
-							capture_name,
-							name
-						);
-						auto t1 = instantiate(variables.at(symbol));
-						captures[symbol] = t1->datatype;
-					}
-					return captures;
-				}();
-
-				typ =
-					make_type(VAL_, make_closure(param_types, output, effset, captures));
+				param_types.push_back(make_type(make_modevar(), make_datavar()));
 			}
 
+			auto output = [&]() {
+				if (opt_type_node.type != NodeType::EMPTY) {
+					return eval(opt_type_idx);
+				} else {
+					return std::dynamic_pointer_cast<Datatype>(make_datavar());
+				}
+			}();
+
+			auto body_type = typecheck(body_idx);
+			auto body_datatype = body_type.first->datatype;
+
+			if (not unify(output, body_datatype)) {
+				mismatch_error(
+					node.loc,
+					"Function annotation output type and infered type don't "
+					"match",
+					make_type(VAL_, output),
+					make_type(VAL_, body_datatype)
+				);
+			}
+
+			logger.log(
+				LogLevel::INFO,
+				"Function body {}. declared output {}",
+				*body_datatype,
+				*output
+			);
+
+			const auto captures = [&]() {
+				auto mf = symtab.function_of(body_idx);
+				assert(mf.has_value());
+				auto f = mf.value();
+				auto free_symbols = symtab.free_symbols_in(f, symtab.value_namespace);
+				logger.log(
+					LogLevel::INFO,
+					"Function index {} with {} free symbols",
+					f.index,
+					free_symbols.size()
+				);
+				std::map<Guid, D> captures {};
+				for (auto symbol : free_symbols) {
+					// FIXME: dont know if this is the proper way. should captures be
+					// instantiated or not?
+					const auto capture_name =
+						std::string_view(pool.find(symtab.name_of(symbol).value()));
+					logger.log(
+						LogLevel::INFO,
+						"Variable \"{}\" free in definition of \"{}\"",
+						capture_name,
+						name
+					);
+					auto t1 = instantiate(variables.at(symbol));
+					captures[symbol] = t1->datatype;
+				}
+				return captures;
+			}();
+
+			auto f = make_closure(param_types, output, make_effsetvar(), captures);
+			auto e = instantiate(variables.at(id_node.guid))->datatype;
+
+			logger.log(LogLevel::INFO, "f: {}", *f);
+			logger.log(LogLevel::INFO, "e: {}", *e);
+
+			if (not cast(e, f)) {
+				mismatch_error(
+					node.loc,
+					"Function annotation output type and infered type don't "
+					"match",
+					make_type(VAL_, f),
+					make_type(VAL_, e)
+				);
+			}
+
+			logger.log(LogLevel::INFO, "f: {}", *f);
+			logger.log(LogLevel::INFO, "e: {}", *e);
+
+			auto typ = make_type(VAL_, f);
 			const auto s = symtab.declaration_scope_of(ast.at(node[0]).guid).value();
 			const auto p1 = generalize(typ, s);
 			variables[id_node.guid] = p1;
@@ -1161,6 +1305,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			auto joined = EMPTY_EFFSET;
 			std::vector<std::shared_ptr<Effect>> to_remove {};
 			for (auto decl_idx : decls) {
+				declare(decl_idx);
 				const auto& decl_node = ast.at(decl_idx);
 				if (decl_node.type == NodeType::HANDLER_DECL) {
 					const auto effect_name = ast.at(decl_node[0]).guid;
@@ -1341,27 +1486,12 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& decl_list = ast.at(node[0]);
 			assert(decl_list.type == NodeType::METALIST);
 			for (auto decl : decl_list) {
-				const auto& decl_node = ast.at(decl);
-				const auto& name = ast.at(decl_name(decl_node));
-				// FIXME: wrong!!!
-				if (decl_node.type == NodeType::TYPE_DECL) {
-				} else if (decl_node.type == NodeType::EFF_DECL) {
-					typecheck(decl);
-				} else if (decl_node.type == NodeType::EFF_ALIAS) {
-					typecheck(decl);
-				} else {
-					const auto p = make_polytype(VAL_, make_scheme({}, make_datavar()));
-					variables[name.guid] = p;
-				}
+				declare(decl);
 			}
 			auto joined = EMPTY_EFFSET;
 			for (auto decl : decl_list) {
-				const auto& decl_node = ast.at(decl);
-				if (decl_node.type != NodeType::EFF_DECL
-				    and decl_node.type != NodeType::EFF_ALIAS) {
-					auto t = typecheck(decl);
-					joined = union_of(joined, t.second);
-				}
+				auto t = typecheck(decl);
+				joined = union_of(joined, t.second);
 			}
 			return std::make_pair(make_type(VAL_, VOID_), joined);
 		}
@@ -1369,56 +1499,10 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& id_node = ast.at(node[0]);
 			assert(id_node.type == NodeType::GUID);
 			const auto data = eval(node[1]);
-			assert(not type_names.contains(id_node.guid));
-			type_names[id_node.guid] = data;
+			unify(type_names.at(id_node.guid), data);
 			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
 		case NodeType::EFF_DECL: {
-			const auto id_idx = node[0];
-			const auto params_idx = node[1];
-			const auto resume_type_idx = node[2];
-			const auto& id_node = ast.at(id_idx);
-			assert(id_node.type == NodeType::GUID);
-			const auto name =
-				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
-			logger.log(
-				LogLevel::INFO, node.loc, "Declaring effect {}", id_node.guid.index
-			);
-			const auto& params_node = ast.at(params_idx);
-			assert(params_node.type == NodeType::METALIST);
-			std::vector<T> parameter_types {};
-			for (auto param_idx : params_node) {
-				const auto& param_node = ast.at(param_idx);
-				const auto& param_mode_node = ast.at(param_node[0]);
-				const auto mode = [&]() {
-					if (param_mode_node.type == NodeType::EMPTY)
-						throw std::runtime_error(
-							"effect declaration parameter must have mode specified"
-						);
-					else if (param_mode_node.mode == ModeLiteral::VAL)
-						return VAL_;
-					else if (param_mode_node.mode == ModeLiteral::VAR)
-						return VAR_;
-					else if (param_mode_node.mode == ModeLiteral::OUT)
-						return OUT_;
-					else
-						assert(false);
-				}();
-				const auto& param_type_node = ast.at(param_node[2]);
-				assert(param_type_node.type != NodeType::EMPTY);
-				const auto param_datatype = eval(param_node[2]);
-				parameter_types.push_back(make_type(mode, param_datatype));
-			}
-			const auto resume_type = eval(resume_type_idx);
-			const auto effect = std::make_shared<Effect>(Effect {
-				.name = std::string(name),
-				.inputs = parameter_types,
-				.output = resume_type,
-			});
-			std::vector<std::shared_ptr<Effect>> xs {{effect}};
-			const auto effect_set = std::make_shared<EffectSet>(xs);
-			effset_names[id_node.guid] = effect_set;
-			name_to_effect[id_node.guid] = effect;
 			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
 		case NodeType::EFF_ALIAS: {
@@ -1427,7 +1511,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& id_node = ast.at(id_idx);
 			assert(id_node.type == NodeType::GUID);
 			const auto effset = eval_effset(union_idx);
-			effset_names[id_node.guid] = effset;
+			unify(effset_names.at(id_node.guid), effset);
 			return std::make_pair(make_type(VAL_, VOID_), EMPTY_EFFSET);
 		}
 		case NodeType::PERFORM: {
@@ -1631,6 +1715,9 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 			return d;
 		}
 		case NodeType::GUID: {
+			const auto name =
+				std::string_view(pool.find(symtab.name_of(node.guid).value()));
+			logger.log(LogLevel::INFO, "Retrieving definition for type {}", name);
 			return type_names.at(node.guid);
 		}
 		case NodeType::UNION_TYPE_LITERAL: {
@@ -1705,10 +1792,13 @@ D Typechecker::substitute_bind(const std::map<std::size_t, V>& subst, D data) {
 				return make_record(fields);
 			},
 			[&](RowSet&& rs) -> D {
+				if (rs.bound_record->has_value()) {
+					return substitute_bind(subst, rs.bound_record->value());
+				}
 				decltype(rs.rows) rows {};
 				for (const auto& [name, data] : rs.rows)
 					rows[name] = substitute_bind(subst, data);
-				return make_row_set(rows);
+				return make_row_set(rows, rs.bound_record);
 			},
 			[&](Array&& a) -> D {
 				return make_array(substitute_bind(subst, a.item_type));
@@ -1775,10 +1865,13 @@ D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 				return make_record(fields);
 			},
 			[&](RowSet&& rs) -> D {
+				if (rs.bound_record->has_value()) {
+					return substitute(subst, rs.bound_record->value());
+				}
 				decltype(rs.rows) rows {};
 				for (const auto& [name, data] : rs.rows)
 					rows[name] = substitute(subst, data);
-				return make_row_set(rows);
+				return make_row_set(rows, rs.bound_record);
 			},
 			[&](Array&& a) -> D {
 				return make_array(substitute(subst, a.item_type));
@@ -1968,6 +2061,14 @@ bool Typechecker::unify_aux(D a, D b, bool should_cast) {
 		if (not vb->is_bound and not vb->is_generalized)
 			return vb->bind_to(a), true;
 
+	if (auto ra = to<RowSet>(a))
+		if (ra->bound_record->has_value())
+			return unify_aux(ra->bound_record->value(), b, should_cast);
+
+	if (auto rb = to<RowSet>(b))
+		if (rb->bound_record->has_value())
+			return unify_aux(a, rb->bound_record->value(), should_cast);
+
 	// a and b are arrays. unify element types
 	if (auto aa = to<Array>(a), ab = to<Array>(b); aa and ab)
 		return unify_aux(aa->item_type, ab->item_type, should_cast);
@@ -2002,6 +2103,7 @@ bool Typechecker::unify_aux(D a, D b, bool should_cast) {
 				if (found == ra->fields.end()) return false;
 				if (not unify((*found).second, d)) return false;
 			}
+			*sb->bound_record = ra;
 			return true;
 		}
 	}
@@ -2010,12 +2112,12 @@ bool Typechecker::unify_aux(D a, D b, bool should_cast) {
 		if (auto rb = to<Record>(b)) return unify(rb, sa);
 
 	if (auto sa = to<RowSet>(a), sb = to<RowSet>(b); sa and sb) {
-		std::map<std::string, D> new_rows = sa->rows;
 		for (const auto& [nb, db] : sb->rows)
-			if (new_rows.contains(nb) and not unify(new_rows.at(nb), db))
+			if (sa->rows.contains(nb) and not unify(sa->rows.at(nb), db))
 				return false;
 			else
-				new_rows[nb] = db;
+				sa->rows[nb] = db;
+		*sb->bound_record = sa;
 		return true;
 	}
 
@@ -2067,7 +2169,9 @@ bool Typechecker::unify_aux(D a, D b, bool should_cast) {
 		if (auto ffrom = ::to<Function>(a)) {
 			if (auto cto = ::to<Closure>(b)) {
 				auto t1 = make_function(cto->inputs, cto->output, cto->effects);
-				auto no_captures = cto->captures.size() == 0;
+				// FIXME: solve this
+				// auto no_captures = cto->captures.size() == 0;
+				auto no_captures = true;
 				return no_captures and cast(ffrom, t1);
 			}
 		}
@@ -2138,6 +2242,18 @@ bool Typechecker::unify_aux(T a, T b, bool should_cast) {
 }
 
 bool Typechecker::unify_aux(E a, E b, bool should_cast) {
+	// {} and e -> true
+	if (should_cast) {
+		if (a->variable == nullptr) {
+			if (b->concrete.size() == 0) {
+				if (b->variable != nullptr) {
+					b->variable->bind_to(a);
+					return true;
+				}
+			}
+		}
+	}
+
 	if (a->variable == nullptr and b->variable == nullptr) {
 		if (should_cast)
 			return contained_in(a->concrete, b->concrete);
