@@ -133,6 +133,8 @@ test_example(type_declarations)
 test_example(effect_declaration)
 test_example(handler)
 test_example(unions)
+test_example(ackermann)
+test_example(recursive_fibonacci)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)
