@@ -144,6 +144,8 @@ class FixedVector {
 
 	std::size_t size() const noexcept { return m_size; }
 
+	std::size_t capacity() const noexcept { return m_cap; }
+
 	void push(const T& value) {
 		if (m_size == m_cap)
 			throw std::runtime_error("vector full. cant push element");
