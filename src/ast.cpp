@@ -617,7 +617,7 @@ void node_deinit(AST* ast, NodeIndex node_idx) {
 
 	for (size_t i = 0; i < node.branch.children_count; i++)
 		node_deinit(ast, node[i]);
-	free(node.branch.children);
+	delete[] node.branch.children;
 }
 
 Node& AST::at(NodeIndex node_idx) {
