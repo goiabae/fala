@@ -1,8 +1,9 @@
-let fun f (val ys) =
-	ys[0] = 'B'
-in
-let var xs = "Foo" in
-do
-	f xs;
-	write_str! xs
-end
+fun main _ !io =
+	let fun f (val ys) =
+		ys[0] = 'B'
+	in
+	let var xs = "Foo" in
+	do
+		f(xs)
+		write_str!(xs)
+	end

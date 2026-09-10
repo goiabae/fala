@@ -1,4 +1,5 @@
-let var x = "Foo" in do
-	x[0] = 'B';
-	write_str! x
-end
+fun main _ !io =
+	let var x = "Foo" in do
+		x[0] = 'B'
+		write_str!(x)
+	end

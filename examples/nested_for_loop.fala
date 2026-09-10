@@ -1,3 +1,4 @@
-for var i = 0 to 10 then
-  for var j = 0 to 10 then
-    nil
+fun main _ !io =
+	for var i = 0 to 10 then
+	  for var j = 0 to 10 then
+	    nil

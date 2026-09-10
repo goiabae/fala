@@ -1,14 +1,15 @@
-let var left = read_int nil in
-let var op = read_char nil in
-let var right = read_int nil in
+fun main _ !io =
+	let var left = read_int(nil) in
+	let var op = read_char(nil) in
+	let var right = read_int(nil) in
 
-if op == '+' then
-    write_int! (left + right)
-else if op == '-' then
-    write_int! (left - right)
-else if op == '*' then
-    write_int! (left * right)
-else if op == '/' then
-    write_int! (left / right)
-else
-    write_str! "Unknown operation!"
+	if op == '+' then
+	    write_int!(left + right)
+	else if op == '-' then
+	    write_int!(left - right)
+	else if op == '*' then
+	    write_int!(left * right)
+	else if op == '/' then
+	    write_int!(left / right)
+	else
+	    write_str!("Unknown operation!")

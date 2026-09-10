@@ -1,5 +1,6 @@
-let fun id x = x in
-do
+fun id x = x
+
+fun main _ !io = do
 	write_int!((id(3)))
 	write_str!((id("\n")))
 end
