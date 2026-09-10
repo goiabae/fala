@@ -6,4 +6,4 @@ fun main _ =
 	let
 		var z = 36
 	in
-		at(z, 3)
+		do write_int!(at(z, 3)); write_str!("\n") end
