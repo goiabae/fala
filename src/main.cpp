@@ -4,6 +4,7 @@
 #include "ast.hpp"
 #include "file.hpp"
 #include "file_reader.hpp"
+#include "hir/hir.hpp"
 #include "line_reader.hpp"
 #include "lir/lir.hpp"
 #include "lir/vm.hpp"
@@ -189,7 +190,7 @@ int compile(Options opts) {
 		return 0;
 #ifdef EXPERIMENTAL_HIR_COMPILER
 	} else if (opts.backend == Backend::HIR) {
-		lower::ast_to_hir::Compiler hir_comp {ast, pool, checker};
+		lower::ast_to_hir::Compiler hir_comp {ast, pool, checker, symtab};
 		print_phase(opts, "compiling(lir)");
 		auto code = hir_comp.compile();
 

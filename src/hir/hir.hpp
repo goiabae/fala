@@ -2,6 +2,7 @@
 #define HIR_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <map>
 #include <memory>
@@ -25,7 +26,7 @@ class String {
 
 struct Register {
 	size_t id;
-	std::string name;
+	std::optional<std::string> name;
 	bool is_mutable;
 };
 
@@ -38,6 +39,12 @@ class Block {
  public:
 	std::shared_ptr<Code> body_code;
 	std::vector<Label> child_blocks;
+};
+
+struct Region {
+	std::map<std::string, Block> blocks;
+	std::string entry_block;
+	std::vector<Register> parameter_registers;
 };
 
 class Function {
@@ -61,22 +68,35 @@ class Character {
 
 class Nil {};
 
+struct Immediate {
+	Immediate(std::int64_t value) : value {value} {}
+	Immediate(std::size_t value) : value {static_cast<std::int64_t>(value)} {}
+	Immediate() : value {0} {}
+	std::int64_t value;
+};
+
 struct Operand {
 	enum class Kind {
 		INVALID, // Represents uninitialized/invalid operands
 		REGISTER,
 		BLOCK,
+		REGION,
+		IMMEDIATE,
 		LABEL,
 	};
 
 	Register registuhr;
 	Block block;
+	Region region;
 	Label label;
+	Immediate immediate;
 	Kind kind;
 
 	Operand(Register r) : registuhr(r), kind(Kind::REGISTER) {}
 	Operand(Block b) : block(b), kind(Kind::BLOCK) {}
 	Operand(Label l) : label(l), kind(Kind::LABEL) {}
+	Operand(Region r) : region(r), kind(Kind::REGION) {}
+	Operand(Immediate i) : immediate(i), kind(Kind::IMMEDIATE) {}
 	Operand() : kind(Kind::INVALID) {}
 };
 
@@ -85,7 +105,9 @@ enum class Opcode {
 	COPY,
 
 	// I/O
-	PRINT,
+	PRINTV,
+	PRINTC,
+	PRINTF,
 	READ,
 
 	// Unary and binary operators
@@ -106,6 +128,10 @@ enum class Opcode {
 
 	GET_GLOBAL,
 
+	MAKE_TUPLE,
+	MAKE_ARRAY,
+	ENCLOSE,
+
 	// Control flow
 	LOOP,
 	IF_TRUE,
@@ -114,6 +140,9 @@ enum class Opcode {
 	CONTINUE,
 	CALL,
 	RET,
+	CATCH, // <result> = catch <tag> <region> <block>
+	PERFORM,
+	RESUME, // <res:opnd> = resume <cnt:label> <value:opnd>
 
 	// Receives a register containing an aggregate value and a sequence of indexes
 	// (registers or numeric literals). Sets or gets the element of the aggregate
@@ -132,6 +161,7 @@ enum class Opcode {
 	ALLOC,
 	CLONE,
 	ALIAS,
+	REPEAT,
 };
 
 class Instruction {
@@ -145,9 +175,10 @@ class Code {
 	std::vector<Instruction> instructions;
 
 	void copy(hir::Register, hir::Operand);
-	void call(hir::Register, hir::Register, std::vector<hir::Operand>);
-	void if_false(hir::Register, hir::Block);
-	void if_true(hir::Register, hir::Block);
+	void call(hir::Register, hir::Operand, std::vector<hir::Operand>);
+	void perform(hir::Register, hir::Label, std::vector<hir::Operand>);
+	void if_false(hir::Operand, hir::Block);
+	void if_true(hir::Operand, hir::Block);
 	void loop(hir::Label next, hir::Label stop, hir::Block);
 	void brake(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
@@ -161,6 +192,14 @@ class Code {
 	void store(hir::Register, hir::Register);
 	void add(hir::Register, hir::Operand, hir::Operand);
 	void get_global(hir::Register, hir::Label);
+	void resume(hir::Register, hir::Register, hir::Operand);
+	void make_tuple(hir::Register, std::vector<hir::Operand>);
+	void make_array(hir::Register, std::vector<hir::Operand>);
+	void enclose(hir::Register, hir::Label, hir::Register);
+	void catch_(hir::Register, hir::Label, hir::Region, hir::Block);
+	void printf(hir::Operand);
+	void printv(hir::Operand);
+	void printc(hir::Operand);
 };
 
 using Constant = std::variant<
@@ -175,8 +214,17 @@ struct BuiltinLoad {
 	std::string name;
 };
 
-using StaticInitialization =
-	std::variant<Constant, StaticAllocation, BuiltinLoad>;
+struct ModuleImport {
+	std::string name;
+};
+
+struct MemberImport {
+	hir::Label label;
+	std::string name;
+};
+
+using StaticInitialization = std::variant<
+	Constant, StaticAllocation, BuiltinLoad, ModuleImport, MemberImport>;
 
 enum class Visibility {
 	EXPORTED,
@@ -195,6 +243,7 @@ struct Module {
 	hir::Label register_static_initialization(
 		hir::Label, Visibility visibility, const StaticInitialization& static_init
 	);
+	void register_member_variable(hir::Operand);
 };
 
 Code operator+(Code pre, Code post);
