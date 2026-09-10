@@ -237,7 +237,8 @@ void VM::run(const lir::Chunk& code) {
 				auto closure_pointer = fetch(inst.operands[0]).as_pointer();
 				auto env_pointer = *(&closure_pointer[0]);
 				stack.push(env_pointer);
-				stack.push(Value((int64_t)program_counter));
+				callstack.push_back(return_address);
+				return_address = program_counter;
 				auto function_address =
 					static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
 				program_counter = function_address;
@@ -248,11 +249,7 @@ void VM::run(const lir::Chunk& code) {
 				return_address = callstack.back();
 				callstack.pop_back();
 				break;
-			case Opcode::FUNC:
-				callstack.push_back(return_address);
-				return_address = (size_t)stack.back().as_integer();
-				stack.pop();
-				break;
+			case Opcode::FUNC: break;
 			case Opcode::ALLOCA: {
 				auto result_register = inst.operands[0];
 				auto size_register = inst.operands[1];
