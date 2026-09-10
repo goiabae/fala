@@ -90,6 +90,7 @@ class FixedVector {
 		if (other.m_cap != m_cap)
 			throw std::runtime_error("assignment to vector of different size");
 		std::ranges::copy(other.begin(), other.end(), m_data.get());
+		m_size = other.m_size;
 		return *this;
 	}
 
