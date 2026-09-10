@@ -441,13 +441,13 @@ void VM::run(const lir::Chunk& code) {
 				if (not maybe_handler.has_value()) {
 					throw std::runtime_error("Thrown value without an enclosing handler");
 				} else {
-					const auto current_cont = save_continuation();
-					const auto handler = maybe_handler.value();
 					std::vector<Value> args {};
 					for (auto i = 0ul; i < arg_count; i++) {
 						args.push_back(stack.back());
 						stack.pop();
 					}
+					const auto current_cont = save_continuation();
+					const auto handler = maybe_handler.value();
 					if (opts.verbosity >= 3) print_continuation(code, current_cont);
 					restore_continuation(handler);
 					for (const auto& a : std::ranges::views::reverse(args)) {
