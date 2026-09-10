@@ -271,6 +271,10 @@ static std::string ast_node_format(
 		return std::format("{}", node.num);
 	} else if (node.type == NodeType::ID) {
 		return std::format("{}", pool.find(node.str_id));
+	} else if (node.type == NodeType::TRUE) {
+		return "true";
+	} else if (node.type == NodeType::FALSE) {
+		return "false";
 	} else if (node.type == NodeType::GUID) {
 		return std::format("{}", node.guid.index);
 	} else if (node.type == NodeType::STR) {
@@ -397,6 +401,12 @@ static void ast_node_print_detailed(
 	if (node.type == NodeType::NUM) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "num = %d\n", node.num);
+	} else if (node.type == NodeType::TRUE) {
+		print_spaces(fd, space + 2);
+		fprintf(fd, "literal = true\n");
+	} else if (node.type == NodeType::FALSE) {
+		print_spaces(fd, space + 2);
+		fprintf(fd, "literal = false\n");
 	} else if (node.type == NodeType::NIL) {
 	} else if (node.type == NodeType::ID) {
 		print_spaces(fd, space + 2);
