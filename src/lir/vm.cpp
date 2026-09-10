@@ -69,10 +69,10 @@ static std::size_t line_for(
 	for (const auto& [lab, idx] : chunk.label_indexes) {
 		index_labels.insert(std::make_pair(idx, lab));
 	}
-	for (auto j = 0ul; j <= (program_counter + 1); j++, i++) {
+	for (auto j = 0ul; j < (program_counter + 1); j++, i++) {
 		i += index_labels.count(j);
 	}
-	return i + 1;
+	return i;
 }
 
 std::size_t VM::address_of_label(const Chunk& code, lir::Label label) {
