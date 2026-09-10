@@ -113,7 +113,7 @@ int interpret(Options opts) {
 			}
 
 			print_phase(opts, "interpreting(lir)");
-			lir::VM vm {std::cin, std::cout};
+			lir::VM vm {std::cin, std::cout, opts};
 			vm.should_print_result = opts.from_stdin or opts.verbosity >= 2;
 			try {
 				vm.run(chunk);

@@ -7,13 +7,13 @@
 #include <cassert>
 #include <cstddef>
 #include <istream>
-#include <stack>
 #include <stdexcept>
 #include <utility>
 #include <variant>
 
 #include "fixed_vector.hpp"
 #include "lir/lir.hpp"
+#include "options.hpp"
 
 namespace lir {
 
@@ -126,7 +126,7 @@ static constexpr const auto stack_size = 4 * 1024;
 struct Continuation {
 	std::array<Value, register_count> cells;
 	FixedVector<Value> stack;
-	std::stack<std::size_t> callstack;
+	std::vector<std::size_t> callstack;
 	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
 		prompt_tags;
 	std::size_t program_counter;
@@ -134,17 +134,18 @@ struct Continuation {
 };
 
 struct VM {
-	VM(std::istream& input, std::ostream& output)
-	: input {input}, output {output}, stack(stack_size) {}
+	VM(std::istream& input, std::ostream& output, const Options& opts)
+	: input {input}, output {output}, opts {opts}, stack(stack_size) {}
 
 	std::istream& input;
 	std::ostream& output;
+	const Options& opts;
 
 	bool should_print_result {true};
 
 	std::array<Value, register_count> cells {};
 	FixedVector<Value> stack;
-	std::stack<std::size_t> callstack {};
+	std::vector<std::size_t> callstack {};
 	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
 		prompt_tags {};
 	size_t program_counter {0};
@@ -161,6 +162,8 @@ struct VM {
 
  private:
 	void print_debug_stack();
+	void print_debug_callstack(const Chunk&);
+	void print_continuation(const Chunk&, const Continuation&);
 };
 
 } // namespace lir

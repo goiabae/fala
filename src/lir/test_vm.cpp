@@ -4,6 +4,7 @@
 #include <string>
 
 #include "lir/lir.hpp"
+#include "options.hpp"
 #include "vm.hpp"
 
 static lir::Operand make_integer_register(std::size_t index) {
@@ -28,7 +29,9 @@ TEST(VMTest, move_immediate) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -47,7 +50,9 @@ TEST(VMTest, move_integer_register) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -70,7 +75,9 @@ TEST(VMTest, arithmetic) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -87,7 +94,9 @@ TEST(VMTest, push_immediate) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -114,7 +123,9 @@ TEST(VMTest, heap_allocation) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -181,7 +192,9 @@ TEST(VMTest, function_call) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -283,7 +296,9 @@ TEST(VMTest, function_integer_out_parameter) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -400,7 +415,9 @@ TEST(VMTest, function_integer_array_out_parameter) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -444,7 +461,9 @@ TEST(VMTest, io_operations) {
 	};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 
@@ -523,7 +542,9 @@ TEST(VMTest, control_operators) {
 	std::istringstream input {""};
 	std::ostringstream output {};
 
-	lir::VM vm {input, output};
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
 	vm.should_print_result = false;
 	vm.run(chunk);
 

@@ -1,6 +1,5 @@
 #include "vm.hpp"
 
-#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -11,6 +10,7 @@
 #include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include "lir/lir.hpp"
@@ -104,6 +104,12 @@ auto VM::fetch(Operand opnd) -> Value {
 void VM::run(const lir::Chunk& code) {
 	while (program_counter < code.m_vec.size()) {
 		const auto& inst = code.m_vec.at(program_counter);
+		if (opts.verbosity >= 3) {
+			using namespace std::chrono_literals;
+			std::this_thread::sleep_for(100ms);
+			std::cerr << opcode_repr(inst.opcode) << '\n';
+			std::cerr << "CUR: " << line_for(code, program_counter) << '\n';
+		}
 		switch (inst.opcode) {
 			case Opcode::PRINTF: {
 				auto t1 = inst.operands[0];
@@ -215,7 +221,12 @@ void VM::run(const lir::Chunk& code) {
 				assert(inst.operands[0].kind == Operand::Kind::REGISTER);
 				auto& cell = cells[inst.operands[0].as_register().index];
 				if (stack.size() == 0)
-					throw std::runtime_error("can't pop value. stack was empty");
+					throw std::runtime_error(
+						std::format(
+							"at line {}: can't pop value. stack was empty",
+							line_for(code, program_counter)
+						)
+					);
 				cell = stack.back();
 				stack.pop();
 				break;
@@ -236,11 +247,11 @@ void VM::run(const lir::Chunk& code) {
 			}
 			case Opcode::RET:
 				program_counter = return_address;
-				return_address = callstack.top();
-				callstack.pop();
+				return_address = callstack.back();
+				callstack.pop_back();
 				break;
 			case Opcode::FUNC:
-				callstack.push(return_address);
+				callstack.push_back(return_address);
 				return_address = (size_t)stack.back().as_integer();
 				stack.pop();
 				break;
@@ -422,6 +433,7 @@ void VM::run(const lir::Chunk& code) {
 				const auto top = stack.back();
 				stack.pop();
 				const auto k = fetch(inst.operands[0]).as_continuation();
+				if (opts.verbosity >= 3) print_continuation(code, *k);
 				restore_continuation(*k);
 				stack.push(top);
 				break;
@@ -442,6 +454,7 @@ void VM::run(const lir::Chunk& code) {
 						args.push_back(stack.back());
 						stack.pop();
 					}
+					if (opts.verbosity >= 3) print_continuation(code, current_cont);
 					restore_continuation(handler);
 					for (const auto& a : std::ranges::views::reverse(args)) {
 						stack.push(a);
@@ -476,6 +489,15 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::HALT: {
+				if (opts.verbosity >= 3) {
+					std::cerr << "DATA: ";
+					print_debug_stack();
+					std::cerr << "CALL: ";
+					print_debug_callstack(code);
+					std::cerr << "RET: " << line_for(code, return_address) << '\n';
+					std::cerr << "NEXT: " << line_for(code, program_counter) << '\n';
+					std::cerr << '\n';
+				}
 				if (should_print_result and code.result_opnd.has_value()) {
 					auto result = code.result_opnd.value();
 					if (result.kind == Operand::Kind::IMMEDIATE) {
@@ -509,6 +531,15 @@ void VM::run(const lir::Chunk& code) {
 		program_counter++;
 	dont_inc:
 		(void)0;
+		if (opts.verbosity >= 3) {
+			std::cerr << "DATA: ";
+			print_debug_stack();
+			std::cerr << "CALL: ";
+			print_debug_callstack(code);
+			std::cerr << "RET: " << line_for(code, return_address) << '\n';
+			std::cerr << "NEXT: " << line_for(code, program_counter) << '\n';
+			std::cerr << '\n';
+		}
 	}
 	throw std::runtime_error("out of bounds code access");
 }
@@ -590,6 +621,42 @@ void VM::print_debug_stack() {
 	}
 	std::cerr << ']';
 	std::cerr << '\n';
+}
+
+void VM::print_debug_callstack(const Chunk& chunk) {
+	std::cerr << '[';
+	for (auto i = 0ul; i < callstack.size(); i++) {
+		std::cerr << line_for(chunk, callstack.at(i));
+		if (i != (callstack.size() - 1)) {
+			std::cerr << "; ";
+		}
+	}
+	std::cerr << ']';
+	std::cerr << '\n';
+}
+
+void VM::print_continuation(const Chunk& chunk, const Continuation& k) {
+	std::cerr << "{\n";
+	std::cerr << '[';
+	for (auto i = 0ul; i < k.stack.size(); i++) {
+		std::cerr << serialize(k.stack.at(i));
+		if (i != (k.stack.size() - 1)) {
+			std::cerr << " ; ";
+		}
+	}
+	std::cerr << ']';
+	std::cerr << '\n';
+	std::cerr << '[';
+	for (auto i = 0ul; i < k.callstack.size(); i++) {
+		std::cerr << line_for(chunk, k.callstack.at(i));
+		if (i != (k.callstack.size() - 1)) {
+			std::cerr << "; ";
+		}
+	}
+	std::cerr << ']';
+	std::cerr << '\n';
+	std::cerr << line_for(chunk, k.return_address) << '\n';
+	std::cerr << "}\n";
 }
 
 } // namespace lir
