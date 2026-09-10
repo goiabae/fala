@@ -155,10 +155,9 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::MOV: {
-				const auto& dest = inst.operands[0];
+				const auto& dest = inst.operands[0].as_register();
 				const auto& src = inst.operands[1];
-				auto& cell = cells[dest.as_register().index];
-				cell = fetch(src);
+				write(dest, fetch(src));
 				break;
 			}
 #define BIN_ARITH_OP(OP)                          \
@@ -218,8 +217,7 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::POP: {
-				assert(inst.operands[0].kind == Operand::Kind::REGISTER);
-				auto& cell = cells[inst.operands[0].as_register().index];
+				auto result = inst.operands[0].as_register();
 				if (stack.size() == 0)
 					throw std::runtime_error(
 						std::format(
@@ -227,7 +225,7 @@ void VM::run(const lir::Chunk& code) {
 							line_for(code, program_counter)
 						)
 					);
-				cell = stack.back();
+				write(result, stack.back());
 				stack.pop();
 				break;
 			}
@@ -355,23 +353,19 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::CLONEA: {
-				auto result_register = inst.operands[0];
-				auto source_register = inst.operands[1];
-				assert(result_register.kind == Operand::Kind::REGISTER);
-				assert(source_register.kind == Operand::Kind::REGISTER);
-				auto source = cells[source_register.as_register().index];
-				auto& destination = cells[result_register.as_register().index];
-				destination = clone(source);
+				auto result = inst.operands[0].as_register();
+				auto source_register = inst.operands[1].as_register();
+				auto source = fetch(source_register);
+				write(result, clone(source));
 				break;
 			}
 			case Opcode::NOP: {
 				break;
 			}
 			case Opcode::REPEAT: {
-				auto result_register = inst.operands[0];
+				auto result = inst.operands[0].as_register();
 				auto element_register = inst.operands[1];
 				auto amount_register = inst.operands[2];
-				assert(result_register.kind == Operand::Kind::REGISTER);
 				assert(
 					element_register.kind == Operand::Kind::REGISTER
 					|| element_register.kind == Operand::Kind::IMMEDIATE
@@ -390,7 +384,7 @@ void VM::run(const lir::Chunk& code) {
 					auto iptr = &(ptr.as_pointer())[i];
 					*iptr = clone(t1);
 				}
-				cells[result_register.as_register().index] = ptr;
+				write(result, ptr);
 				break;
 			}
 			case Opcode::INITA: {
@@ -407,7 +401,7 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::ENCLOSE: {
-				auto& result = deref(inst.operands[0]);
+				auto result = inst.operands[0].as_register();
 				auto label = Value(
 					static_cast<int64_t>(
 						address_of_label(code, inst.operands[1].as_label())
@@ -415,7 +409,7 @@ void VM::run(const lir::Chunk& code) {
 				);
 				auto closure = fetch(inst.operands[2]);
 				auto object = Value(new Value[2] {closure, label}, 2);
-				result = object;
+				write(result, object);
 				break;
 			}
 			case Opcode::CATCH: {
@@ -480,12 +474,12 @@ void VM::run(const lir::Chunk& code) {
 				break;
 			}
 			case Opcode::PICK: {
-				auto& r = deref(inst.operands[0]);
+				auto r = inst.operands[0].as_register();
 				const auto n = fetch(inst.operands[1]).as_integer();
 				assert(n >= 0);
 				auto v = &stack.at(stack.size() - 1 - static_cast<std::size_t>(n));
 				auto p = Value(v, 1);
-				r = p;
+				write(r, p);
 				break;
 			}
 			case Opcode::HALT: {
@@ -506,7 +500,7 @@ void VM::run(const lir::Chunk& code) {
 						std::cout << "==> " << t1.as_integer() << '\n';
 					} else if (result.kind == Operand::Kind::REGISTER) {
 						std::cout << '%' << result.as_register().index << ' ';
-						auto reg = cells[result.as_register().index];
+						auto reg = fetch(result);
 						if (reg.is_integer()) {
 							std::cout << "==> " << reg.as_integer() << '\n';
 						} else if (reg.is_pointer()) {
@@ -657,6 +651,21 @@ void VM::print_continuation(const Chunk& chunk, const Continuation& k) {
 	std::cerr << '\n';
 	std::cerr << line_for(chunk, k.return_address) << '\n';
 	std::cerr << "}\n";
+}
+
+void VM::write(lir::Register reg, Value value) {
+	if (watching_registers.contains(reg.index)) {
+		auto old = serialize(fetch(reg));
+		auto new_ = serialize(value);
+		std::cerr << std::format("Updating r{} from {} to {}", reg.index, old, new_)
+							<< '\n';
+	}
+	auto& cell = deref(reg);
+	cell = value;
+}
+
+void VM::install_watch_point(lir::Register r) {
+	watching_registers.insert(r.index);
 }
 
 } // namespace lir

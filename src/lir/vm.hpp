@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <istream>
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -143,6 +144,7 @@ struct VM {
 
 	bool should_print_result {true};
 
+	void install_watch_point(lir::Register);
 	std::array<Value, register_count> cells {};
 	FixedVector<Value> stack;
 	std::vector<std::size_t> callstack {};
@@ -159,6 +161,8 @@ struct VM {
 	Continuation save_continuation();
 	void restore_continuation(const Continuation&);
 	std::optional<Continuation> find_handler(std::size_t tag);
+	void write(lir::Register, Value);
+	std::unordered_set<std::size_t> watching_registers;
 
  private:
 	void print_debug_stack();
