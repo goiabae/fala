@@ -60,7 +60,7 @@ struct Compiler {
 	lir::Chunk compile();
 	Result compile(NodeIndex node_idx, Context ctx);
 	lir::Block compile_handler_decl(
-		NodeIndex node_idx, Context ctx, lir::Label exit
+		NodeIndex node_idx, Context ctx, lir::Label body
 	);
 	Result compile_lvalue(NodeIndex node_idx, Context ctx);
 	Result compile_or_allocate_lvalue(NodeIndex node_idx, Context ctx);

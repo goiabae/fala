@@ -248,21 +248,23 @@ TEST(ASTToLIRTest, let_expression) {
 	try {
 		const char* b =
 			"L000:\n"
-			"    jump L004\n"
+			"    jump L005\n"
 			"L001:\n"
 			"    jump L002\n"
 			"L002:\n"
 			"    loada %1:???, 0(%0)\n"
-			"    jump L003\n"
+			"    jump L004\n"
 			"L003:\n"
-			"    jump L006\n"
+			"    jump L007\n"
 			"L004:\n"
-			"    jump L005\n"
+			"    jump L003\n"
 			"L005:\n"
+			"    jump L006\n"
+			"L006:\n"
 			"    alloca %0:???, 1\n"
 			"    storea 3, 0(%0)\n"
 			"    jump L001\n"
-			"L006:\n"
+			"L007:\n"
 			"    halt\n";
 		std::string expected = std::string(b);
 		std::stringstream actualss;

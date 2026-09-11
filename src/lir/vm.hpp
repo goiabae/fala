@@ -18,7 +18,14 @@
 
 namespace lir {
 
-struct Continuation;
+struct Prompt {
+	std::size_t program_counter;
+	std::size_t control_stack_height;
+	std::size_t data_stack_height;
+	std::size_t prompt_stack_height;
+};
+
+struct DelimitedContinuation;
 
 class Value {
  public:
@@ -65,7 +72,7 @@ class Value {
 	Value(Value* pointer, std::size_t size) : data(Pointer(pointer, size)) {}
 	Value(const Pointer& pointer) : data(pointer) {}
 	Value(const Integer& integer) : data(integer) {}
-	Value(const std::shared_ptr<Continuation>& continuation)
+	Value(const std::shared_ptr<DelimitedContinuation>& continuation)
 	: data(continuation) {}
 	Value() : data(std::monostate {}) {}
 
@@ -74,6 +81,9 @@ class Value {
 	bool is_pointer() const { return std::holds_alternative<Pointer>(data); }
 	bool is_undefined() const {
 		return std::holds_alternative<std::monostate>(data);
+	}
+	bool is_continuation() const {
+		return std::holds_alternative<std::shared_ptr<DelimitedContinuation>>(data);
 	}
 
 	Integer const& as_integer() const {
@@ -100,12 +110,13 @@ class Value {
 		return const_cast<Pointer&>(std::as_const(*this).as_pointer());
 	}
 
-	std::shared_ptr<Continuation> as_continuation() const {
-		return std::get<std::shared_ptr<Continuation>>(data);
+	std::shared_ptr<DelimitedContinuation> as_continuation() const {
+		return std::get<std::shared_ptr<DelimitedContinuation>>(data);
 	}
 
  private:
-	std::variant<Integer, Pointer, std::shared_ptr<Continuation>, std::monostate>
+	std::variant<
+		Integer, Pointer, std::shared_ptr<DelimitedContinuation>, std::monostate>
 		data;
 };
 
@@ -124,48 +135,49 @@ inline bool operator==(const Value::Integer& x, const Value::Integer& y) {
 static constexpr const auto register_count = 2048;
 static constexpr const auto stack_size = 4 * 1024;
 
-struct Continuation {
-	std::array<Value, register_count> cells;
-	FixedVector<Value> stack;
-	std::vector<std::size_t> callstack;
-	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
-		prompt_tags;
+struct DelimitedContinuation {
+	std::vector<Value> data_stack_suffix;
+	std::vector<std::size_t> control_stack_suffix;
+	std::vector<std::pair<std::size_t, Prompt>> prompt_stack_suffix;
 	std::size_t program_counter;
 };
 
 struct VM {
 	VM(std::istream& input, std::ostream& output, const Options& opts)
-	: input {input}, output {output}, opts {opts}, stack(stack_size) {}
+	: input {input}, output {output}, opts {opts}, data_stack(stack_size) {}
 
+ public:
 	std::istream& input;
 	std::ostream& output;
 	const Options& opts;
+	FixedVector<Value> data_stack;
 
+ public:
 	bool should_print_result {true};
-
-	void install_watch_point(lir::Register);
 	std::array<Value, register_count> cells {};
-	FixedVector<Value> stack;
-	std::vector<std::size_t> callstack {};
-	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
-		prompt_tags {};
+	std::vector<std::size_t> control_stack {};
+	std::vector<std::pair<std::size_t, Prompt>> prompt_stack {};
 	size_t program_counter {0};
-	std::string serialize(Value);
-
-	void run(const Chunk&);
-	std::size_t address_of_label(const Chunk&, lir::Label);
-	Value& deref(lir::Operand);
-	Value fetch(lir::Operand);
-	Continuation save_continuation();
-	void restore_continuation(const Continuation&);
-	std::optional<Continuation> find_handler(std::size_t tag);
-	void write(lir::Register, Value);
 	std::unordered_set<std::size_t> watching_registers;
+
+ public:
+	void install_watch_point(lir::Register);
+	auto serialize(Value) -> std::string;
+	void run(const Chunk&);
+	auto address_of_label(const Chunk&, lir::Label) -> std::size_t;
+	auto deref(lir::Operand) -> Value&;
+	auto fetch(lir::Operand) -> Value;
+	auto find_handler(std::size_t tag) -> std::optional<Prompt>;
+	void write(lir::Register, Value);
+	auto save_continuation(const Prompt&)
+		-> std::shared_ptr<DelimitedContinuation>;
+	void restore_continuation(const DelimitedContinuation&);
+	void unwind_prompt(const Prompt&);
 
  private:
 	void print_debug_stack();
 	void print_debug_callstack(const Chunk&);
-	void print_continuation(const Chunk&, const Continuation&);
+	void print_continuation(const Chunk&, const DelimitedContinuation&);
 };
 
 } // namespace lir

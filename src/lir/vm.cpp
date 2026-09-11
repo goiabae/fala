@@ -202,15 +202,15 @@ void VM::run(const lir::Chunk& code) {
 					program_counter++;
 				goto dont_inc;
 			case Opcode::PUSH: {
-				if (stack.size() == stack.capacity()) {
+				if (data_stack.size() == data_stack.capacity()) {
 					throw std::runtime_error("stack is full. can't push value");
 				}
 				if (inst.operands[0].kind == Operand::Kind::IMMEDIATE) {
-					stack.push(Value(inst.operands[0].as_immediate().number));
+					data_stack.push(Value(inst.operands[0].as_immediate().number));
 				} else if (inst.operands[0].kind == Operand::Kind::REGISTER) {
-					stack.push(cells[inst.operands[0].as_register().index]);
+					data_stack.push(cells[inst.operands[0].as_register().index]);
 				} else if (inst.operands[0].kind == Operand::Kind::NOTHING) {
-					stack.push(Value(0));
+					data_stack.push(Value(0));
 				} else {
 					throw std::runtime_error("can't push value");
 				}
@@ -218,15 +218,15 @@ void VM::run(const lir::Chunk& code) {
 			}
 			case Opcode::POP: {
 				auto result = inst.operands[0].as_register();
-				if (stack.size() == 0)
+				if (data_stack.size() == 0)
 					throw std::runtime_error(
 						std::format(
 							"at line {}: can't pop value. stack was empty",
 							line_for(code, program_counter)
 						)
 					);
-				write(result, stack.back());
-				stack.pop();
+				write(result, data_stack.back());
+				data_stack.pop();
 				break;
 			}
 			case Opcode::CALL: {
@@ -236,16 +236,16 @@ void VM::run(const lir::Chunk& code) {
 				//                 +---> ...
 				auto closure_pointer = fetch(inst.operands[0]).as_pointer();
 				auto env_pointer = *(&closure_pointer[0]);
-				stack.push(env_pointer);
-				callstack.push_back(program_counter);
+				data_stack.push(env_pointer);
+				control_stack.push_back(program_counter);
 				auto function_address =
 					static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
 				program_counter = function_address;
 				goto dont_inc;
 			}
 			case Opcode::RET:
-				program_counter = callstack.back();
-				callstack.pop_back();
+				program_counter = control_stack.back();
+				control_stack.pop_back();
 				break;
 			case Opcode::FUNC: break;
 			case Opcode::ALLOCA: {
@@ -410,21 +410,24 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::CATCH: {
 				const auto tag =
 					static_cast<std::size_t>(fetch(inst.operands[0]).as_integer());
-				const auto npc = address_of_label(code, inst.operands[1].as_label());
-				const auto exit_pc =
+				const auto handler_address =
+					address_of_label(code, inst.operands[1].as_label());
+				const auto body_address =
 					address_of_label(code, inst.operands[2].as_label());
-				const auto k = save_continuation();
-				callstack.push_back(exit_pc);
-				restore_stack.push(callstack.size());
-				prompt_tags.push_back(
-					std::make_pair(tag, std::make_shared<Continuation>(k))
-				);
-				program_counter = npc;
+				control_stack.push_back(program_counter);
+				Prompt p {
+					.program_counter = handler_address,
+					.control_stack_height = control_stack.size(),
+					.data_stack_height = data_stack.size(),
+					.prompt_stack_height = prompt_stack.size(),
+				};
+				prompt_stack.push_back(std::make_pair(tag, p));
+				program_counter = body_address;
 				goto dont_inc;
 			}
 			case Opcode::RESUME: {
-				const auto top = stack.back();
-				stack.pop();
+				const auto top = data_stack.back();
+				data_stack.pop();
 				auto v = fetch(inst.operands[0]);
 				if (not v.is_continuation()) {
 					throw std::runtime_error(
@@ -433,17 +436,9 @@ void VM::run(const lir::Chunk& code) {
 				}
 				const auto k = v.as_continuation();
 				if (opts.verbosity >= 3) print_continuation(code, *k);
-				if (k->restore_stack.size() == 0)
-					throw std::runtime_error(
-						"resume needs to modify the restore address"
-					);
-				if (k->restore_stack.back() < k->callstack.size()) {
-					k->callstack.at(k->restore_stack.back()) = program_counter;
-				} else {
-					throw std::runtime_error("restore overrriden");
-				}
+				control_stack.push_back(program_counter);
 				restore_continuation(*k);
-				stack.push(top);
+				data_stack.push(top);
 				break;
 			}
 			case Opcode::THROW: {
@@ -457,25 +452,25 @@ void VM::run(const lir::Chunk& code) {
 				} else {
 					std::vector<Value> args {};
 					for (auto i = 0ul; i < arg_count; i++) {
-						args.push_back(stack.back());
-						stack.pop();
+						args.push_back(data_stack.back());
+						data_stack.pop();
 					}
-					const auto current_cont = save_continuation();
 					const auto handler = maybe_handler.value();
-					if (opts.verbosity >= 3) print_continuation(code, current_cont);
-					restore_continuation(handler);
+					const auto current_cont = save_continuation(handler);
+					if (opts.verbosity >= 3) print_continuation(code, *current_cont);
+					unwind_prompt(handler);
 					for (const auto& a : std::ranges::views::reverse(args)) {
-						stack.push(a);
+						data_stack.push(a);
 					}
-					stack.push(Value(std::make_shared<Continuation>(current_cont)));
+					data_stack.push(current_cont);
 				}
-				break;
+				goto dont_inc;
 			}
 			case Opcode::BUMP: {
 				const auto n = fetch(inst.operands[0]).as_integer();
 				assert(n >= 0);
 				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
-					stack.push(Value());
+					data_stack.push(Value());
 				}
 				break;
 			}
@@ -483,7 +478,7 @@ void VM::run(const lir::Chunk& code) {
 				const auto n = fetch(inst.operands[0]).as_integer();
 				assert(n >= 0);
 				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
-					stack.pop();
+					data_stack.pop();
 				}
 				break;
 			}
@@ -491,7 +486,8 @@ void VM::run(const lir::Chunk& code) {
 				auto r = inst.operands[0].as_register();
 				const auto n = fetch(inst.operands[1]).as_integer();
 				assert(n >= 0);
-				auto v = &stack.at(stack.size() - 1 - static_cast<std::size_t>(n));
+				auto v =
+					&data_stack.at(data_stack.size() - 1 - static_cast<std::size_t>(n));
 				auto p = Value(v, 1);
 				write(r, p);
 				break;
@@ -569,29 +565,28 @@ Value::Pointer clone_pointer(Value::Pointer ptr) {
 	return ptr2;
 }
 
-Continuation VM::save_continuation() {
-	return Continuation {
-		.cells = cells,
-		.stack = stack,
-		.callstack = callstack,
-		.prompt_tags = prompt_tags,
-		.program_counter = program_counter,
-		.restore_stack = restore_stack,
-	};
+std::shared_ptr<DelimitedContinuation> VM::save_continuation(const Prompt& p) {
+	auto k = std::make_shared<DelimitedContinuation>();
+	for (auto i = p.prompt_stack_height; i < prompt_stack.size(); i++)
+		k->prompt_stack_suffix.push_back(prompt_stack.at(i));
+	for (auto i = p.control_stack_height; i < control_stack.size(); i++)
+		k->control_stack_suffix.push_back(control_stack.at(i));
+	for (auto i = p.data_stack_height; i < data_stack.size(); i++)
+		k->data_stack_suffix.push_back(data_stack.at(i));
+	k->program_counter = program_counter;
+	return k;
 }
 
-void VM::restore_continuation(const Continuation& k) {
-	cells = k.cells;
-	stack = k.stack;
-	callstack = k.callstack;
-	prompt_tags = k.prompt_tags;
+void VM::restore_continuation(const DelimitedContinuation& k) {
+	for (const auto& x : k.control_stack_suffix) control_stack.push_back(x);
+	for (const auto& x : k.data_stack_suffix) data_stack.push(x);
+	for (const auto& x : k.prompt_stack_suffix) prompt_stack.push_back(x);
 	program_counter = k.program_counter;
-	restore_stack = k.restore_stack;
 }
 
-std::optional<Continuation> VM::find_handler(std::size_t tag) {
-	for (const auto& [tag2, handler] : std::ranges::views::reverse(prompt_tags))
-		if (tag2 == tag) return *handler;
+std::optional<Prompt> VM::find_handler(std::size_t tag) {
+	for (const auto& [tag2, handler] : std::ranges::views::reverse(prompt_stack))
+		if (tag2 == tag) return handler;
 	return std::nullopt;
 }
 
@@ -619,9 +614,9 @@ std::string VM::serialize(Value value) {
 
 void VM::print_debug_stack() {
 	std::cerr << '[';
-	for (auto i = 0ul; i < stack.size(); i++) {
-		std::cerr << serialize(stack.at(i));
-		if (i != (stack.size() - 1)) {
+	for (auto i = 0ul; i < data_stack.size(); i++) {
+		std::cerr << serialize(data_stack.at(i));
+		if (i != (data_stack.size() - 1)) {
 			std::cerr << " ; ";
 		}
 	}
@@ -631,9 +626,9 @@ void VM::print_debug_stack() {
 
 void VM::print_debug_callstack(const Chunk& chunk) {
 	std::cerr << '[';
-	for (auto i = 0ul; i < callstack.size(); i++) {
-		std::cerr << line_for(chunk, callstack.at(i));
-		if (i != (callstack.size() - 1)) {
+	for (auto i = 0ul; i < control_stack.size(); i++) {
+		std::cerr << line_for(chunk, control_stack.at(i));
+		if (i != (control_stack.size() - 1)) {
 			std::cerr << "; ";
 		}
 	}
@@ -641,21 +636,23 @@ void VM::print_debug_callstack(const Chunk& chunk) {
 	std::cerr << '\n';
 }
 
-void VM::print_continuation(const Chunk& chunk, const Continuation& k) {
+void VM::print_continuation(
+	const Chunk& chunk, const DelimitedContinuation& k
+) {
 	std::cerr << "{\n";
 	std::cerr << '[';
-	for (auto i = 0ul; i < k.stack.size(); i++) {
-		std::cerr << serialize(k.stack.at(i));
-		if (i != (k.stack.size() - 1)) {
+	for (auto i = 0ul; i < k.data_stack_suffix.size(); i++) {
+		std::cerr << serialize(k.data_stack_suffix.at(i));
+		if (i != (k.data_stack_suffix.size() - 1)) {
 			std::cerr << " ; ";
 		}
 	}
 	std::cerr << ']';
 	std::cerr << '\n';
 	std::cerr << '[';
-	for (auto i = 0ul; i < k.callstack.size(); i++) {
-		std::cerr << line_for(chunk, k.callstack.at(i));
-		if (i != (k.callstack.size() - 1)) {
+	for (auto i = 0ul; i < k.control_stack_suffix.size(); i++) {
+		std::cerr << line_for(chunk, k.control_stack_suffix.at(i));
+		if (i != (k.control_stack_suffix.size() - 1)) {
 			std::cerr << "; ";
 		}
 	}
@@ -676,6 +673,14 @@ void VM::write(lir::Register reg, Value value) {
 
 void VM::install_watch_point(lir::Register r) {
 	watching_registers.insert(r.index);
+}
+
+void VM::unwind_prompt(const Prompt& p) {
+	while (prompt_stack.size() > p.prompt_stack_height) prompt_stack.pop_back();
+	while (data_stack.size() > p.data_stack_height) data_stack.pop();
+	while (control_stack.size() > p.control_stack_height)
+		control_stack.pop_back();
+	program_counter = p.program_counter;
 }
 
 } // namespace lir

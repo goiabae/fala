@@ -1,0 +1,26 @@
+-- ===> "69\n420\n1337\n"
+
+type Bool = Uint<1>
+
+effect choose (val _: Nil): Bool
+
+fun f _ !choose = do
+	val choice = choose!(nil)
+	if choice then
+		69
+	else
+		420
+end
+
+fun main _ !io = do
+	let catch choose _ = do
+		val x = resume true
+		val y = resume false
+		write_int!(x)
+		write_str!("\n")
+		write_int!(y)
+		write_str!("\n")
+	end in f(nil)
+	write_int!(1337)
+	write_str!("\n")
+end

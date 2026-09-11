@@ -112,7 +112,7 @@ size_t opcode_opnd_count(Opcode op) {
 		case Opcode::REPEAT: return 3;
 		case Opcode::INITA: return 2;
 		case Opcode::ENCLOSE: return 3;
-		case Opcode::CATCH: return 2;
+		case Opcode::CATCH: return 3;
 		case Opcode::RESUME: return 1;
 		case Opcode::THROW: return 2;
 		case Opcode::BUMP: return 1;

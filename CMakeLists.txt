@@ -136,6 +136,7 @@ test_example(unions)
 test_example(ackermann)
 test_example(recursive_fibonacci)
 test_example(out_of_order_declarations)
+test_example(multiple_resumptions)
 
 find_package(GTest REQUIRED)
 include(GoogleTest)
