@@ -237,16 +237,14 @@ void VM::run(const lir::Chunk& code) {
 				auto closure_pointer = fetch(inst.operands[0]).as_pointer();
 				auto env_pointer = *(&closure_pointer[0]);
 				stack.push(env_pointer);
-				callstack.push_back(return_address);
-				return_address = program_counter;
+				callstack.push_back(program_counter);
 				auto function_address =
 					static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
 				program_counter = function_address;
 				goto dont_inc;
 			}
 			case Opcode::RET:
-				program_counter = return_address;
-				return_address = callstack.back();
+				program_counter = callstack.back();
 				callstack.pop_back();
 				break;
 			case Opcode::FUNC: break;
@@ -413,7 +411,11 @@ void VM::run(const lir::Chunk& code) {
 				const auto tag =
 					static_cast<std::size_t>(fetch(inst.operands[0]).as_integer());
 				const auto npc = address_of_label(code, inst.operands[1].as_label());
+				const auto exit_pc =
+					address_of_label(code, inst.operands[2].as_label());
 				const auto k = save_continuation();
+				callstack.push_back(exit_pc);
+				restore_stack.push(callstack.size());
 				prompt_tags.push_back(
 					std::make_pair(tag, std::make_shared<Continuation>(k))
 				);
@@ -423,8 +425,23 @@ void VM::run(const lir::Chunk& code) {
 			case Opcode::RESUME: {
 				const auto top = stack.back();
 				stack.pop();
-				const auto k = fetch(inst.operands[0]).as_continuation();
+				auto v = fetch(inst.operands[0]);
+				if (not v.is_continuation()) {
+					throw std::runtime_error(
+						std::format("expected continuation but was {}", serialize(v))
+					);
+				}
+				const auto k = v.as_continuation();
 				if (opts.verbosity >= 3) print_continuation(code, *k);
+				if (k->restore_stack.size() == 0)
+					throw std::runtime_error(
+						"resume needs to modify the restore address"
+					);
+				if (k->restore_stack.back() < k->callstack.size()) {
+					k->callstack.at(k->restore_stack.back()) = program_counter;
+				} else {
+					throw std::runtime_error("restore overrriden");
+				}
 				restore_continuation(*k);
 				stack.push(top);
 				break;
@@ -485,7 +502,6 @@ void VM::run(const lir::Chunk& code) {
 					print_debug_stack();
 					std::cerr << "CALL: ";
 					print_debug_callstack(code);
-					std::cerr << "RET: " << line_for(code, return_address) << '\n';
 					std::cerr << "NEXT: " << line_for(code, program_counter) << '\n';
 					std::cerr << '\n';
 				}
@@ -527,7 +543,6 @@ void VM::run(const lir::Chunk& code) {
 			print_debug_stack();
 			std::cerr << "CALL: ";
 			print_debug_callstack(code);
-			std::cerr << "RET: " << line_for(code, return_address) << '\n';
 			std::cerr << "NEXT: " << line_for(code, program_counter) << '\n';
 			std::cerr << '\n';
 		}
@@ -561,7 +576,7 @@ Continuation VM::save_continuation() {
 		.callstack = callstack,
 		.prompt_tags = prompt_tags,
 		.program_counter = program_counter,
-		.return_address = return_address,
+		.restore_stack = restore_stack,
 	};
 }
 
@@ -571,7 +586,7 @@ void VM::restore_continuation(const Continuation& k) {
 	callstack = k.callstack;
 	prompt_tags = k.prompt_tags;
 	program_counter = k.program_counter;
-	return_address = k.return_address;
+	restore_stack = k.restore_stack;
 }
 
 std::optional<Continuation> VM::find_handler(std::size_t tag) {
@@ -645,8 +660,6 @@ void VM::print_continuation(const Chunk& chunk, const Continuation& k) {
 		}
 	}
 	std::cerr << ']';
-	std::cerr << '\n';
-	std::cerr << line_for(chunk, k.return_address) << '\n';
 	std::cerr << "}\n";
 }
 

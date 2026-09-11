@@ -131,7 +131,6 @@ struct Continuation {
 	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
 		prompt_tags;
 	std::size_t program_counter;
-	std::size_t return_address;
 };
 
 struct VM {
@@ -151,7 +150,6 @@ struct VM {
 	std::vector<std::pair<std::size_t, std::shared_ptr<Continuation>>>
 		prompt_tags {};
 	size_t program_counter {0};
-	std::size_t return_address {0};
 	std::string serialize(Value);
 
 	void run(const Chunk&);
