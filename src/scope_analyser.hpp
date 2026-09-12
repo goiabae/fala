@@ -2,12 +2,16 @@
 #define SCOPE_ANALYSER_HPP
 
 #include "ast.hpp"
+#include "logger.hpp"
 #include "str_pool.h"
 #include "symbol_table.hpp"
 
 class ScopeAnalyser {
  public:
-	ScopeAnalyser(AST& ast, StringPool& pool) : m_ast(ast), m_pool(pool) {}
+	ScopeAnalyser(AST& ast, StringPool& pool)
+	: m_ast(ast),
+		m_pool(pool),
+		logger("ScopeAnalyserr", ast.file_name, ast.lines) {}
 
  public:
 	SymbolTable analyse();
@@ -27,6 +31,7 @@ class ScopeAnalyser {
 	AST& m_ast;
 	StringPool& m_pool;
 	SymbolTable m_symtab;
+	Logger logger;
 };
 
 #endif

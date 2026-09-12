@@ -445,8 +445,13 @@ Guid ScopeAnalyser::refere(
 ) {
 	auto& id_node = m_ast.at(node_idx);
 	assert(id_node.type == NodeType::ID);
-	const auto guid = m_symtab.use_of(id_node.str_id, scope_idx, node_idx, space);
-	id_node.type = NodeType::GUID;
-	id_node.guid = guid;
-	return guid;
+	if (const auto guid =
+	      m_symtab.use_of(id_node.str_id, scope_idx, node_idx, space)) {
+		id_node.type = NodeType::GUID;
+		id_node.guid = guid.value();
+		return guid.value();
+	} else {
+		logger.err(id_node.loc, "Variable not previously declared");
+		return {};
+	}
 }

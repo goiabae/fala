@@ -19,7 +19,7 @@ enum class RelativeScope {
 class SymbolTable {
  public:
 	Guid define(StrID, ScopeIndex, NodeIndex, Namespace);
-	Guid use_of(StrID, ScopeIndex, NodeIndex, Namespace);
+	std::optional<Guid> use_of(StrID, ScopeIndex, NodeIndex, Namespace);
 	ScopeIndex make_child_scope(ScopeIndex);
 	ScopeIndex make_function_scope(ScopeIndex, NodeIndex);
 	std::optional<RelativeScope> relative_scope_of(Guid, NodeIndex) const;

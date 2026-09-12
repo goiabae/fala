@@ -84,7 +84,7 @@ Guid SymbolTable::define_builtin(StrID name, Namespace space) {
 	return guid;
 }
 
-Guid SymbolTable::use_of(
+std::optional<Guid> SymbolTable::use_of(
 	StrID name, ScopeIndex scope, NodeIndex node, Namespace space
 ) {
 	m_node_scopes[node] = scope;
@@ -105,7 +105,7 @@ Guid SymbolTable::use_of(
 			}
 		}
 		auto parent = parent_of(cur);
-		if (not parent.has_value()) throw std::runtime_error("undefined symbol");
+		if (not parent.has_value()) return std::nullopt;
 		cur = parent.value();
 	}
 }
