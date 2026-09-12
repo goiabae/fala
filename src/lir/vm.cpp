@@ -169,11 +169,21 @@ void VM::run(const lir::Chunk& code) {
 		cells[inst.operands[0].as_register().index] = \
 			t1.as_integer() OP t2.as_integer();         \
 	}
+#define SAFE_BIN_ARITH_OP(OP)                                               \
+	{                                                                         \
+		auto t1 = fetch(inst.operands[1]);                                      \
+		assert(t1.is_integer());                                                \
+		auto t2 = fetch(inst.operands[2]);                                      \
+		assert(t2.is_integer());                                                \
+		if (t2.as_integer() == 0) throw std::runtime_error("division by zero"); \
+		cells[inst.operands[0].as_register().index] =                           \
+			t1.as_integer() OP t2.as_integer();                                   \
+	}
 			case Opcode::ADD: BIN_ARITH_OP(+); break;
 			case Opcode::SUB: BIN_ARITH_OP(-); break;
 			case Opcode::MUL: BIN_ARITH_OP(*); break;
-			case Opcode::DIV: BIN_ARITH_OP(/); break;
-			case Opcode::MOD: BIN_ARITH_OP(%); break;
+			case Opcode::DIV: SAFE_BIN_ARITH_OP(/); break;
+			case Opcode::MOD: SAFE_BIN_ARITH_OP(%); break;
 			case Opcode::OR: BIN_ARITH_OP(||); break;
 			case Opcode::AND: BIN_ARITH_OP(&&); break;
 			case Opcode::EQ: BIN_ARITH_OP(==); break;
