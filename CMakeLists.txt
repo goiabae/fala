@@ -33,6 +33,7 @@ BISON_TARGET(
 	COMPILE_FLAGS "-v -Werror")
 
 add_library(falaparser STATIC
+	src/lexer.cpp
 	${BISON_PARSER_OUTPUTS})
 
 set_property(TARGET falaparser PROPERTY CXX_STANDARD 23)
@@ -44,7 +45,6 @@ target_include_directories(falaparser PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 add_library(falalib SHARED
 	src/str_pool.cpp
-	src/lexer.cpp
 	src/ast.cpp
 	src/typecheck.cpp
 	src/walk.cpp
