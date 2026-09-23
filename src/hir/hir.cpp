@@ -27,6 +27,28 @@ Code operator+(Code pre, Code post) {
 	return res;
 }
 
+void Code::if_(
+	hir::Register result, hir::Operand condition, hir::Block then_branch,
+	hir::Block else_branch
+) {
+	assert(not result.is_mutable);
+	instructions.push_back(
+		Instruction {
+			.opcode = Opcode::IF,
+			.operands = {result, condition, then_branch, else_branch},
+		}
+	);
+}
+
+void Code::yield(hir::Operand value) {
+	instructions.push_back(
+		Instruction {
+			.opcode = Opcode::YIELD,
+			.operands = {value},
+		}
+	);
+}
+
 void Code::call(
 	hir::Register result, hir::Operand function,
 	std::vector<hir::Operand> arguments
@@ -473,6 +495,27 @@ void print_instruction(
 				fprintf(fd, " ");
 				print_operand(fd, inst.operands[i], pool, spaces);
 			}
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::IF: {
+			assert(inst.operands.size() == 4);
+			print_operand(fd, inst.operands[0], pool, spaces);
+			fprintf(fd, " = ");
+			fprintf(fd, "if ");
+			print_operand(fd, inst.operands[1], pool, spaces);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[2], pool, spaces);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[3], pool, spaces);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::YIELD: {
+			assert(inst.operands.size() == 1);
+			fprintf(fd, "yield");
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[0], pool, spaces);
 			fprintf(fd, "\n");
 			return;
 		}

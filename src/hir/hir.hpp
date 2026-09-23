@@ -134,10 +134,12 @@ enum class Opcode {
 
 	// Control flow
 	LOOP,
+	IF,
 	IF_TRUE,
 	IF_FALSE,
 	BREAK,
 	CONTINUE,
+	YIELD,
 	CALL,
 	RET,
 	CATCH, // <result> = catch <tag> <region> <block>
@@ -179,6 +181,7 @@ class Code {
 	void perform(hir::Register, hir::Label, std::vector<hir::Operand>);
 	void if_false(hir::Operand, hir::Block);
 	void if_true(hir::Operand, hir::Block);
+	void if_(hir::Register, hir::Operand, hir::Block, hir::Block);
 	void loop(hir::Label next, hir::Label stop, hir::Block);
 	void brake(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
@@ -200,6 +203,7 @@ class Code {
 	void printf(hir::Operand);
 	void printv(hir::Operand);
 	void printc(hir::Operand);
+	void yield(hir::Operand);
 };
 
 using Constant = std::variant<

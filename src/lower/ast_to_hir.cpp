@@ -344,23 +344,21 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	auto cond_opnd = cond_res.result_register;
 
 	auto then_res = compile(then_idx, ctx);
-	then_res.code.copy(result_register, then_res.result_register);
+	then_res.code.yield(then_res.result_register);
 
 	auto else_res = compile(else_idx, ctx);
-	else_res.code.copy(result_register, else_res.result_register);
+	else_res.code.yield(else_res.result_register);
 
 	auto if_true_code = std::make_shared<hir::Code>(then_res.code);
 	auto if_false_code = std::make_shared<hir::Code>(else_res.code);
 
-	code.if_true(
+	code.if_(
+		result_register,
 		cond_opnd,
 		hir::Block {
 			.body_code = if_true_code,
 			.child_blocks = {},
-		}
-	);
-	code.if_false(
-		cond_opnd,
+		},
 		hir::Block {
 			.body_code = if_false_code,
 			.child_blocks = {},
@@ -690,14 +688,29 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto cond_opnd = cond_res.result_register;
 
 			auto then_res = compile(then_idx, ctx);
-			then_res.code.copy(result_register, then_res.result_register);
+			then_res.code.yield(then_res.result_register);
+
+			hir::Code if_false {};
+
+			auto r = make_register();
+			auto l = ctx.current_module.register_constant(
+				make_label("nil"), hir::Visibility::HIDDEN, hir::Nil {}
+			);
+			if_false.get_global(r, l);
+			if_false.yield(r);
 
 			auto if_true_code = std::make_shared<hir::Code>(then_res.code);
+			auto if_false_code = std::make_shared<hir::Code>(if_false);
 
-			code.if_true(
+			code.if_(
+				result_register,
 				cond_opnd,
 				hir::Block {
 					.body_code = if_true_code,
+					.child_blocks = {},
+				},
+				hir::Block {
+					.body_code = if_false_code,
 					.child_blocks = {},
 				}
 			);
