@@ -874,8 +874,20 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			return {code, then_opnd};
 		}
-		case NodeType::BREAK: assert(false);
-		case NodeType::CONTINUE: assert(false);
+		case NodeType::BREAK: {
+			hir::Code code {};
+			auto value = compile(node[0], ctx);
+			code = code + value.code;
+			code.brake(ctx.handlers.break_handler.label);
+			return {code, {}};
+		}
+		case NodeType::CONTINUE: {
+			hir::Code code {};
+			auto value = compile(node[0], ctx);
+			code = code + value.code;
+			code.continue_(ctx.handlers.continue_handler.label);
+			return {code, {}};
+		}
 		case NodeType::ASS: {
 			hir::Code code {};
 

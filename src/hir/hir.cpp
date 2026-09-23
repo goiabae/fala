@@ -125,6 +125,10 @@ void Code::brake(hir::Label where_to) {
 	instructions.push_back(Instruction {hir::Opcode::BREAK, {where_to}});
 }
 
+void Code::continue_(hir::Label where_to) {
+	instructions.push_back(Instruction {hir::Opcode::CONTINUE, {where_to}});
+}
+
 void Code::equals(hir::Register result, hir::Operand a, hir::Operand b) {
 	instructions.push_back(Instruction {hir::Opcode::EQ, {result, a, b}});
 }

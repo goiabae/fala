@@ -184,6 +184,7 @@ class Code {
 	void if_(hir::Register, hir::Operand, hir::Block, hir::Block);
 	void loop(hir::Label next, hir::Label stop, hir::Block);
 	void brake(hir::Label where_to);
+	void continue_(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
 	void set_element(hir::Register, std::vector<hir::Operand>, hir::Operand);
 	void get_element(hir::Register, hir::Register, std::vector<hir::Operand>);
