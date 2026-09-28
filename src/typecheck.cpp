@@ -115,9 +115,31 @@ auto visit(T&& obj, F&& f) {
 		return f(std::forward<RowSet>(*x));
 	} else if (auto x = dynamic_cast<Union*>(&obj)) {
 		return f(std::forward<Union>(*x));
+	} else if (auto x = dynamic_cast<Named*>(&obj)) {
+		return f(std::forward<Named>(*x));
 	} else {
 		assert(false && "no more datatype subclasses!!!");
 	}
+}
+
+static const char* kind_of(D data) {
+	const char* p = visit(
+		*data,
+		overloaded {
+			[&](Integer&&) { return "Integer"; },
+			[&](Nil&&) { return "Nil"; },
+			[&](Void&&) { return "Void"; },
+			[&](Named&&) { return "Named"; },
+			[&](Function&&) { return "Function"; },
+			[&](Closure&&) { return "Closure"; },
+			[&](Record&&) { return "Record"; },
+			[&](RowSet&&) { return "RowSet"; },
+			[&](Array&&) { return "Array"; },
+			[&](Union&&) { return "Union"; },
+			[&](TypeVariable&&) { return "TypeVariable"; },
+		}
+	);
+	return p;
 }
 
 static bool contains(
@@ -1623,7 +1645,14 @@ void Typechecker::typecheck_pattern(NodeIndex node_idx, D data) {
 			const auto fty = std::dynamic_pointer_cast<Function>(get_datatype(ty));
 			assert(fty != nullptr);
 			if (not unify(data, fty->output)) throw std::runtime_error("");
-			auto uty = std::dynamic_pointer_cast<Union>(get_datatype(data));
+			auto c = to_concrete(data);
+			auto uty = to<Union>(c);
+			if (uty == nullptr) {
+				throw std::runtime_error(
+					std::format("cannot cast to Union. was: {}", kind_of(c))
+				);
+			}
+			assert(uty != nullptr);
 			const auto name =
 				std::string(pool.find(symtab.name_of(name_node.guid).value()));
 			if (auto found = std::ranges::find(
@@ -1718,7 +1747,7 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(node.guid).value()));
 			logger.log(LogLevel::INFO, "Retrieving definition for type {}", name);
-			return type_names.at(node.guid);
+			return make_named(node.guid);
 		}
 		case NodeType::UNION_TYPE_LITERAL: {
 			auto union_dty = std::make_shared<Union>();
@@ -1762,6 +1791,7 @@ D Typechecker::substitute_bind(const std::map<std::size_t, V>& subst, D data) {
 			[&](Integer&&) -> D { return data; },
 			[&](Nil&&) -> D { return data; },
 			[&](Void&&) -> D { return data; },
+			[&](Named&&) -> D { return data; },
 			[&](Function&& f) -> D {
 				std::vector<T> inputs {};
 				for (auto& input : f.inputs)
@@ -1835,6 +1865,7 @@ D Typechecker::substitute(const std::map<std::size_t, V>& subst, D data) {
 			[&](Integer&&) -> D { return data; },
 			[&](Nil&&) -> D { return data; },
 			[&](Void&&) -> D { return data; },
+			[&](Named&&) -> D { return data; },
 			[&](Function&& f) -> D {
 				std::vector<T> inputs {};
 				for (auto& input : f.inputs)
@@ -1985,6 +2016,7 @@ std::unordered_set<V> Typechecker::free_type_variables(D data) {
 			[](Integer&&) -> std::unordered_set<V> { return {}; },
 			[](Nil&&) -> std::unordered_set<V> { return {}; },
 			[](Void&&) -> std::unordered_set<V> { return {}; },
+			[](Named&&) -> std::unordered_set<V> { return {}; },
 			[&](Function&& f) -> std::unordered_set<V> {
 				std::unordered_set<V> set {};
 				for (const auto& input : f.inputs)
@@ -2060,6 +2092,14 @@ bool Typechecker::unify_aux(D a, D b, bool should_cast) {
 	if (auto vb = to<TypeVariable>(b))
 		if (not vb->is_bound and not vb->is_generalized)
 			return vb->bind_to(a), true;
+
+	if (auto na = to<Named>(a)) {
+		return unify_aux(type_names.at(na->name), b, should_cast);
+	}
+
+	if (auto nb = to<Named>(b)) {
+		return unify_aux(a, type_names.at(nb->name), should_cast);
+	}
 
 	if (auto ra = to<RowSet>(a))
 		if (ra->bound_record->has_value())
@@ -2294,6 +2334,40 @@ bool Typechecker::unify_aux(E a, E b, bool should_cast) {
 	}
 
 	return false;
+}
+
+D Typechecker::to_concrete(D data) const {
+	if (auto named = to<Named>(data)) {
+		auto x = type_names.at(named->name);
+		assert(named != x);
+		return to_concrete(x);
+	} else if (auto t2 = std::dynamic_pointer_cast<Integer>(data)) {
+		return data;
+	} else if (auto t2 = std::dynamic_pointer_cast<Nil>(data)) {
+		return data;
+	} else if (auto t2 = std::dynamic_pointer_cast<Void>(data)) {
+		return data;
+	} else if (auto t2 = std::dynamic_pointer_cast<Array>(data)) {
+		return data;
+	} else if (auto t2 = std::dynamic_pointer_cast<Function>(data)) {
+		return data;
+	} else if (auto t2 = std::dynamic_pointer_cast<TypeVariable>(data)) {
+		if (not t2->is_bound)
+			throw std::runtime_error("type variable was not bound");
+		return to_concrete(t2->bound_type);
+	} else if (auto t2 = std::dynamic_pointer_cast<RowSet>(data)) {
+		if (t2->bound_record->has_value())
+			return to_concrete(t2->bound_record->value());
+		throw std::runtime_error("row set is not a concrete record");
+	} else if (auto t2 = std::dynamic_pointer_cast<Record>(data)) {
+		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Closure>(data)) {
+		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Union>(data)) {
+		return t2;
+	} else {
+		assert(false && "no more variants of type!!!");
+	}
 }
 
 bool Typechecker::unify(E a, E b) { return unify_aux(a, b, false); }

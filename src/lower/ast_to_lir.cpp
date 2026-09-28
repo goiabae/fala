@@ -906,7 +906,7 @@ lir::Block Compiler::compile_pattern_match(
 			const auto ctor_name =
 				std::string(pool.find(symtab.name_of(name_node.guid).value()));
 			const auto union_ty =
-				std::dynamic_pointer_cast<Union>(get_datatype(expr_type));
+				std::dynamic_pointer_cast<Union>(tpc.to_concrete(expr_type));
 			assert(union_ty != nullptr);
 			if (auto found = std::ranges::find(
 						union_ty->constructors,

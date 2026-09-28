@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ast.hpp"
+#include "indexes.hpp"
 #include "variable.hpp"
 
 #define M std::shared_ptr<Mode>
@@ -43,6 +44,7 @@ struct Array;
 struct Record;
 struct RowSet;
 struct Union;
+struct Named;
 
 struct EffectSet;
 
@@ -103,6 +105,10 @@ struct Union final : DERIVE (
 	Union() = default;
 	Union(std::vector<Constructor> constructors) : constructors(constructors) {}
 	std::vector<Constructor> constructors;
+);
+
+struct Named final : DERIVE (
+	Guid name;
 );
 
 // clang-format on
@@ -190,6 +196,7 @@ std::shared_ptr<DataScheme> make_scheme(
 	std::vector<std::shared_ptr<TypeVariable>>, D
 );
 E make_effsetvar(std::size_t index);
+D make_named(Guid name);
 T as_monotype(std::shared_ptr<PolyType>);
 D get_datatype(D);
 

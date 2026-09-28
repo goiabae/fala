@@ -1,5 +1,6 @@
 #include "type.hpp"
 
+#include <cassert>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -355,4 +356,14 @@ T as_monotype(std::shared_ptr<PolyType> p) {
 			"can't cast polytype with quantified arguments to a monotype"
 		);
 	return make_type(p->mode, p->scheme->body);
+}
+
+size_t Named::size_of() { assert(false); }
+
+std::ostream& Named::print(std::ostream& st) const { return st << name.index; }
+
+D make_named(Guid name) {
+	auto n = std::make_shared<Named>();
+	n->name = name;
+	return n;
 }

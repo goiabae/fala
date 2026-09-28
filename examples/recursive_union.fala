@@ -1,0 +1,25 @@
+
+type List = union
+	Nil()
+	Cons(Int<64>, List)
+end
+
+fun print_listln xs !io =
+	match xs with
+		Nil() then write_str!("\n")
+		Cons(n, xss) then do
+			write_int!(n)
+			write_str!(" ")
+			print_listln(xss)
+		end
+	end
+
+fun main _ !io =
+	let val x0 = Nil() in
+	let val x1 = Cons(1, x0) in
+	let val x2 = Cons(2, x1) in
+	let val x3 = Cons(3, x1) in
+	do
+		print_listln(x2)
+		print_listln(x3)
+	end

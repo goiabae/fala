@@ -70,6 +70,7 @@ struct Typechecker {
 	P dont_generalize(T, ScopeIndex);
 	D substitute_bind(const std::map<std::size_t, V>&, D);
 	D substitute(const std::map<std::size_t, V>&, D);
+	D to_concrete(D) const;
 
  public:
 	bool unify(M, M);
