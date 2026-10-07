@@ -116,9 +116,11 @@ ScopeIndex SymbolTable::make_child_scope(ScopeIndex s) {
 		.function = function_of(s),
 	};
 	m_scopes.push_back(child);
-	return ScopeIndex {
+	auto index = ScopeIndex {
 		.index = static_cast<ScopeIndex::index_type>(m_scopes.size() - 1),
 	};
+	m_symbols_in_scope[index] = {};
+	return index;
 }
 
 ScopeIndex SymbolTable::make_function_scope(ScopeIndex s, NodeIndex body) {
@@ -131,9 +133,11 @@ ScopeIndex SymbolTable::make_function_scope(ScopeIndex s, NodeIndex body) {
 	};
 	m_scopes.push_back(child);
 	m_body_function[body] = f;
-	return ScopeIndex {
+	auto index = ScopeIndex {
 		.index = static_cast<ScopeIndex::index_type>(m_scopes.size() - 1),
 	};
+	m_symbols_in_scope[index] = {};
+	return index;
 }
 
 std::optional<RelativeScope> SymbolTable::relative_scope_of(
