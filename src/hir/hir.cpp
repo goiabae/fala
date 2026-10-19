@@ -589,7 +589,7 @@ hir::Label Module::register_constant(
 }
 
 static void myprint(FILE* fd, const hir::Integer& i, const StringPool&, int) {
-	fprintf(fd, "%d", i.integer);
+	fprintf(fd, "%ld", i.integer);
 }
 
 static void myprint(FILE* fd, const hir::Character& c, const StringPool&, int) {

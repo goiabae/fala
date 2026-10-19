@@ -86,9 +86,9 @@ struct Label {
 };
 
 struct Immediate {
-	Immediate(int number) : number {number} {}
+	Immediate(int64_t number) : number {number} {}
 	Immediate() = default;
-	int number;
+	int64_t number;
 };
 
 struct ByteString {

@@ -1707,12 +1707,12 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 
 			if (name == "Int") {
 				auto bit_count = ast.at(args_node[0]).num;
-				return make_integer(bit_count, Integer::Sign::SIGNED);
+				return make_integer((int)bit_count, Integer::Sign::SIGNED);
 			}
 
 			if (name == "Uint") {
 				auto bit_count = ast.at(args_node[0]).num;
-				return make_integer(bit_count, Integer::Sign::UNSIGNED);
+				return make_integer((int)bit_count, Integer::Sign::UNSIGNED);
 			}
 
 			// TODO

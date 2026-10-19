@@ -175,7 +175,7 @@ int print_operand(FILE* fd, Operand opnd) {
 			     + print_type(fd, opnd.as_register().type);
 		case Operand::Kind::LABEL: return fprintf(fd, "L%03zu", opnd.as_label().id);
 		case Operand::Kind::IMMEDIATE:
-			return fprintf(fd, "%d", opnd.as_immediate().number);
+			return fprintf(fd, "%ld", opnd.as_immediate().number);
 		case Operand::Kind::BYTE_STRING: {
 			int printed = 0;
 			printed += fprintf(fd, "\"");
@@ -250,7 +250,7 @@ const char* opcode_repr(Opcode op) {
 
 int print_operand_indirect(FILE* fd, Operand opnd) {
 	if (opnd.kind == Operand::Kind::IMMEDIATE) {
-		return fprintf(fd, "%d", opnd.as_immediate().number);
+		return fprintf(fd, "%ld", opnd.as_immediate().number);
 	} else if (opnd.kind == Operand::Kind::REGISTER) {
 		return fprintf(fd, "%%%zu", opnd.as_register().index) + fprintf(fd, ":")
 		     + print_type(fd, opnd.as_register().type);

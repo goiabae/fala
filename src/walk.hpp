@@ -31,7 +31,8 @@ struct Record;
 struct Nil {};
 
 using Value = std::variant<
-	BuiltinFunction, CustomFunction, Array, int, bool, std::string, Nil, Record>;
+	BuiltinFunction, CustomFunction, Array, int64_t, bool, std::string, Nil,
+	Record>;
 
 using ValueCell = std::shared_ptr<Value>;
 
@@ -87,7 +88,7 @@ struct Interpreter {
 	auto eval_assignment(NodeIndex var_idx, NodeIndex exp_idx) -> ValueCell;
 	auto eval_string(StrID string_id) -> ValueCell;
 	auto eval_indexing(NodeIndex var_idx, NodeIndex index_idx) -> ValueCell;
-	auto eval_integer(int integer) -> ValueCell;
+	auto eval_integer(int64_t integer) -> ValueCell;
 	auto eval_break(NodeIndex exp_idx) -> ValueCell;
 	auto eval_continue(NodeIndex exp_idx) -> ValueCell;
 	auto eval_arithmetic(char operation, NodeIndex left_idx, NodeIndex right_idx) -> ValueCell;

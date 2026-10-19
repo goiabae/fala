@@ -130,18 +130,18 @@ auto Interpreter::eval_for_loop(
 		inc = std::make_shared<Value>(1);
 	}
 
-	if (not std::holds_alternative<int>(*to))
+	if (not std::holds_alternative<int64_t>(*to))
 		err("Type of `to' value is not number");
 
-	if (not std::holds_alternative<int>(*inc))
+	if (not std::holds_alternative<int64_t>(*inc))
 		err("Type of `inc' value is not number");
 
-	int initial = std::get<int>(*decl);
-	int upto = std::get<int>(*to);
-	int inc_int = std::get<int>(*inc);
+	auto initial = std::get<int64_t>(*decl);
+	auto upto = std::get<int64_t>(*to);
+	auto inc_int = std::get<int64_t>(*inc);
 
 	ctx.in_loop = true;
-	for (int i = initial; i != upto; i += inc_int) {
+	for (auto i = initial; i != upto; i += inc_int) {
 		*decl = Value {i};
 		eval_node(then_idx);
 		if (ctx.should_break) {
@@ -184,8 +184,8 @@ auto Interpreter::eval_while_loop(NodeIndex cond_idx, NodeIndex then_idx)
 }
 
 ValueCell copy_value(ValueCell value) {
-	if (std::holds_alternative<int>(*value)) {
-		return std::make_shared<Value>(std::get<int>(*value));
+	if (std::holds_alternative<int64_t>(*value)) {
+		return std::make_shared<Value>(std::get<int64_t>(*value));
 	} else if (std::holds_alternative<Array>(*value)) {
 		auto size = std::get<Array>(*value).size;
 		Array arr {
@@ -263,7 +263,7 @@ auto Interpreter::eval_character(char character) -> ValueCell {
 	return std::make_shared<Value>((int)character);
 }
 
-auto Interpreter::eval_integer(int integer) -> ValueCell {
+auto Interpreter::eval_integer(int64_t integer) -> ValueCell {
 	return std::make_shared<Value>(integer);
 }
 
@@ -316,13 +316,13 @@ auto Interpreter::eval_arithmetic(
 		exit(1);
 	}
 	assert(right != nullptr);
-	if (not std::holds_alternative<int>(*left))
+	if (not std::holds_alternative<int64_t>(*left))
 		err("Left-hand side of arithmentic operator is not a number");
-	if (not std::holds_alternative<int>(*right))
+	if (not std::holds_alternative<int64_t>(*right))
 		err("Right-hand side of arithmentic operator is not a number");
-	int left_int = std::get<int>(*left);
-	int right_int = std::get<int>(*right);
-	int result_int = -1;
+	auto left_int = std::get<int64_t>(*left);
+	auto right_int = std::get<int64_t>(*right);
+	int64_t result_int = -1;
 	if (operation == '+') {
 		result_int = left_int + right_int;
 	} else if (operation == '-') {
@@ -354,22 +354,22 @@ auto Interpreter::eval_comparison(
 		else if (std::holds_alternative<bool>(*left)
 		         and std::holds_alternative<bool>(*right))
 			result = std::get<bool>(*left) == std::get<bool>(*right);
-		else if (std::holds_alternative<int>(*left)
-		         and std::holds_alternative<int>(*right))
-			result = std::get<int>(*left) == std::get<int>(*right);
+		else if (std::holds_alternative<int64_t>(*left)
+		         and std::holds_alternative<int64_t>(*right))
+			result = std::get<int64_t>(*left) == std::get<int64_t>(*right);
 		else
 			err("Can't compare values for equality");
 
 		return std::make_shared<Value>(result);
 	}
 
-	if (not std::holds_alternative<int>(*left)
-	    or not std::holds_alternative<int>(*right)) {
+	if (not std::holds_alternative<int64_t>(*left)
+	    or not std::holds_alternative<int64_t>(*right)) {
 		err("Arithmetic comparison is allowed only between numbers");
 	}
 
-	int left_int = std::get<int>(*left);
-	int right_int = std::get<int>(*right);
+	auto left_int = std::get<int64_t>(*left);
+	auto right_int = std::get<int64_t>(*right);
 	bool result = false;
 	if (operation == '>') {
 		result = left_int > right_int;
@@ -399,11 +399,11 @@ auto Interpreter::eval_indexing(NodeIndex var_idx, NodeIndex index_idx)
 	if (not std::holds_alternative<Array>(*base)) err("Can only index arrays");
 
 	const auto off = eval_node(index_idx);
-	if (not std::holds_alternative<int>(*off)) err("Index must be a number");
+	if (not std::holds_alternative<int64_t>(*off)) err("Index must be a number");
 
-	assert((size_t)std::get<int>(*off) < std::get<Array>(*base).size);
+	assert((size_t)std::get<int64_t>(*off) < std::get<Array>(*base).size);
 
-	auto value = std::get<Array>(*base).items[(size_t)std::get<int>(*off)];
+	auto value = std::get<Array>(*base).items[(size_t)std::get<int64_t>(*off)];
 	return value;
 }
 
@@ -541,8 +541,8 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 		case NodeType::REPEAT: {
 			auto init = eval_node(node[0]);
 			auto v1 = eval_node(node[1]);
-			assert(std::holds_alternative<int>(*v1));
-			auto amount = std::get<int>(*v1);
+			assert(std::holds_alternative<int64_t>(*v1));
+			auto amount = std::get<int64_t>(*v1);
 			std::vector<ValueCell> values {};
 			for (auto i = 0ul; i < static_cast<std::size_t>(amount); i++) {
 				values.push_back(copy_value(init));
@@ -578,8 +578,8 @@ auto Interpreter::eval_node(NodeIndex node_idx) -> ValueCell {
 }
 
 std::ostream& operator<<(std::ostream& st, const ValueCell& val) {
-	if (std::holds_alternative<int>(*val)) {
-		st << std::get<int>(*val);
+	if (std::holds_alternative<int64_t>(*val)) {
+		st << std::get<int64_t>(*val);
 	} else if (std::holds_alternative<std::string>(*val)) {
 		st << std::get<std::string>(*val);
 	} else if (std::holds_alternative<bool>(*val)) {
@@ -612,9 +612,9 @@ ValueCell Interpreter::builtin_write(std::vector<ValueCell> args) {
 ValueCell Interpreter::builtin_array(std::vector<ValueCell> args) {
 	if (args.size() != 1) err("Expected a single numeric argument");
 	if (args[0] == nullptr) err("Expected a single numeric argument");
-	if (not std::holds_alternative<int>(*args[0]))
+	if (not std::holds_alternative<int64_t>(*args[0]))
 		err("Expected a single numeric argument");
-	auto arr_len = std::get<int>(*args[0]);
+	auto arr_len = std::get<int64_t>(*args[0]);
 	if (arr_len < 0) err("Array length must be positive");
 
 	ValueCell val = std::make_shared<Value>(Array {
@@ -627,8 +627,8 @@ ValueCell Interpreter::builtin_array(std::vector<ValueCell> args) {
 
 ValueCell Interpreter::builtin_exit(std::vector<ValueCell> args) {
 	if (args.size() != 1) err("exit takes exit code as a argument");
-	Number exit_code = std::get<int>(*args[0]);
-	exit(exit_code);
+	Number exit_code = std::get<int64_t>(*args[0]);
+	exit((int)exit_code);
 	return {};
 }
 

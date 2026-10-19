@@ -31,7 +31,7 @@ static void ast_node_print_scoped(
 
 	if (node.type == NodeType::NUM) {
 		print_spaces(fd, space + 2);
-		fprintf(fd, "num = %d\n", node.num);
+		fprintf(fd, "num = %ld\n", node.num);
 	} else if (node.type == NodeType::TRUE) {
 		print_spaces(fd, space + 2);
 		fprintf(fd, "literal = true\n");

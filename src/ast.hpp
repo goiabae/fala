@@ -13,7 +13,7 @@
 
 #define INVALID_NODE_INDEX -1
 
-typedef int Number;
+typedef int64_t Number;
 typedef char* String;
 
 enum class NodeType {

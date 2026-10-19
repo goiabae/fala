@@ -16,7 +16,7 @@ class Code;
 
 class Integer {
  public:
-	int integer;
+	int64_t integer;
 };
 
 class String {

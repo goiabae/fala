@@ -4,8 +4,8 @@
 #include "ast.hpp"
 
 union TokenValue {
-	int num;
-	char *str;
+	int64_t num;
+	char* str;
 	char character;
 	NodeIndex node;
 };
