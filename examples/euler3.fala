@@ -1,0 +1,21 @@
+
+fun max a b =
+	if a > b then
+		a
+	else
+		b
+
+fun main !io = do
+	var x = 1
+	var y = 600851475143
+	var i = 2
+	while not (y == 1) then do
+		if (y % i) == 0 then do
+			x = max(i, x)
+			y = y / i
+		end else
+			i = i + 1
+	end
+	write_int!(x)
+	write_str!("\n")
+end

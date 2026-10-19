@@ -1,0 +1,16 @@
+
+-- ==> 4613732
+fun main !io = do
+	var acc = 2
+	var f1 = 1
+	var f2 = 2
+	while f2 <= 4000000 then do
+		val t = f2
+		f2 = f1 + f2
+		f1 = t
+		when (f2 % 2) == 0 then
+			acc = acc + f2
+	end
+	write_int!(acc)
+	write_str!("\n")
+end

@@ -1,0 +1,12 @@
+
+type A = [Int<64>]
+
+fun main !io = do
+	val a: A = [
+		7;
+		11;
+		13;
+	]
+	write_int!(a[1])
+	write_str!("\n")
+end

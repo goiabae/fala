@@ -1,0 +1,14 @@
+
+type R = {
+	x: Int<64>;
+	y: Int<64>;
+}
+
+fun main !io = do
+	val r: R = {
+		x = 3;
+		y = 4;
+	}
+	write_int!(r.x)
+	write_str!("\n")
+end

@@ -1,0 +1,9 @@
+-- ==> 233168
+fun main !io = do
+	var acc = 0
+	for var i = 0 to 1000 then
+		when (i % 3) == 0 or (i % 5) == 0 then
+			acc = acc + i
+	write_int!(acc)
+	write_str!("\n")
+end
