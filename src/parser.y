@@ -399,7 +399,7 @@ term : "(" nls exp nls ")" { $$ = $exp; }
      ;
 
 record_literal
-  : "{" field_list opt_field_sep "}" { $$ = $2; }
+  : "{" nls field_list[fields] opt_field_sepnls "}" { $$ = $fields; }
   ;
 
 field_list
@@ -407,7 +407,7 @@ field_list
     $$ = new_list_node(ast, NodeType::RECORD_LITERAL);
     $$ = list_append_node(ast, $$, $1);
   }
-  | field_list[prefix] field_sep field[postfix] {
+  | field_list[prefix] field_sepnls field[postfix] {
     $$ = list_append_node(ast, $prefix, $postfix);
   }
   ;
@@ -419,7 +419,7 @@ field
   ;
 
 array_literal
-  : "[" element_list opt_field_sep "]" { $$ = $2; }
+  : "[" nls element_list[elements] opt_field_sepnls "]" { $$ = $elements; }
   ;
 
 element_list
@@ -427,22 +427,43 @@ element_list
     $$ = new_list_node(ast, NodeType::ARRAY_LITERAL);
     $$ = list_append_node(ast, $$, $1);
   }
-  | element_list[prefix] field_sep term[postfix] {
+  | element_list[prefix] field_sepnls term[postfix] {
     $$ = list_append_node(ast, $prefix, $postfix);
   }
   ;
 
 field_sep : ";" ;
 
-opt_field_sep : %empty | field_sep ;
+/* ("\n"* (";" "\n"*)?)? */
+opt_field_sepnls
+	: %empty
+	| field_sepnls
+	;
+
+/* "\n"* (";" "\n"*)? */
+field_sepnls
+  : leading_newlines
+	;
+
+leading_newlines
+	: "\n"
+	| "\n" leading_newlines
+	| field_sep
+	| field_sep trailing_newlines
+	;
+
+trailing_newlines
+	: "\n"
+	| "\n" trailing_newlines
+	;
 
 id : ID { $$ = new_string_node(ast, NodeType::ID, @$, pool, $1); } ;
 
 int : NUMBER { $$ = new_number_node(ast, @$, $1); } ;
 
 type_declaration
-	: TYPE id "=" type_expression {
-		$$ = NODE(NodeType::TYPE_DECL, $2, $4);
+	: TYPE id "=" nls type_expression {
+		$$ = NODE(NodeType::TYPE_DECL, $2, $5);
 	}
 	;
 
@@ -512,7 +533,7 @@ type_argument
   ;
 
 record_type_literal
-  : "{" field_type_list opt_field_sep "}" { $$ = $2; }
+  : "{" nls field_type_list[fields] opt_field_sepnls "}" { $$ = $fields; }
   ;
 
 field_type_list
@@ -520,7 +541,7 @@ field_type_list
     $$ = new_list_node(ast, NodeType::RECORD_TYPE_LITERAL);
     $$ = list_append_node(ast, $$, $1);
   }
-  | field_type_list[prefix] field_sep field_type[postfix] {
+  | field_type_list[prefix] field_sepnls field_type[postfix] {
     $$ = list_append_node(ast, $prefix, $postfix);
   }
   ;
