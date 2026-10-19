@@ -1221,9 +1221,11 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			if (auto static_function = std::get_if<StaticFunction>(&var)) {
 				auto r0 = make_register();
 				auto r1 = make_register();
+				auto r2 = make_variable();
 				code.make_tuple(r0, {});
 				code.enclose(r1, static_function->label, r0);
-				return {code, r1};
+				code.alloc(r2, r1);
+				return {code, r2};
 			} else if (auto local_variable = std::get_if<LocalVariable>(&var)) {
 				if (rel == RelativeScope::FREE) {
 					if (auto closure = ctx.current_closure) {
