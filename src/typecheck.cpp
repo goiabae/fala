@@ -1569,7 +1569,8 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			auto effset = eval_effset(node[0]);
 			auto effect = singleton_effset(effset);
 			const auto& param_list_node = ast.at(node[1]);
-			for (auto param_idx : param_list_node) {
+			for (auto [i, param_idx] :
+			     param_list_node | std::ranges::views::enumerate) {
 				const auto& param = ast.at(param_idx);
 				assert(param.type == NodeType::PARAM);
 				const auto& param_name = ast.at(param[1]);
@@ -1595,11 +1596,14 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				auto param_datatype = (param_type_node.type == NodeType::EMPTY)
 				                      ? make_datavar()
 				                      : eval(param[2]);
-				auto var = make_type(mode, param_datatype);
+				auto param_type = make_type(mode, param_datatype);
+				unify(param_type, effect->inputs.at(static_cast<std::size_t>(i)));
+				auto var = param_type;
 				const auto p1 = dont_generalize(var, {});
 				variables[param_name.guid] = p1;
 			}
 			auto p = typecheck(node[3]);
+			unify(p.first->datatype, effect->output);
 			ASSOC_TYPE(node_idx, p.first);
 			return remove_effect(p, effect);
 		}
