@@ -1083,12 +1083,14 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			const auto& decls_node = ast.at(decls_idx);
 
+			std::vector<std::pair<hir::Code*, hir::Operand>> chain {};
 			Context inner_ctx {ctx};
 			for (auto idx : decls_node) {
 				if (auto r = compile_declaration(idx, inner_ctx)) {
 					auto [c, v, b] = *r;
 					if (b.has_value()) {
 						*code = *code + c;
+						chain.push_back(std::make_pair(code, v));
 						code = *b;
 					} else {
 						*code = *code + c;
@@ -1105,6 +1107,10 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			}
 			auto expression_result = compile(exp_idx, inner_ctx);
 			*code = *code + expression_result.code;
+			chain.push_back(std::make_pair(code, expression_result.result_register));
+			for (auto i = chain.size(); i > 1; i--) {
+				chain.at(i - 1).first->yield(chain.at(i - 1).second);
+			}
 			return {code_, expression_result.result_register};
 		}
 		case NodeType::CHAR: {
