@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "hir/hir_type.hpp"
 #include "str_pool.h"
 
 namespace hir {
@@ -28,6 +29,7 @@ struct Register {
 	size_t id;
 	std::optional<std::string> name;
 	bool is_mutable;
+	HTPtr htype;
 };
 
 class Label {
@@ -253,9 +255,11 @@ struct Module {
 
 Code operator+(Code pre, Code post);
 
-void print_code(FILE* fd, const Code& code, const StringPool& pool, int spaces);
+void print_code(
+	FILE* fd, const Code& code, const StringPool& pool, int spaces, HTContext&
+);
 void print_module(
-	FILE* fd, const Module& mod, const StringPool& pool, int spaces
+	FILE* fd, const Module& mod, const StringPool& pool, int spaces, HTContext&
 );
 
 } // namespace hir

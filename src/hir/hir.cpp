@@ -1,21 +1,28 @@
 #include "hir.hpp"
 
 #include <cassert>
+#include <cstdio>
 #include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <variant>
 
+#include "hir/hir_type.hpp"
 #include "str_pool.h"
 #include "utils.hpp"
 
 namespace hir {
 
 static void print_operand(
-	FILE* fd, Operand opnd, const StringPool& pool, int spaces
+	FILE* fd, Operand opnd, const StringPool& pool, int spaces, HTContext& ctx
 );
 static void print_instruction(
-	FILE* fd, const Instruction& inst, const StringPool& pool, int spaces
+	FILE* fd, const Instruction& inst, const StringPool& pool, int spaces,
+	HTContext& ctx
+);
+static void print_type(
+	FILE* fd, const HTPtr& hptr, const StringPool& pool, int spaces,
+	HTContext& ctx
 );
 
 Code operator+(Code pre, Code post) {
@@ -165,7 +172,9 @@ void Code::get_element(hir::Register a, hir::Register b, hir::Operand c) {
 	instructions.push_back(Instruction {hir::Opcode::GET_ELEMENT, {a, b, c}});
 }
 
-void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
+void print_operand(
+	FILE* fd, Operand opnd, const StringPool& pool, int spaces, HTContext& ctx
+) {
 	switch (opnd.kind) {
 		case Operand::Kind::INVALID: assert(false);
 		case Operand::Kind::REGISTER: {
@@ -188,7 +197,7 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 			fprintf(fd, "{\n");
 			assert(opnd.block.body_code != nullptr);
 			const auto& code = *opnd.block.body_code;
-			print_code(fd, code, pool, spaces + 2);
+			print_code(fd, code, pool, spaces + 2, ctx);
 			for (int i = 0; i < spaces; i++) fprintf(fd, " ");
 			fprintf(fd, "}");
 			return;
@@ -202,7 +211,9 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 			fprintf(fd, "(");
 			for (const auto& [i, p] :
 			     std::ranges::views::enumerate(r.parameter_registers)) {
-				print_operand(fd, p, pool, spaces);
+				print_operand(fd, p, pool, spaces, ctx);
+				fprintf(fd, ": ");
+				print_type(fd, p.htype, pool, spaces, ctx);
 				if (static_cast<std::size_t>(i) != (r.parameter_registers.size() - 1)) {
 					fprintf(fd, ", ");
 				}
@@ -212,7 +223,7 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 			fprintf(fd, " ");
 			for (const auto& [n, b] : r.blocks) {
 				// fprintf(fd, "%s", n.c_str());
-				print_operand(fd, b, pool, spaces);
+				print_operand(fd, b, pool, spaces, ctx);
 			}
 			return;
 		}
@@ -223,51 +234,102 @@ void print_operand(FILE* fd, Operand opnd, const StringPool& pool, int spaces) {
 	}
 }
 
+void print_type(
+	FILE* fd, const HTPtr& hptr, const StringPool& pool, int spaces,
+	HTContext& ctx
+) {
+	const auto& htype = ctx.at(hptr);
+	std::visit(
+		overloaded {
+			[&](const HInteger& i) {
+				if (i.sign == HInteger::Sign::UNSIGNED) {
+					fprintf(fd, "u%d", i.bit_count);
+				} else {
+					fprintf(fd, "s%d", i.bit_count);
+				}
+			},
+			[&](const HNil&) { fprintf(fd, "nil"); },
+			[&](const HVoid&) { fprintf(fd, "void"); },
+			[&](const HContinuation&) { fprintf(fd, "cont"); },
+			[&](const HClosure&) { fprintf(fd, "clos"); },
+			[&](const HArray& a) {
+				fprintf(fd, "[]");
+				print_type(fd, a.element, pool, spaces, ctx);
+			},
+			[&](const HTuple& t) {
+				fprintf(fd, "(");
+				for (auto i = 0ul; i < t.elements.size(); i++) {
+					print_type(fd, t.elements.at(i), pool, spaces, ctx);
+					if (i != (t.elements.size() - 1)) {
+						fprintf(fd, "; ");
+					}
+				}
+				fprintf(fd, ")");
+			},
+			[&](const HUnion&) { fprintf(fd, "union"); },
+			[&](const HAny&) { fprintf(fd, "any"); },
+			[&](const HGeneric& g) {
+				if (g.name <= 26) {
+					fprintf(fd, "'%c", 'a' + (char)g.name);
+				} else {
+					fprintf(fd, "'%zu", g.name);
+				}
+			}
+		},
+		htype.data
+	);
+}
+
 void print_instruction(
-	FILE* fd, const Instruction& inst, const StringPool& pool, int spaces
+	FILE* fd, const Instruction& inst, const StringPool& pool, int spaces,
+	HTContext& ctx
 ) {
 	for (int i = 0; i < spaces; i++) fprintf(fd, " ");
 	switch (inst.opcode) {
 		case Opcode::PRINTF: {
 			fprintf(fd, "printf");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::PRINTV: {
 			fprintf(fd, "printv");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::PRINTC: {
 			fprintf(fd, "printc");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::READ: assert(false);
 		case Opcode::COPY: {
 			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
-#define BINARY_INST(PRETTY)                            \
-	{                                                    \
-		assert(inst.operands.size() == 3);                 \
-		print_operand(fd, inst.operands[0], pool, spaces); \
-		fprintf(fd, " = ");                                \
-		print_operand(fd, inst.operands[1], pool, spaces); \
-		fprintf(fd, " " PRETTY " ");                       \
-		print_operand(fd, inst.operands[2], pool, spaces); \
-		fprintf(fd, "\n");                                 \
-		return;                                            \
+#define BINARY_INST(PRETTY)                                              \
+	{                                                                      \
+		assert(inst.operands.size() == 3);                                   \
+		print_operand(fd, inst.operands[0], pool, spaces, ctx);              \
+		fprintf(fd, ": ");                                                   \
+		print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx); \
+		fprintf(fd, " = ");                                                  \
+		print_operand(fd, inst.operands[1], pool, spaces, ctx);              \
+		fprintf(fd, " " PRETTY " ");                                         \
+		print_operand(fd, inst.operands[2], pool, spaces, ctx);              \
+		fprintf(fd, "\n");                                                   \
+		return;                                                              \
 	}
 
 		case Opcode::ADD: BINARY_INST("+");
@@ -285,23 +347,27 @@ void print_instruction(
 		case Opcode::GREATER_EQ: BINARY_INST(">=");
 		case Opcode::NOT: {
 			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "not");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::GET_ELEMENT: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "get_element");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
@@ -310,18 +376,20 @@ void print_instruction(
 			fprintf(fd, "set_element");
 			for (size_t i = 0; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::CALL: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "call");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
@@ -330,7 +398,7 @@ void print_instruction(
 			fprintf(fd, "ret");
 			for (size_t i = 0; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
@@ -338,35 +406,35 @@ void print_instruction(
 		case Opcode::LOOP: {
 			assert(inst.operands.size() == 3);
 			fprintf(fd, "loop ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces);
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::IF_TRUE: {
 			assert(inst.operands.size() == 2);
 			fprintf(fd, "if_true ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::IF_FALSE: {
 			assert(inst.operands.size() == 2);
 			fprintf(fd, "if_false ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::BREAK: {
 			fprintf(fd, "break ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
@@ -376,142 +444,168 @@ void print_instruction(
 		}
 		case Opcode::LOAD: {
 			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "load ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::STORE: {
 			assert(inst.operands.size() == 2);
 			fprintf(fd, "store ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::ALLOC: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "alloc ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::CLONE: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "clone ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::ALIAS: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "alias ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::GET_GLOBAL: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "get_global ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::CATCH: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "catch ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces);
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[3], pool, spaces);
+			print_operand(fd, inst.operands[3], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::PERFORM: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "perform");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::RESUME: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "resume");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces);
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::REPEAT: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "repeat");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces);
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::MAKE_TUPLE: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "make_tuple");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::ENCLOSE: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "enclose");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces);
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::MAKE_ARRAY: {
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "make_array");
 			for (size_t i = 1; i < inst.operands.size(); i++) {
 				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces);
+				print_operand(fd, inst.operands[i], pool, spaces, ctx);
 			}
 			fprintf(fd, "\n");
 			return;
 		}
 		case Opcode::IF: {
 			assert(inst.operands.size() == 4);
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
 			fprintf(fd, " = ");
 			fprintf(fd, "if ");
-			print_operand(fd, inst.operands[1], pool, spaces);
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces);
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[3], pool, spaces);
+			print_operand(fd, inst.operands[3], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
@@ -519,7 +613,7 @@ void print_instruction(
 			assert(inst.operands.size() == 1);
 			fprintf(fd, "yield");
 			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
 			fprintf(fd, "\n");
 			return;
 		}
@@ -527,11 +621,11 @@ void print_instruction(
 }
 
 void print_code(
-	FILE* fd, const Code& code, const StringPool& pool, int spaces
+	FILE* fd, const Code& code, const StringPool& pool, int spaces, HTContext& ctx
 ) {
 	size_t i = 0;
 	for (i = 0; i < code.instructions.size(); i++) {
-		print_instruction(fd, code.instructions[i], pool, spaces);
+		print_instruction(fd, code.instructions[i], pool, spaces, ctx);
 	}
 }
 
@@ -588,20 +682,26 @@ hir::Label Module::register_constant(
 	return name;
 }
 
-static void myprint(FILE* fd, const hir::Integer& i, const StringPool&, int) {
+static void myprint(
+	FILE* fd, const hir::Integer& i, const StringPool&, int, HTContext&
+) {
 	fprintf(fd, "%ld", i.integer);
 }
 
-static void myprint(FILE* fd, const hir::Character& c, const StringPool&, int) {
+static void myprint(
+	FILE* fd, const hir::Character& c, const StringPool&, int, HTContext&
+) {
 	fprintf(fd, "'%c'", c.character);
 }
 
-static void myprint(FILE* fd, const hir::Boolean& b, const StringPool&, int) {
+static void myprint(
+	FILE* fd, const hir::Boolean& b, const StringPool&, int, HTContext&
+) {
 	fprintf(fd, "%s", b.boolean ? "true" : "false");
 }
 
 static void myprint(
-	FILE* fd, const hir::String& s, const StringPool& pool, int
+	FILE* fd, const hir::String& s, const StringPool& pool, int, HTContext&
 ) {
 	auto str = std::string_view(pool.find(s.str_id));
 	fprintf(fd, "\"");
@@ -619,7 +719,8 @@ static void myprint(
 }
 
 static void myprint(
-	FILE* fd, const hir::Function& fn, const StringPool& pool, int spaces
+	FILE* fd, const hir::Function& fn, const StringPool& pool, int spaces,
+	HTContext& ctx
 ) {
 	fprintf(fd, "function ");
 	if (fn.is_builtin) {
@@ -628,7 +729,9 @@ static void myprint(
 		fprintf(fd, "(");
 		for (const auto& [i, reg] :
 		     std::ranges::views::enumerate(fn.parameter_registers)) {
-			print_operand(fd, reg, pool, spaces);
+			print_operand(fd, reg, pool, spaces, ctx);
+			fprintf(fd, ": ");
+			print_type(fd, reg.htype, pool, spaces, ctx);
 			if (i != (long)(fn.parameter_registers.size() - 1)) {
 				fprintf(fd, ", ");
 			}
@@ -637,47 +740,51 @@ static void myprint(
 		fprintf(fd, "@%s ", fn.entry_block.c_str());
 		for (const auto& [name, block] : fn.blocks) {
 			fprintf(fd, "@%s ", name.c_str());
-			print_operand(fd, block, pool, spaces);
+			print_operand(fd, block, pool, spaces, ctx);
 		}
 	}
 }
 
-static void myprint(FILE* fd, const hir::Nil&, const StringPool&, int) {
+static void myprint(
+	FILE* fd, const hir::Nil&, const StringPool&, int, HTContext&
+) {
 	fprintf(fd, "nil");
 }
 
 static void myprint(
-	FILE* fd, const hir::Constant& c, const StringPool& pool, int spaces
+	FILE* fd, const hir::Constant& c, const StringPool& pool, int spaces,
+	HTContext& ctx
 ) {
-	std::visit([&](const auto& x) { myprint(fd, x, pool, spaces); }, c);
+	std::visit([&](const auto& x) { myprint(fd, x, pool, spaces, ctx); }, c);
 }
 
 static void myprint(
-	FILE* fd, const hir::StaticAllocation& c, const StringPool&, int
+	FILE* fd, const hir::StaticAllocation& c, const StringPool&, int, HTContext&
 ) {
 	fprintf(fd, "static_alloc %zu", c.size);
 }
 
 static void myprint(
-	FILE* fd, const hir::BuiltinLoad& c, const StringPool&, int
+	FILE* fd, const hir::BuiltinLoad& c, const StringPool&, int, HTContext&
 ) {
 	fprintf(fd, "builtin_load %s", c.name.c_str());
 }
 
 static void myprint(
-	FILE* fd, const hir::ModuleImport& c, const StringPool&, int
+	FILE* fd, const hir::ModuleImport& c, const StringPool&, int, HTContext&
 ) {
 	fprintf(fd, "module_import \"%s\"", c.name.c_str());
 }
 
 static void myprint(
-	FILE* fd, const hir::MemberImport& c, const StringPool&, int
+	FILE* fd, const hir::MemberImport& c, const StringPool&, int, HTContext&
 ) {
 	fprintf(fd, "member_import @%s \"%s\"", c.label.name.c_str(), c.name.c_str());
 }
 
 void print_module(
-	FILE* fd, const Module& mod, const StringPool& pool, int spaces
+	FILE* fd, const Module& mod, const StringPool& pool, int spaces,
+	HTContext& ctx
 ) {
 	fprintf(fd, "module {\n");
 	spaces += 2;
@@ -689,7 +796,7 @@ void print_module(
 		}
 		fprintf(fd, "@%s: ", symbol.c_str());
 		const auto& init = std::get<1>(v);
-		std::visit([&](const auto& x) { myprint(fd, x, pool, spaces); }, init);
+		std::visit([&](const auto& x) { myprint(fd, x, pool, spaces, ctx); }, init);
 		fprintf(fd, "\n");
 	}
 	fprintf(fd, "}\n");

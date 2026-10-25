@@ -51,6 +51,7 @@ struct Typechecker {
 	std::map<NodeIndex, T> node_to_type {};
 	std::unordered_set<Guid> constructors {};
 	std::map<Guid, std::shared_ptr<Effect>> name_to_effect {};
+	std::map<Guid, D> type_names {};
 
  private:
 	AST& ast;
@@ -59,7 +60,6 @@ struct Typechecker {
 	size_t next_var_id {0};
 	size_t next_modevar_id {0};
 	size_t next_effsetvar_id {0};
-	std::map<Guid, D> type_names {};
 	std::map<Guid, E> effset_names {};
 	Logger logger;
 

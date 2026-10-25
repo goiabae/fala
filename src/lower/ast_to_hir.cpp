@@ -10,6 +10,7 @@
 
 #include "ast.hpp"
 #include "hir/hir.hpp"
+#include "hir/hir_type.hpp"
 #include "symbol_table.hpp"
 #include "type.hpp"
 
@@ -33,14 +34,15 @@ std::optional<Variable> Compiler::classify_variable(Guid sym) {
 	// FIXME: don't access the body directly. polymorphic type might have
 	// quantified variables!
 	auto mono = poly->scheme->body;
+	auto htype = hir::translate(mono, hctx, checker.type_names);
 	if (std::dynamic_pointer_cast<Function>(mono)) {
 		return LocalVariable {
-			.register_ = make_register(),
+			.register_ = make_register(htype),
 		};
 	} else if (auto closure = std::dynamic_pointer_cast<Closure>(mono)) {
 		if (closure->captures.size() > 0) {
 			return LocalVariable {
-				.register_ = make_register(),
+				.register_ = make_register(htype),
 			};
 		} else {
 			return StaticFunction {
@@ -49,7 +51,7 @@ std::optional<Variable> Compiler::classify_variable(Guid sym) {
 		}
 	} else {
 		return LocalVariable {
-			.register_ = make_variable(name),
+			.register_ = make_variable(htype, name),
 		};
 	}
 }
@@ -93,18 +95,36 @@ hir::Module Compiler::start_module() {
 		}
 	);
 
-	auto v0 = make_register();
-	auto v1 = make_register();
-	auto v2 = make_register();
-	auto v3 = make_register();
-	auto v4 = make_register();
-	auto v5 = make_register();
-	auto v6 = make_register();
-	auto v7 = make_register();
-	auto v8 = make_register();
-	auto v9 = make_register();
-	auto v10 = make_register();
-	auto v11 = make_register();
+	// HIR Types
+	auto hint = hctx.alloc(
+		hir::HType {hir::HInteger {
+			.bit_count = 64,
+			.sign = hir::HInteger::Sign::SIGNED,
+		}}
+	);
+	auto hcont = hctx.alloc(hir::HType {hir::HContinuation {}});
+	auto hnil = hctx.alloc(hir::HType {hir::HNil {}});
+	auto hchar = hctx.alloc(
+		hir::HType {hir::HInteger {
+			.bit_count = 8,
+			.sign = hir::HInteger::Sign::UNSIGNED,
+		}}
+	);
+	auto hvoid = hctx.alloc(hir::HType {hir::HVoid {}});
+	auto hany = hctx.alloc(hir::HType {hir::HAny {}});
+
+	auto v0 = make_register(hany);
+	auto v1 = make_register(hcont);
+	auto v2 = make_register(hint);
+	auto v3 = make_register(hvoid);
+	auto v4 = make_register(hnil);
+	auto v5 = make_register(hany);
+	auto v6 = make_register(hany);
+	auto v7 = make_register(hany);
+	auto v9 = make_register(hany);
+	auto v10 = make_register(hany);
+	auto v11 = make_register(hany);
+	auto v12 = make_register(hchar);
 
 	hir::Code c0 {};
 	c0.printv(v2);
@@ -122,7 +142,7 @@ hir::Module Compiler::start_module() {
 	};
 
 	hir::Code c4 {};
-	c4.printc(v2);
+	c4.printc(v12);
 	c4.get_global(v4, nil);
 	c4.resume(v3, v1, v4);
 
@@ -246,13 +266,12 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
 
-	auto result_register = make_register();
-
-	std::vector<hir::Operand> operands;
-	operands.push_back(hir::Operand {result_register});
+	auto result_register = make_register(type_of(node_idx));
 
 	// Resolve function
-	const auto& func_node = ast.at(node[0]);
+	const auto func_idx = node[0];
+	const auto& func_node = ast.at(func_idx);
+	const auto func_htyp = type_of(func_idx);
 
 	assert(func_node.type == NodeType::GUID);
 
@@ -264,7 +283,7 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 
 	for (const auto& builtin : builtins) {
 		if (func_name == std::string_view(builtin)) {
-			auto func_register = make_register();
+			auto func_register = make_register(func_htyp);
 			const auto l = hir::Label {.name = std::string(func_name)};
 			ctx.current_module.load_builtin(l);
 			code.get_global(func_register, l);
@@ -280,7 +299,9 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 		function = func_result.result_register;
 	}
 
-	operands.push_back(hir::Operand {function});
+	const auto& function_htype =
+		std::get<hir::HClosure>(hctx.at(function.htype).data);
+	const auto& argument_htypes = function_htype.inputs;
 
 	// Resolve arguments
 	const auto& args_node = ast.at(node[1]);
@@ -290,10 +311,18 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 	std::vector<hir::Operand> args {};
 
 	for (size_t i = 0; i < args_node.branch.children_count; i++) {
-		auto arg_idx = args_node[i];
-		auto arg_result = compile(arg_idx, ctx);
-		code = code + arg_result.code;
-		args.push_back(arg_result.result_register);
+		const auto hmode = argument_htypes.at(i).first;
+		if (hmode == hir::HClosure::Mode::SAME_MUTABLE) {
+			auto arg_idx = args_node[i];
+			auto arg_result = compile_lvalue(arg_idx, ctx);
+			code = code + arg_result.code;
+			args.push_back(arg_result.result_register);
+		} else {
+			auto arg_idx = args_node[i];
+			auto arg_result = compile(arg_idx, ctx);
+			code = code + arg_result.code;
+			args.push_back(arg_result.result_register);
+		}
 	}
 
 	code.call(result_register, function, args);
@@ -305,7 +334,7 @@ Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 	hir::Code code {};
 	const auto& node = ast.at(node_idx);
 
-	auto result_register = make_register();
+	auto result_register = make_register(type_of(node_idx));
 
 	const auto& func_node = ast.at(node[0]);
 	assert(func_node.type == NodeType::GUID);
@@ -337,7 +366,7 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	auto then_idx = node[1];
 	auto else_idx = node[2];
 
-	auto result_register = make_register();
+	auto result_register = make_register(type_of(node_idx));
 
 	auto cond_res = compile(cond_idx, ctx);
 	code = code + cond_res.code;
@@ -392,8 +421,9 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 			hir::Code code {};
 			hir::Region region {};
 
-			auto v2 = make_register();
-			region.parameter_registers.push_back(v2);
+			auto hcont = hctx.alloc(hir::HType {hir::HContinuation {}});
+			auto resumption = make_register(hcont);
+			region.parameter_registers.push_back(resumption);
 			for (auto param_idx : param_list_node) {
 				const auto& param_node = ast.at(param_idx);
 				assert(param_node.type == NodeType::PARAM);
@@ -410,8 +440,9 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				.current_closure = ctx.current_closure,
 			};
 			body_ctx.handlers.has_resume_handler = true;
-			body_ctx.handlers.resume_handler = v2;
+			body_ctx.handlers.resume_handler = resumption;
 			auto r = compile(body_idx, body_ctx);
+			r.code.yield(r.result_register);
 			hir::Block blk {
 				.body_code = std::make_shared<hir::Code>(r.code),
 				.child_blocks = {},
@@ -427,7 +458,7 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 			// );
 			hir::Label l {std::to_string(effect_tags.at(id_node.guid))};
 			auto b = std::make_shared<hir::Code>();
-			auto v1 = make_register();
+			auto v1 = make_register(type_of(node_idx));
 			code.instructions.push_back(
 				hir::Instruction {
 					.opcode = hir::Opcode::CATCH,
@@ -480,9 +511,7 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 			const auto& params_node = ast.at(params_idx);
 			assert(id_node.type == NodeType::GUID);
 
-			auto variable_register = make_variable(
-				std::string(pool.find(symtab.name_of(id_node.guid).value()))
-			);
+			auto name = std::string(pool.find(symtab.name_of(id_node.guid).value()));
 
 			auto variable = variables.at(id_node.guid);
 
@@ -491,6 +520,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 			const auto dty = ty->scheme->body;
 			const auto cty = std::dynamic_pointer_cast<Closure>(dty);
 			assert(cty != nullptr);
+
+			auto htype = hir::translate(dty, hctx, checker.type_names);
+			auto variable_register = make_variable(htype, name);
+			const auto& hclos = std::get<hir::HClosure>(hctx.at(htype).data);
+			const auto hcapture_set =
+				hctx.alloc(hir::HType {hir::HTuple {.elements = hclos.captures}});
 
 			std::vector<hir::Register> parameter_registers {};
 
@@ -543,7 +578,6 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 					.builtin_name = {0},
 				};
 
-				auto t1 = make_register();
 				auto l2 = ctx.current_module.register_constant(
 					static_function->label, hir::Visibility::HIDDEN, function
 				);
@@ -552,8 +586,7 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 
 				return std::make_tuple(code, variable_register, std::nullopt);
 			} else if (auto local_variable = std::get_if<LocalVariable>(&variable)) {
-				auto t4 = make_register();
-				auto t3 = make_variable("env");
+				auto t3 = make_variable(hcapture_set, "env");
 				auto t5 = local_variable->register_;
 
 				ClosureInfo clinfo {
@@ -566,7 +599,8 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				{
 					auto i = 0ul;
 					for (const auto& [a, b] : cty->captures) {
-						const auto ti = make_register();
+						const auto ti =
+							make_register(hir::translate(b, hctx, checker.type_names));
 						code.clone(ti, std::get<LocalVariable>(variables.at(a)).register_);
 						closure_values.push_back(ti);
 						clinfo.offsets[a] = i;
@@ -613,12 +647,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 					.builtin_name = {0},
 				};
 
-				auto t1 = make_register();
 				auto l = make_label();
 				auto l2 = ctx.current_module.register_constant(
 					l, hir::Visibility::HIDDEN, function
 				);
 
+				auto t4 = make_register(hcapture_set);
 				code.make_tuple(t4, closure_values);
 				code.enclose(t5, l2, t4);
 
@@ -643,7 +677,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::APP: return compile_app(node_idx, ctx);
 		case NodeType::NUM: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto result_register = make_register(type_of(node_idx));
 			auto literal_num = hir::Integer {node.num};
 			auto l = make_label();
 			auto l2 = ctx.current_module.register_constant(
@@ -681,7 +715,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto cond_idx = node[0];
 			auto then_idx = node[1];
 
-			auto result_register = make_register();
+			auto result_register = make_register(type_of(node_idx));
 
 			auto cond_res = compile(cond_idx, ctx);
 			code = code + cond_res.code;
@@ -692,7 +726,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 
 			hir::Code if_false {};
 
-			auto r = make_register();
+			auto hnil = hctx.alloc(hir::HType {hir::HNil {}});
+			auto r = make_register(hnil);
 			auto l = ctx.current_module.register_constant(
 				make_label("nil"), hir::Visibility::HIDDEN, hir::Nil {}
 			);
@@ -751,7 +786,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				auto l2 = ctx.current_module.register_constant(
 					l, hir::Visibility::HIDDEN, hir::Integer(1)
 				);
-				auto r = make_register();
+				auto hint = hctx.alloc(
+					hir::HType {hir::HInteger {
+						.bit_count = 64,
+						.sign = hir::HInteger::Sign::SIGNED,
+					}}
+				);
+				auto r = make_register(hint);
 				code.get_global(r, l2);
 				step_value = r;
 			}
@@ -785,7 +826,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			if_break.brake(stop_label);
 
 			hir::Code loop_body {};
-			auto cond = make_register();
+			auto hbool = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 1,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			auto cond = make_register(hbool);
 			loop_body.equals(cond, var_opnd, to_opnd);
 			loop_body.if_true(
 				cond,
@@ -795,12 +842,18 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				}
 			);
 			loop_body = loop_body + then_result.code;
-			auto t1 = make_register();
+			auto hint = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 64,
+					.sign = hir::HInteger::Sign::SIGNED,
+				}}
+			);
+			auto t1 = make_register(hint);
 			auto l = make_label();
 			auto l2 = ctx.current_module.register_constant(
 				l, hir::Visibility::HIDDEN, hir::Integer(1)
 			);
-			auto t2 = make_register();
+			auto t2 = make_register(hint);
 			loop_body.get_global(t2, l2);
 			loop_body.add(t1, var_opnd, t2);
 			loop_body.store(var_opnd, t1);
@@ -904,25 +957,25 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			return {code, value};
 		}
 
-#define BINARY_ARITH(OPCODE)                            \
-	{                                                     \
-		hir::Code code {};                                  \
-		auto left_idx = node[0];                            \
-		auto right_idx = node[1];                           \
-                                                        \
-		auto left_result = compile(left_idx, ctx);          \
-		auto right_result = compile(right_idx, ctx);        \
-		code = code + left_result.code + right_result.code; \
-		auto result_register = make_register();             \
-		code.instructions.push_back(                        \
-			hir::Instruction {                                \
-				hir::Opcode::OPCODE,                            \
-				{result_register,                               \
-		     left_result.result_register,                   \
-		     right_result.result_register}                  \
-			}                                                 \
-		);                                                  \
-		return {code, result_register};                     \
+#define BINARY_ARITH(OPCODE)                                 \
+	{                                                          \
+		hir::Code code {};                                       \
+		auto left_idx = node[0];                                 \
+		auto right_idx = node[1];                                \
+                                                             \
+		auto left_result = compile(left_idx, ctx);               \
+		auto right_result = compile(right_idx, ctx);             \
+		code = code + left_result.code + right_result.code;      \
+		auto result_register = make_register(type_of(node_idx)); \
+		code.instructions.push_back(                             \
+			hir::Instruction {                                     \
+				hir::Opcode::OPCODE,                                 \
+				{result_register,                                    \
+		     left_result.result_register,                        \
+		     right_result.result_register}                       \
+			}                                                      \
+		);                                                       \
+		return {code, result_register};                          \
 	}
 
 		case NodeType::OR: BINARY_ARITH(OR);
@@ -948,7 +1001,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::MOD: BINARY_ARITH(MOD);
 		case NodeType::NOT: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto result_register = make_register(type_of(node[0]));
 			auto exp_result = compile(node[0], ctx);
 			code = code + exp_result.code;
 			code.instructions.push_back(
@@ -960,7 +1013,14 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::STR: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto hchar = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 8,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			auto hstr = hctx.alloc(hir::HType {hir::HArray {.element = hchar}});
+			auto result_register = make_register(hstr);
 			auto literal_string = hir::String {node.str_id};
 			auto l = ctx.current_module.register_constant(
 				make_label(), hir::Visibility::HIDDEN, literal_string
@@ -970,7 +1030,8 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::NIL: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto hnil = hctx.alloc(hir::HType {hir::HNil {}});
+			auto result_register = make_register(hnil);
 			auto literal_nil = hir::Nil {};
 			auto l = make_label();
 			auto l2 = ctx.current_module.register_constant(
@@ -981,7 +1042,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::TRUE: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto hbool = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 1,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			auto result_register = make_register(hbool);
 			auto literal_true = hir::Boolean {true};
 			auto l = make_label();
 			auto l2 = ctx.current_module.register_constant(
@@ -992,7 +1059,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::FALSE: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto hbool = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 1,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			auto result_register = make_register(hbool);
 			auto literal_false = hir::Boolean {false};
 			auto l = make_label();
 			auto l2 = ctx.current_module.register_constant(
@@ -1036,7 +1109,13 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::CHAR: {
 			hir::Code code {};
-			auto result_register = make_register();
+			auto hchar = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 8,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			auto result_register = make_register(hchar);
 			auto literal_character = hir::Character {node.character};
 			auto l = ctx.current_module.register_constant(
 				make_label(), hir::Visibility::HIDDEN, literal_character
@@ -1049,7 +1128,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto v_res = compile_lvalue(node[0], ctx);
 			code = code + v_res.code;
 			auto v = v_res.result_register;
-			auto a = make_register();
+			auto a = make_register(type_of(node[0]));
 			code.load(a, v);
 			return {code, a};
 		}
@@ -1060,7 +1139,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::GUID: {
 			hir::Code code {};
-			auto v = make_register();
+			auto v = make_register(type_of(node_idx));
 			auto r = compile_lvalue(node_idx, ctx);
 			code = code + r.code;
 			code.load(v, r.result_register);
@@ -1069,25 +1148,31 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::RECORD_LITERAL: {
 			const auto field_count = node.size();
 			hir::Code code {};
-			auto t1 = make_register();
+			auto t1 = make_register(type_of(node_idx));
 			const auto l1 = ctx.current_module.register_static_initialization(
 				make_label(),
 				hir::Visibility::HIDDEN,
 				hir::StaticAllocation {field_count}
 			);
 			code.get_global(t1, l1);
-			const auto t2 = make_register();
+			const auto t2 = make_variable(type_of(node_idx));
 			code.alloc(t2, t1);
 			for (auto i = 0ul; i < field_count; i++) {
 				const auto& field_node = ast.at(node[i]);
 				assert(field_node.type == NodeType::FIELD);
-				const auto ti = make_register();
+				const auto ti = make_variable(type_of(field_node[1]));
 				const auto li = ctx.current_module.register_constant(
 					make_label(),
 					hir::Visibility::HIDDEN,
 					hir::Integer(static_cast<int>(i))
 				);
-				const auto ti2 = make_register();
+				auto hint = hctx.alloc(
+					hir::HType {hir::HInteger {
+						.bit_count = 64,
+						.sign = hir::HInteger::Sign::SIGNED,
+					}}
+				);
+				const auto ti2 = make_register(hint);
 				code.get_global(ti2, li);
 				code.get_element(ti, t2, ti2);
 				const auto c0 = compile(field_node[1], ctx);
@@ -1119,7 +1204,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			assert(ctx.handlers.has_resume_handler);
 			hir::Code code {};
 			auto r = compile(node[0], ctx);
-			auto v = make_register();
+			auto v = make_register(type_of(node_idx));
 			code = code + r.code;
 			code.resume(v, ctx.handlers.resume_handler, r.result_register);
 			return {code, v};
@@ -1128,7 +1213,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code code {};
 			auto r0 = compile(node[0], ctx);
 			auto r1 = compile(node[1], ctx);
-			auto v = make_register();
+			auto v = make_register(type_of(node_idx));
 			code = code + r0.code;
 			code = code + r1.code;
 			code.instructions.push_back(
@@ -1141,14 +1226,14 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::LEN: {
 			hir::Code code {};
 			auto r0 = compile(node[0], ctx);
-			auto v = make_register();
+			auto v = make_register(type_of(node_idx));
 			code = code + r0.code;
 			code.get_element(v, r0.result_register, hir::Immediate(1ul));
 			return {code, v};
 		}
 		case NodeType::ARRAY_LITERAL: {
 			hir::Code code {};
-			auto v = make_register();
+			auto v = make_register(type_of(node_idx));
 			std::vector<hir::Operand> elements {};
 			for (auto elt_idx : node) {
 				auto r = compile(elt_idx, ctx);
@@ -1167,11 +1252,12 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 	assert(false);
 }
 
-hir::Register Compiler::make_register() {
+hir::Register Compiler::make_register(const hir::HTPtr& htype) {
 	return hir::Register {
 		.id = register_count++,
 		.name = std::nullopt,
 		.is_mutable = false,
+		.htype = htype,
 	};
 }
 
@@ -1183,11 +1269,14 @@ hir::Label Compiler::make_label(std::optional<std::string> name) {
 	}
 }
 
-hir::Register Compiler::make_variable(std::optional<std::string> name) {
+hir::Register Compiler::make_variable(
+	const hir::HTPtr& htype, std::optional<std::string> name
+) {
 	return hir::Register {
 		.id = register_count++,
 		.name = name,
 		.is_mutable = true,
+		.htype = htype,
 	};
 }
 
@@ -1204,7 +1293,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			auto offset_res = compile(offset_idx, ctx);
 			code = code + offset_res.code;
 			auto offset = offset_res.result_register;
-			auto a = make_variable(std::nullopt);
+			auto a = make_variable(type_of(node_idx), std::nullopt);
 			code.get_element(a, place, offset);
 			return {code, a};
 		}
@@ -1219,9 +1308,13 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			auto var = variables.at(node.guid);
 			hir::Code code {};
 			if (auto static_function = std::get_if<StaticFunction>(&var)) {
-				auto r0 = make_register();
-				auto r1 = make_register();
-				auto r2 = make_variable();
+				auto htype = type_of(node_idx);
+				const auto& hclos = std::get<hir::HClosure>(hctx.at(htype).data);
+				const auto hcapture_set =
+					hctx.alloc(hir::HType {hir::HTuple {.elements = hclos.captures}});
+				auto r0 = make_register(hcapture_set);
+				auto r1 = make_register(htype);
+				auto r2 = make_variable(htype);
 				code.make_tuple(r0, {});
 				code.enclose(r1, static_function->label, r0);
 				code.alloc(r2, r1);
@@ -1230,7 +1323,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 				if (rel == RelativeScope::FREE) {
 					if (auto closure = ctx.current_closure) {
 						auto offset = closure->offsets.at(node.guid);
-						auto r0 = make_variable(std::nullopt);
+						auto r0 = make_variable(type_of(node_idx), std::nullopt);
 						code.get_element(r0, closure->object, hir::Immediate(offset));
 						return {code, r0};
 					} else {
@@ -1258,7 +1351,7 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 			assert(found != t0->fields.end());
 			auto d = std::distance(t0->fields.begin(), found);
 			const auto field_ty = found->second;
-			const auto v0 = make_variable();
+			const auto v0 = make_variable(type_of(node_idx));
 			code = code + r.code;
 			code.get_element(v0, r.result_register, hir::Immediate(d));
 			return {code, v0};
@@ -1271,4 +1364,11 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	}
 	assert(false);
 }
+
+auto Compiler::type_of(NodeIndex node_idx) -> hir::HTPtr {
+	return hir::translate(
+		checker.node_to_type.at(node_idx)->datatype, hctx, checker.type_names
+	);
+}
+
 } // namespace lower::ast_to_hir

@@ -5,6 +5,7 @@
 
 #include "ast.hpp"
 #include "hir/hir.hpp"
+#include "hir/hir_type.hpp"
 #include "indexes.hpp"
 #include "logger.hpp"
 #include "str_pool.h"
@@ -104,11 +105,17 @@ class Compiler {
 
 #undef DECLARE_NODE_HANDLER
 
-	hir::Register make_register();
+	hir::Register make_register(const hir::HTPtr&);
 	hir::Label make_label(std::optional<std::string> name = std::nullopt);
-	hir::Register make_variable(std::optional<std::string> name = std::nullopt);
+	hir::Register make_variable(
+		const hir::HTPtr&, std::optional<std::string> name = std::nullopt
+	);
 
 	std::optional<Variable> classify_variable(Guid);
+	auto type_of(NodeIndex) -> hir::HTPtr;
+
+ public:
+	hir::HTContext hctx {};
 
  private:
 	const AST& ast;
