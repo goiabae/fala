@@ -1556,7 +1556,9 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				arguments.push_back(x.first);
 			}
 			joined = union_of(joined, effset);
-			return std::make_pair(make_type(VAL_, effect->output), joined);
+			auto t = make_type(VAL_, effect->output);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, joined);
 		}
 		case NodeType::HANDLER_DECL: {
 			const auto& id_node = ast.at(node[0]);
@@ -1598,11 +1600,14 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				variables[param_name.guid] = p1;
 			}
 			auto p = typecheck(node[3]);
+			ASSOC_TYPE(node_idx, p.first);
 			return remove_effect(p, effect);
 		}
 		case NodeType::RESUME: {
 			auto p = typecheck(node[0]);
-			return std::make_pair(make_type(VAL_, VOID_), p.second);
+			auto t = make_type(VAL_, VOID_);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, p.second);
 		}
 		case NodeType::MATCH: {
 			const auto p = typecheck(node[0]);
@@ -1620,7 +1625,9 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				}
 				joined = union_of(joined, t.second);
 			}
-			return std::make_pair(make_type(VAL_, d), joined);
+			auto t = make_type(VAL_, d);
+			ASSOC_TYPE(node_idx, t);
+			return std::make_pair(t, joined);
 		}
 		default: {
 			throw std::runtime_error(
