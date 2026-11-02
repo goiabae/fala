@@ -51,9 +51,7 @@ struct Region {
 
 class Function {
  public:
-	std::map<std::string, Block> blocks;
-	std::string entry_block;
-	std::vector<Register> parameter_registers;
+	Region region;
 	bool is_builtin;
 	StrID builtin_name;
 };

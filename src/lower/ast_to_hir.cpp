@@ -571,9 +571,13 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				};
 				auto entry = make_label();
 				hir::Function function {
-					.blocks = {{entry.name, block}},
-					.entry_block = entry.name,
-					.parameter_registers = parameter_registers,
+					.region =
+						hir::Region {
+							.blocks = {{entry.name, block}},
+							.entry_block = entry.name,
+							.parameter_registers = parameter_registers,
+
+						},
 					.is_builtin = false,
 					.builtin_name = {0},
 				};
@@ -640,9 +644,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				}
 				auto entry = make_label();
 				hir::Function function {
-					.blocks = {{entry.name, block}},
-					.entry_block = entry.name,
-					.parameter_registers = new_parameter_registers,
+					.region =
+						hir::Region {
+							.blocks = {{entry.name, block}},
+							.entry_block = entry.name,
+							.parameter_registers = new_parameter_registers,
+						},
 					.is_builtin = false,
 					.builtin_name = {0},
 				};

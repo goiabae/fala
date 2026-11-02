@@ -726,22 +726,7 @@ static void myprint(
 	if (fn.is_builtin) {
 		fprintf(fd, "\"%s\"", pool.find(fn.builtin_name));
 	} else {
-		fprintf(fd, "(");
-		for (const auto& [i, reg] :
-		     std::ranges::views::enumerate(fn.parameter_registers)) {
-			print_operand(fd, reg, pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, reg.htype, pool, spaces, ctx);
-			if (i != (long)(fn.parameter_registers.size() - 1)) {
-				fprintf(fd, ", ");
-			}
-		}
-		fprintf(fd, ") ");
-		fprintf(fd, "@%s ", fn.entry_block.c_str());
-		for (const auto& [name, block] : fn.blocks) {
-			fprintf(fd, "@%s ", name.c_str());
-			print_operand(fd, block, pool, spaces, ctx);
-		}
+		print_operand(fd, fn.region, pool, spaces, ctx);
 	}
 }
 
