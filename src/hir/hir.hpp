@@ -108,7 +108,6 @@ enum class Opcode {
 	PRINTV,
 	PRINTC,
 	PRINTF,
-	READ,
 
 	// Unary and binary operators
 	ADD,
@@ -177,9 +176,10 @@ class Instruction {
 };
 
 class Code {
- public:
+ private:
 	std::vector<Instruction> instructions;
 
+ public:
 	void copy(hir::Register, hir::Operand);
 	void call(hir::Register, hir::Operand, std::vector<hir::Operand>);
 	void perform(hir::Register, hir::Label, std::vector<hir::Operand>);
@@ -191,7 +191,6 @@ class Code {
 	void continue_(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
 	void set_element(hir::Register, std::vector<hir::Operand>, hir::Operand);
-	void get_element(hir::Register, hir::Register, std::vector<hir::Operand>);
 	void get_element(hir::Register, hir::Register, hir::Operand);
 	void alloc(hir::Register, hir::Register);
 	void clone(hir::Register, hir::Register);
@@ -215,6 +214,16 @@ class Code {
 	void get_constructor(hir::Register, hir::Operand);
 	void get_variant(hir::Register, hir::Operand, hir::Operand);
 	void panic();
+	void ret(hir::Operand);
+	void binop(hir::Opcode, hir::Register, hir::Operand, hir::Operand);
+	void unop(hir::Opcode, hir::Register, hir::Operand);
+	void repeat(hir::Register, hir::Operand, hir::Operand);
+
+ public:
+	std::size_t size() const { return instructions.size(); }
+	Instruction& at(std::size_t i) { return instructions.at(i); }
+	Instruction const& at(std::size_t i) const { return instructions.at(i); }
+	friend Code operator+(Code, Code);
 };
 
 using Constant = std::variant<

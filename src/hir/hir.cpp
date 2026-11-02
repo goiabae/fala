@@ -153,16 +153,6 @@ void Code::set_element(
 	operands.push_back(value);
 	instructions.push_back(Instruction {hir::Opcode::SET_ELEMENT, operands});
 }
-void Code::get_element(
-	hir::Register result, hir::Register aggregate,
-	std::vector<hir::Operand> indexes
-) {
-	std::vector<hir::Operand> operands;
-	operands.push_back(result);
-	operands.push_back(aggregate);
-	for (const auto& x : indexes) operands.push_back(x);
-	instructions.push_back(Instruction {hir::Opcode::GET_ELEMENT, operands});
-}
 
 void Code::load(hir::Register r, hir::Register v) {
 	instructions.push_back(Instruction {hir::Opcode::LOAD, {r, v}});
@@ -289,54 +279,67 @@ void print_instruction(
 	FILE* fd, const Instruction& inst, const StringPool& pool, int spaces,
 	HTContext& ctx
 ) {
+#define A(N, C, R, I)                                                        \
+	{                                                                          \
+		auto c = inst.operands.size();                                           \
+		if (C >= 0 and c != C)                                                   \
+			throw std::runtime_error(                                              \
+				std::format(                                                         \
+					"instruction with wrong operand amount. expected {}. got {}", C, c \
+				)                                                                    \
+			);                                                                     \
+		if (I) {                                                                 \
+			assert(C == 3);                                                        \
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);                \
+			fprintf(fd, ": ");                                                     \
+			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);   \
+			fprintf(fd, " = ");                                                    \
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);                \
+			fprintf(fd, " ");                                                      \
+			fprintf(fd, "%s", N);                                                  \
+			fprintf(fd, " ");                                                      \
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);                \
+		} else if (C > 0 or C < 0) {                                             \
+			if (R) {                                                               \
+				print_operand(fd, inst.operands[0], pool, spaces, ctx);              \
+				fprintf(fd, ": ");                                                   \
+				print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx); \
+				fprintf(fd, " = ");                                                  \
+				fprintf(fd, "%s", N);                                                \
+				if (c > 1) fprintf(fd, " ");                                         \
+			} else {                                                               \
+				fprintf(fd, "%s", N);                                                \
+				fprintf(fd, " ");                                                    \
+				print_operand(fd, inst.operands[0], pool, spaces, ctx);              \
+				if (C > 1) fprintf(fd, " ");                                         \
+			}                                                                      \
+			if (C > 0) {                                                           \
+				for (auto i = 1; i < C; i++) {                                       \
+					print_operand(fd, inst.operands[i], pool, spaces, ctx);            \
+					if (i != (C - 1)) fprintf(fd, " ");                                \
+				}                                                                    \
+			} else {                                                               \
+				for (auto i = 1ul; i < inst.operands.size(); i++) {                  \
+					print_operand(fd, inst.operands[i], pool, spaces, ctx);            \
+					if (i != (inst.operands.size() - 1)) fprintf(fd, " ");             \
+				}                                                                    \
+			}                                                                      \
+		}                                                                        \
+		fprintf(fd, "\n");                                                       \
+		return;                                                                  \
+	}                                                                          \
+	(void)0
+
+#define BINARY_INST(PRETTY) A(PRETTY, 3, true, true)
+#define S(N, C) A(N, C, false, false)
+#define E(N, C) A(N, C, true, false)
+
 	for (int i = 0; i < spaces; i++) fprintf(fd, " ");
 	switch (inst.opcode) {
-		case Opcode::PRINTF: {
-			fprintf(fd, "printf");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::PRINTV: {
-			fprintf(fd, "printv");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::PRINTC: {
-			fprintf(fd, "printc");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::READ: assert(false);
-		case Opcode::COPY: {
-			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-#define BINARY_INST(PRETTY)                                              \
-	{                                                                      \
-		assert(inst.operands.size() == 3);                                   \
-		print_operand(fd, inst.operands[0], pool, spaces, ctx);              \
-		fprintf(fd, ": ");                                                   \
-		print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx); \
-		fprintf(fd, " = ");                                                  \
-		print_operand(fd, inst.operands[1], pool, spaces, ctx);              \
-		fprintf(fd, " " PRETTY " ");                                         \
-		print_operand(fd, inst.operands[2], pool, spaces, ctx);              \
-		fprintf(fd, "\n");                                                   \
-		return;                                                              \
-	}
-
+		case Opcode::PRINTF: S("printf", 1);
+		case Opcode::PRINTV: S("printvf", 1);
+		case Opcode::PRINTC: S("printvc", 1);
+		case Opcode::COPY: E("", 2);
 		case Opcode::ADD: BINARY_INST("+");
 		case Opcode::SUB: BINARY_INST("-");
 		case Opcode::MUL: BINARY_INST("*");
@@ -350,324 +353,49 @@ void print_instruction(
 		case Opcode::LESS_EQ: BINARY_INST("<=");
 		case Opcode::GREATER: BINARY_INST(">=");
 		case Opcode::GREATER_EQ: BINARY_INST(">=");
-		case Opcode::NOT: {
-			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "not");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::GET_ELEMENT: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "get_element");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::SET_ELEMENT: {
-			fprintf(fd, "set_element");
-			for (size_t i = 0; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::CALL: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "call");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::RET: {
-			fprintf(fd, "ret");
-			for (size_t i = 0; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::LOOP: {
-			assert(inst.operands.size() == 3);
-			fprintf(fd, "loop ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::IF_TRUE: {
-			assert(inst.operands.size() == 2);
-			fprintf(fd, "if_true ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::IF_FALSE: {
-			assert(inst.operands.size() == 2);
-			fprintf(fd, "if_false ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::BREAK: {
-			fprintf(fd, "break ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::CONTINUE: {
-			fprintf(fd, "continue\n");
-			return;
-		}
-		case Opcode::LOAD: {
-			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "load ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::STORE: {
-			assert(inst.operands.size() == 2);
-			fprintf(fd, "store ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::ALLOC: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "alloc ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::CLONE: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "clone ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::ALIAS: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "alias ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::GET_GLOBAL: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "get_global ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::CATCH: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "catch ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[3], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::PERFORM: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "perform");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::RESUME: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "resume");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::REPEAT: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "repeat");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::MAKE_TUPLE: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "make_tuple");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::ENCLOSE: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "enclose");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::MAKE_ARRAY: {
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "make_array");
-			for (size_t i = 1; i < inst.operands.size(); i++) {
-				fprintf(fd, " ");
-				print_operand(fd, inst.operands[i], pool, spaces, ctx);
-			}
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::IF: {
-			assert(inst.operands.size() == 4);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, ": ");
-			print_type(fd, inst.operands[0].registuhr.htype, pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "if ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[3], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::YIELD: {
-			assert(inst.operands.size() == 1);
-			fprintf(fd, "yield");
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::GET_CONSTRUCTOR: {
-			assert(inst.operands.size() == 2);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "get_constructor ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::GET_VARIANT: {
-			assert(inst.operands.size() == 3);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "get_variant ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::PANIC: {
-			assert(inst.operands.size() == 0);
-			fprintf(fd, "panic");
-			fprintf(fd, "\n");
-			return;
-		}
-		case Opcode::MAKE_VARIANT: {
-			assert(inst.operands.size() == 3);
-			print_operand(fd, inst.operands[0], pool, spaces, ctx);
-			fprintf(fd, " = ");
-			fprintf(fd, "make_variant ");
-			print_operand(fd, inst.operands[1], pool, spaces, ctx);
-			fprintf(fd, " ");
-			print_operand(fd, inst.operands[2], pool, spaces, ctx);
-			fprintf(fd, "\n");
-			return;
-		}
+		case Opcode::NOT: E("not", 2);
+		case Opcode::GET_ELEMENT: E("get_element", 3);
+		case Opcode::SET_ELEMENT: S("set_element", -1);
+		case Opcode::CALL: E("call", -1);
+		case Opcode::RET: S("ret", -1);
+		case Opcode::LOOP: S("loop", 3);
+		case Opcode::IF_TRUE: S("if_true", 2);
+		case Opcode::IF_FALSE: S("if_false", 2);
+		case Opcode::BREAK: S("break", 1);
+		case Opcode::CONTINUE: S("continue", 1);
+		case Opcode::LOAD: E("load", 2);
+		case Opcode::STORE: S("store", 2);
+		case Opcode::ALLOC: E("alloc", 2);
+		case Opcode::CLONE: E("clone", 2);
+		case Opcode::ALIAS: E("alias", 2);
+		case Opcode::GET_GLOBAL: E("get_global", 2);
+		case Opcode::CATCH: E("catch", 4);
+		case Opcode::PERFORM: E("perform", -1);
+		case Opcode::RESUME: E("resume", 3);
+		case Opcode::REPEAT: E("repeat", 3);
+		case Opcode::MAKE_TUPLE: E("make_tuple", -1);
+		case Opcode::ENCLOSE: E("enclose", 3);
+		case Opcode::MAKE_ARRAY: E("make_array", -1);
+		case Opcode::IF: E("if", 4);
+		case Opcode::YIELD: S("yield", 1);
+		case Opcode::GET_CONSTRUCTOR: E("get_constructor", 2);
+		case Opcode::GET_VARIANT: E("get_variant", 3);
+		case Opcode::PANIC: S("panic", 0);
+		case Opcode::MAKE_VARIANT: E("make_variant", 3);
 	}
+
+#undef BINARY_INST
+#undef S
+#undef E
+#undef A
 }
 
 void print_code(
 	FILE* fd, const Code& code, const StringPool& pool, int spaces, HTContext& ctx
 ) {
 	size_t i = 0;
-	for (i = 0; i < code.instructions.size(); i++) {
-		print_instruction(fd, code.instructions[i], pool, spaces, ctx);
+	for (i = 0; i < code.size(); i++) {
+		print_instruction(fd, code.at(i), pool, spaces, ctx);
 	}
 }
 
@@ -945,6 +673,41 @@ void Code::get_variant(
 
 void Code::panic() {
 	instructions.push_back(Instruction {.opcode = Opcode::PANIC, .operands = {}});
+}
+
+void Code::ret(hir::Operand value) {
+	instructions.push_back(
+		Instruction {.opcode = Opcode::RET, .operands = {value}}
+	);
+}
+
+void Code::binop(
+	hir::Opcode operation, hir::Register result, hir::Operand left,
+	hir::Operand right
+) {
+	// FIXME: check if operation is a binary operator
+	instructions.push_back(
+		Instruction {.opcode = operation, .operands = {result, left, right}}
+	);
+}
+
+void Code::unop(
+	hir::Opcode operation, hir::Register result, hir::Operand right
+) {
+	// FIXME: check if operation is a unary operator
+	instructions.push_back(
+		Instruction {.opcode = operation, .operands = {result, right}}
+	);
+}
+
+void Code::repeat(
+	hir::Register result, hir::Operand element, hir::Operand amount
+) {
+	instructions.push_back(
+		Instruction {
+			.opcode = Opcode::REPEAT, .operands = {result, element, amount}
+		}
+	);
 }
 
 void Code::make_variant(

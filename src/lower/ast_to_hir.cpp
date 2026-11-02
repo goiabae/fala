@@ -530,29 +530,20 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 			region.blocks["0"] = blk;
 			region.entry_block = "0";
 
-			// auto l = make_label();
-			// l = ctx.current_module.register_constant(
-			// 	l,
-			// 	hir::Visibility::HIDDEN,
-			// 	hir::Integer(static_cast<int>(effect_tags.at(id_node.guid)))
-			// );
 			hir::Label l {std::to_string(effect_tags.at(id_node.guid))};
 			auto b = std::make_shared<hir::Code>();
 			auto v1 = make_register(type_of(node_idx));
-			code.instructions.push_back(
-				hir::Instruction {
-					.opcode = hir::Opcode::CATCH,
-					.operands = {
-						v1,
-						l,
-						region,
-						hir::Block {
+			const hir::Region handler {
+				.blocks =
+					{{"0",
+			      hir::Block {
 							.body_code = b,
 							.child_blocks = {},
-						}
-					}
-				}
-			);
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
+			code.catch_(v1, l, region, handler);
 
 			return std::make_tuple(code, v1, b.get());
 		}
@@ -640,10 +631,7 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				};
 
 				auto body_result = compile(body_idx, body_ctx);
-
-				body_result.code.instructions.push_back(
-					hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
-				);
+				body_result.code.ret(body_result.result_register);
 
 				hir::Block block {
 					.body_code = std::make_shared<hir::Code>(body_result.code),
@@ -709,10 +697,7 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				};
 
 				auto body_result = compile(body_idx, body_ctx);
-
-				body_result.code.instructions.push_back(
-					hir::Instruction {hir::Opcode::RET, {body_result.result_register}}
-				);
+				body_result.code.ret(body_result.result_register);
 
 				hir::Block block {
 					.body_code = std::make_shared<hir::Code>(body_result.code),
@@ -1082,13 +1067,11 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		auto right_result = compile(right_idx, ctx);             \
 		code = code + left_result.code + right_result.code;      \
 		auto result_register = make_register(type_of(node_idx)); \
-		code.instructions.push_back(                             \
-			hir::Instruction {                                     \
-				hir::Opcode::OPCODE,                                 \
-				{result_register,                                    \
-		     left_result.result_register,                        \
-		     right_result.result_register}                       \
-			}                                                      \
+		code.binop(                                              \
+			hir::Opcode::OPCODE,                                   \
+			result_register,                                       \
+			left_result.result_register,                           \
+			right_result.result_register                           \
 		);                                                       \
 		return {code, result_register};                          \
 	}
@@ -1119,11 +1102,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto result_register = make_register(type_of(node[0]));
 			auto exp_result = compile(node[0], ctx);
 			code = code + exp_result.code;
-			code.instructions.push_back(
-				hir::Instruction {
-					hir::Opcode::NOT, {result_register, exp_result.result_register}
-				}
-			);
+			code.unop(hir::Opcode::NOT, result_register, exp_result.result_register);
 			return {code, result_register};
 		}
 		case NodeType::STR: {
@@ -1337,11 +1316,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto v = make_register(type_of(node_idx));
 			code = code + r0.code;
 			code = code + r1.code;
-			code.instructions.push_back(
-				hir::Instruction {
-					hir::Opcode::REPEAT, {v, r0.result_register, r1.result_register}
-				}
-			);
+			code.repeat(v, r0.result_register, r1.result_register);
 			return {code, v};
 		}
 		case NodeType::LEN: {
