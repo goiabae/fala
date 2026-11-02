@@ -35,8 +35,8 @@ Code operator+(Code pre, Code post) {
 }
 
 void Code::if_(
-	hir::Register result, hir::Operand condition, hir::Block then_branch,
-	hir::Block else_branch
+	hir::Register result, hir::Operand condition, hir::Region then_branch,
+	hir::Region else_branch
 ) {
 	assert(not result.is_mutable);
 	instructions.push_back(
@@ -112,19 +112,19 @@ void Code::get_global(hir::Register result, hir::Label name) {
 	instructions.push_back(Instruction {hir::Opcode::GET_GLOBAL, {result, name}});
 }
 
-void Code::if_false(hir::Operand condition, hir::Block block) {
+void Code::if_false(hir::Operand condition, hir::Region block) {
 	instructions.push_back(
 		Instruction {hir::Opcode::IF_FALSE, {condition, block}}
 	);
 }
 
-void Code::if_true(hir::Operand condition, hir::Block block) {
+void Code::if_true(hir::Operand condition, hir::Region block) {
 	instructions.push_back(
 		Instruction {hir::Opcode::IF_TRUE, {condition, block}}
 	);
 }
 
-void Code::loop(hir::Label next, hir::Label stop, hir::Block block) {
+void Code::loop(hir::Label next, hir::Label stop, hir::Region block) {
 	instructions.push_back(Instruction {hir::Opcode::LOOP, {next, stop, block}});
 }
 
@@ -869,7 +869,7 @@ void Code::printc(hir::Operand opnd) {
 
 void Code::catch_(
 	hir::Register result, hir::Label tag, hir::Region handler,
-	hir::Block expression
+	hir::Region expression
 ) {
 	instructions.push_back(
 		Instruction {

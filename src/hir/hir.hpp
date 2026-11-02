@@ -179,10 +179,10 @@ class Code {
 	void copy(hir::Register, hir::Operand);
 	void call(hir::Register, hir::Operand, std::vector<hir::Operand>);
 	void perform(hir::Register, hir::Label, std::vector<hir::Operand>);
-	void if_false(hir::Operand, hir::Block);
-	void if_true(hir::Operand, hir::Block);
-	void if_(hir::Register, hir::Operand, hir::Block, hir::Block);
-	void loop(hir::Label next, hir::Label stop, hir::Block);
+	void if_false(hir::Operand, hir::Region);
+	void if_true(hir::Operand, hir::Region);
+	void if_(hir::Register, hir::Operand, hir::Region, hir::Region);
+	void loop(hir::Label next, hir::Label stop, hir::Region);
 	void brake(hir::Label where_to);
 	void continue_(hir::Label where_to);
 	void equals(hir::Register, hir::Operand, hir::Operand);
@@ -200,7 +200,7 @@ class Code {
 	void make_tuple(hir::Register, std::vector<hir::Operand>);
 	void make_array(hir::Register, std::vector<hir::Operand>);
 	void enclose(hir::Register, hir::Label, hir::Register);
-	void catch_(hir::Register, hir::Label, hir::Region, hir::Block);
+	void catch_(hir::Register, hir::Label, hir::Region, hir::Region);
 	void printf(hir::Operand);
 	void printv(hir::Operand);
 	void printc(hir::Operand);

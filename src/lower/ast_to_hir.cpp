@@ -181,33 +181,48 @@ hir::Module Compiler::start_module() {
 
 	auto a1 = std::make_shared<hir::Code>(c7);
 
-	hir::Block write_str_expression {
+	hir::Block write_str_expression2 {
 		.body_code = a1,
 		.child_blocks = {},
 	};
-	assert(write_str_expression.body_code != nullptr);
+	assert(write_str_expression2.body_code != nullptr);
+	hir::Region write_str_expression {
+		.blocks = {{"0", write_str_expression2}},
+		.entry_block = "0",
+		.parameter_registers = {}
+	};
 
 	hir::Code c5 {};
 	c5.catch_(v6, write_str_tag, write_str_handler, write_str_expression);
 
 	auto a2 = std::make_shared<hir::Code>(c5);
 
-	hir::Block write_char_expression {
+	hir::Block write_char_expression2 {
 		.body_code = a2,
 		.child_blocks = {},
 	};
-	assert(write_char_expression.body_code != nullptr);
+	assert(write_char_expression2.body_code != nullptr);
+	hir::Region write_char_expression {
+		.blocks = {{"0", write_char_expression2}},
+		.entry_block = "0",
+		.parameter_registers = {}
+	};
 
 	hir::Code c1 {};
 	c1.catch_(v5, write_char_tag, write_char_handler, write_char_expression);
 
 	auto a3 = std::make_shared<hir::Code>(c1);
 
-	hir::Block write_int_expression {
+	hir::Block write_int_expression2 {
 		.body_code = a3,
 		.child_blocks = {},
 	};
-	assert(write_int_expression.body_code != nullptr);
+	assert(write_int_expression2.body_code != nullptr);
+	hir::Region write_int_expression {
+		.blocks = {{"0", write_int_expression2}},
+		.entry_block = "0",
+		.parameter_registers = {}
+	};
 
 	hir::Code code {};
 	code.catch_(v0, write_int_tag, write_int_handler, write_int_expression);
@@ -221,9 +236,12 @@ hir::Module Compiler::start_module() {
 	assert(blk.body_code != nullptr);
 
 	hir::Function start {
-		.blocks = {{"0", blk}},
-		.entry_block = "0",
-		.parameter_registers = {},
+		.region =
+			hir::Region {
+				.blocks = {{"0", blk}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			},
 		.is_builtin = false,
 		.builtin_name = {},
 	};
@@ -359,7 +377,6 @@ Result Compiler::compile_perform(NodeIndex node_idx, Context ctx) {
 }
 
 Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
-	hir::Code code {};
 	const auto& node = ast.at(node_idx);
 
 	auto cond_idx = node[0];
@@ -369,7 +386,6 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	auto result_register = make_register(type_of(node_idx));
 
 	auto cond_res = compile(cond_idx, ctx);
-	code = code + cond_res.code;
 	auto cond_opnd = cond_res.result_register;
 
 	auto then_res = compile(then_idx, ctx);
@@ -381,19 +397,31 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	auto if_true_code = std::make_shared<hir::Code>(then_res.code);
 	auto if_false_code = std::make_shared<hir::Code>(else_res.code);
 
-	code.if_(
-		result_register,
-		cond_opnd,
-		hir::Block {
-			.body_code = if_true_code,
-			.child_blocks = {},
-		},
-		hir::Block {
-			.body_code = if_false_code,
-			.child_blocks = {},
-		}
-	);
+	hir::Region true_branch {
+		.blocks =
+			{{"0",
+	      hir::Block {
+					.body_code = if_true_code,
+					.child_blocks = {},
+				}}},
+		.entry_block = "0",
+		.parameter_registers = {},
+	};
 
+	hir::Region false_branch {
+		.blocks =
+			{{"0",
+	      hir::Block {
+					.body_code = if_false_code,
+					.child_blocks = {},
+				}}},
+		.entry_block = "0",
+		.parameter_registers = {},
+	};
+
+	hir::Code code {};
+	code = code + cond_res.code;
+	code.if_(result_register, cond_opnd, true_branch, false_branch);
 	return Result {code, result_register};
 }
 
@@ -716,7 +744,6 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::IF: return compile_if(node_idx, ctx);
 		case NodeType::WHEN: {
-			hir::Code code {};
 			const auto& node = ast.at(node_idx);
 
 			auto cond_idx = node[0];
@@ -725,7 +752,6 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto result_register = make_register(type_of(node_idx));
 
 			auto cond_res = compile(cond_idx, ctx);
-			code = code + cond_res.code;
 			auto cond_opnd = cond_res.result_register;
 
 			auto then_res = compile(then_idx, ctx);
@@ -744,19 +770,31 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto if_true_code = std::make_shared<hir::Code>(then_res.code);
 			auto if_false_code = std::make_shared<hir::Code>(if_false);
 
-			code.if_(
-				result_register,
-				cond_opnd,
-				hir::Block {
-					.body_code = if_true_code,
-					.child_blocks = {},
-				},
-				hir::Block {
-					.body_code = if_false_code,
-					.child_blocks = {},
-				}
-			);
+			hir::Region true_branch {
+				.blocks =
+					{{"0",
+			      hir::Block {
+							.body_code = if_true_code,
+							.child_blocks = {},
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
 
+			hir::Region false_branch {
+				.blocks =
+					{{"0",
+			      hir::Block {
+							.body_code = if_false_code,
+							.child_blocks = {},
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
+
+			hir::Code code {};
+			code = code + cond_res.code;
+			code.if_(result_register, cond_opnd, true_branch, false_branch);
 			return Result {code, result_register};
 		}
 		case NodeType::FOR: {
@@ -832,6 +870,17 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code if_break {};
 			if_break.brake(stop_label);
 
+			hir::Region loop_break_region {
+				.blocks =
+					{{"0",
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(if_break),
+							.child_blocks = {},
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
+
 			hir::Code loop_body {};
 			auto hbool = hctx.alloc(
 				hir::HType {hir::HInteger {
@@ -841,13 +890,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			);
 			auto cond = make_register(hbool);
 			loop_body.equals(cond, var_opnd, to_opnd);
-			loop_body.if_true(
-				cond,
-				hir::Block {
-					.body_code = std::make_shared<hir::Code>(if_break),
-					.child_blocks = {},
-				}
-			);
+			loop_body.if_true(cond, loop_break_region);
 			loop_body = loop_body + then_result.code;
 			auto hint = hctx.alloc(
 				hir::HType {hir::HInteger {
@@ -865,14 +908,18 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			loop_body.add(t1, var_opnd, t2);
 			loop_body.store(var_opnd, t1);
 
-			code.loop(
-				next_label,
-				stop_label,
-				hir::Block {
-					.body_code = std::make_shared<hir::Code>(loop_body),
-					.child_blocks = {},
-				}
-			);
+			hir::Region loop_body_region {
+				.blocks =
+					{{"0",
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(loop_body),
+							.child_blocks = {},
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
+
+			code.loop(next_label, stop_label, loop_body_region);
 
 			return {code, then_opnd};
 		}
@@ -912,25 +959,34 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			hir::Code if_break {};
 			if_break.brake(stop_label);
 
+			hir::Region loop_break_region {
+				.blocks =
+					{{"0",
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(if_break),
+							.child_blocks = {},
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
+
 			hir::Code loop_body {};
 			loop_body = loop_body + cond_result.code;
-			loop_body.if_false(
-				cond_opnd,
-				hir::Block {
-					.body_code = std::make_shared<hir::Code>(if_break),
-					.child_blocks = {},
-				}
-			);
+			loop_body.if_false(cond_opnd, loop_break_region);
 			loop_body = loop_body + then_result.code;
 
-			code.loop(
-				next_label,
-				stop_label,
-				hir::Block {
-					.body_code = std::make_shared<hir::Code>(loop_body),
-					.child_blocks = {},
-				}
-			);
+			hir::Region loop_body_region {
+				.blocks =
+					{{"0",
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(loop_body),
+							.child_blocks = {},
+						}}},
+				.entry_block = "0",
+				.parameter_registers = {},
+			};
+
+			code.loop(next_label, stop_label, loop_body_region);
 
 			return {code, then_opnd};
 		}
