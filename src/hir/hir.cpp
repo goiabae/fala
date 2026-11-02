@@ -194,12 +194,9 @@ void print_operand(
 			return;
 		}
 		case Operand::Kind::BLOCK: {
-			fprintf(fd, "{\n");
 			assert(opnd.block.body_code != nullptr);
 			const auto& code = *opnd.block.body_code;
 			print_code(fd, code, pool, spaces + 2, ctx);
-			for (int i = 0; i < spaces; i++) fprintf(fd, " ");
-			fprintf(fd, "}");
 			return;
 		}
 		case Operand::Kind::LABEL: {
@@ -208,23 +205,31 @@ void print_operand(
 		}
 		case Operand::Kind::REGION: {
 			const auto& r = opnd.region;
-			fprintf(fd, "(");
-			for (const auto& [i, p] :
-			     std::ranges::views::enumerate(r.parameter_registers)) {
-				print_operand(fd, p, pool, spaces, ctx);
-				fprintf(fd, ": ");
-				print_type(fd, p.htype, pool, spaces, ctx);
-				if (static_cast<std::size_t>(i) != (r.parameter_registers.size() - 1)) {
-					fprintf(fd, ", ");
+			if (r.parameter_registers.size() > 0) {
+				fprintf(fd, "(");
+				for (const auto& [i, p] :
+				     std::ranges::views::enumerate(r.parameter_registers)) {
+					print_operand(fd, p, pool, spaces, ctx);
+					fprintf(fd, ": ");
+					print_type(fd, p.htype, pool, spaces, ctx);
+					if (static_cast<std::size_t>(i)
+					    != (r.parameter_registers.size() - 1)) {
+						fprintf(fd, ", ");
+					}
 				}
+				fprintf(fd, ") ");
 			}
-			fprintf(fd, ")");
-			fprintf(fd, " @%s", r.entry_block.c_str());
-			fprintf(fd, " ");
+			fprintf(fd, "@%s {\n", r.entry_block.c_str());
+			auto j = 0ul;
 			for (const auto& [n, b] : r.blocks) {
-				// fprintf(fd, "%s", n.c_str());
+				for (int i = 0; i < spaces + 2; i++) fprintf(fd, " ");
+				fprintf(fd, "@%s:\n", n.c_str());
 				print_operand(fd, b, pool, spaces, ctx);
+				if (j != (r.blocks.size() - 1)) fprintf(fd, "\n");
+				j++;
 			}
+			for (int i = 0; i < spaces; i++) fprintf(fd, " ");
+			fprintf(fd, "}");
 			return;
 		}
 		case Operand::Kind::IMMEDIATE: {
