@@ -648,6 +648,7 @@ NodeIndex AST::alloc_node() {
 }
 
 NodeIndex& Node::operator[](size_t index) const {
+	if (size() <= index) throw std::out_of_range("");
 	return branch.children[index];
 }
 
