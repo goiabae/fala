@@ -160,7 +160,7 @@ auto translate(
 					for (const auto& argument : ctor.arguments) {
 						arguments.push_back(translate(argument, hctx, sctx));
 					}
-					HUnion::Constructor hctor {.arguments = arguments};
+					HUnion::Constructor hctor {.name = ctor.name, .arguments = arguments};
 					constructors.push_back(hctor);
 				}
 				HUnion hu {.constructors = constructors};

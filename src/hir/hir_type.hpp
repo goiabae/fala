@@ -2,6 +2,7 @@
 #define HIR_TYPE_HPP
 
 #include <memory>
+#include <string>
 
 #include "type.hpp"
 
@@ -49,6 +50,7 @@ struct HTuple {
 
 struct HUnion {
 	struct Constructor {
+		std::string name;
 		std::vector<HTPtr> arguments;
 	};
 	// position of the constructor in the vector represents the tag used to match
