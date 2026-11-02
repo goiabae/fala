@@ -622,6 +622,43 @@ void print_instruction(
 			fprintf(fd, "\n");
 			return;
 		}
+		case Opcode::GET_CONSTRUCTOR: {
+			assert(inst.operands.size() == 2);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, " = ");
+			fprintf(fd, "get_constructor ");
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::GET_VARIANT: {
+			assert(inst.operands.size() == 3);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, " = ");
+			fprintf(fd, "get_variant ");
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::PANIC: {
+			assert(inst.operands.size() == 0);
+			fprintf(fd, "panic");
+			fprintf(fd, "\n");
+			return;
+		}
+		case Opcode::MAKE_VARIANT: {
+			assert(inst.operands.size() == 3);
+			print_operand(fd, inst.operands[0], pool, spaces, ctx);
+			fprintf(fd, " = ");
+			fprintf(fd, "make_variant ");
+			print_operand(fd, inst.operands[1], pool, spaces, ctx);
+			fprintf(fd, " ");
+			print_operand(fd, inst.operands[2], pool, spaces, ctx);
+			fprintf(fd, "\n");
+			return;
+		}
 	}
 }
 
@@ -880,6 +917,42 @@ void Code::catch_(
 		Instruction {
 			.opcode = Opcode::CATCH,
 			.operands = {result, tag, handler, expression},
+		}
+	);
+}
+
+void Code::alias(hir::Register result, hir::Register value) {
+	instructions.push_back(
+		Instruction {.opcode = Opcode::ALIAS, .operands = {result, value}}
+	);
+}
+
+void Code::get_constructor(hir::Register result, hir::Operand value) {
+	instructions.push_back(
+		Instruction {.opcode = Opcode::GET_CONSTRUCTOR, .operands = {result, value}}
+	);
+}
+
+void Code::get_variant(
+	hir::Register result, hir::Operand value, hir::Operand tag
+) {
+	instructions.push_back(
+		Instruction {
+			.opcode = Opcode::GET_VARIANT, .operands = {result, value, tag}
+		}
+	);
+}
+
+void Code::panic() {
+	instructions.push_back(Instruction {.opcode = Opcode::PANIC, .operands = {}});
+}
+
+void Code::make_variant(
+	hir::Register result, hir::Operand tag, hir::Register tuple
+) {
+	instructions.push_back(
+		Instruction {
+			.opcode = Opcode::MAKE_VARIANT, .operands = {result, tag, tuple}
 		}
 	);
 }

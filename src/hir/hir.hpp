@@ -131,6 +131,7 @@ enum class Opcode {
 	MAKE_TUPLE,
 	MAKE_ARRAY,
 	ENCLOSE,
+	PANIC,
 
 	// Control flow
 	LOOP,
@@ -151,6 +152,9 @@ enum class Opcode {
 	// at the position indicated by the indexes.
 	SET_ELEMENT,
 	GET_ELEMENT,
+	GET_CONSTRUCTOR,
+	GET_VARIANT,
+	MAKE_VARIANT, // <result> = make_variant <tag> <tuple>
 
 	// Given a reference, copy the value contained in the register pointed to by
 	// the refence into another register
@@ -199,12 +203,18 @@ class Code {
 	void resume(hir::Register, hir::Register, hir::Operand);
 	void make_tuple(hir::Register, std::vector<hir::Operand>);
 	void make_array(hir::Register, std::vector<hir::Operand>);
+	void make_variant(
+		hir::Register result, hir::Operand tag, hir::Register tuple
+	);
 	void enclose(hir::Register, hir::Label, hir::Register);
 	void catch_(hir::Register, hir::Label, hir::Region, hir::Region);
 	void printf(hir::Operand);
 	void printv(hir::Operand);
 	void printc(hir::Operand);
 	void yield(hir::Operand);
+	void get_constructor(hir::Register, hir::Operand);
+	void get_variant(hir::Register, hir::Operand, hir::Operand);
+	void panic();
 };
 
 using Constant = std::variant<

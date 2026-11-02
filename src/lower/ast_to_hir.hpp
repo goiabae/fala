@@ -2,8 +2,10 @@
 #define AST_TO_HIR_HPP
 
 #include <optional>
+#include <stack>
 
 #include "ast.hpp"
+#include "hir/decision_tree.hpp"
 #include "hir/hir.hpp"
 #include "hir/hir_type.hpp"
 #include "indexes.hpp"
@@ -95,6 +97,20 @@ class Compiler {
 	Result compile_lvalue(NodeIndex node_idx, Context ctx);
 	auto compile_declaration(NodeIndex node_idx, Context ctx) -> std::optional<
 		std::tuple<hir::Code, hir::Operand, std::optional<hir::Code*>>>;
+
+	using Pattern = NodeIndex;
+	using Decision = decision_tree::Node<hir::Register, std::size_t>;
+
+	auto generate_cases(
+		std::stack<std::pair<Pattern, NodeIndex>> cases, hir::Register initial
+	) -> Decision*;
+
+	auto generate_patterns(
+		std::stack<std::pair<Pattern, hir::Register>> matches, NodeIndex then,
+		std::stack<std::pair<Pattern, NodeIndex>> cases, hir::Register initial
+	) -> Decision*;
+
+	auto compile_decision(const Decision& decision, Context ctx) -> Result;
 
 #define DECLARE_NODE_HANDLER(NODE_TYPE) \
 	Result compile_##NODE_TYPE(NodeIndex node_idx, Context ctx)

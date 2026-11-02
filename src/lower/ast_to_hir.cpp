@@ -5,6 +5,7 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <tuple>
 
@@ -309,6 +310,57 @@ Result Compiler::compile_app(NodeIndex node_idx, Context ctx) {
 			builtin_function_found = true;
 			break;
 		}
+	}
+
+	if (checker.constructors.contains(func_node.guid)) {
+		// Resolve arguments
+		const auto& args_node = ast.at(node[1]);
+		assert(args_node.type == NodeType::METALIST);
+
+		std::vector<hir::Operand> args {};
+
+		for (size_t i = 0; i < args_node.branch.children_count; i++) {
+			auto arg_idx = args_node[i];
+			auto arg_result = compile(arg_idx, ctx);
+			code = code + arg_result.code;
+			args.push_back(arg_result.result_register);
+		}
+
+		const auto ty = checker.node_to_type.at(func_idx);
+		const auto dty = get_datatype(ty);
+		const auto fty = erase_function_captures(dty);
+		const auto name =
+			std::string_view(pool.find(symtab.name_of(func_node.guid).value()));
+		const auto unty = std::dynamic_pointer_cast<Union>(fty->output);
+		assert(unty != nullptr);
+		auto tag = [&]() -> std::size_t {
+			if (auto found = std::ranges::find(
+						unty->constructors,
+						std::string(name),
+						[](const auto& x) { return x.name; }
+					);
+			    found != unty->constructors.end()) {
+				auto index = std::distance(unty->constructors.begin(), found);
+				return static_cast<std::size_t>(index);
+			} else {
+				throw std::runtime_error(
+					"union type of expression does not contain constructor"
+				);
+			}
+		}();
+		std::vector<hir::HTPtr> elements_htypes;
+		for (const auto& argument_stype : unty->constructors.at(tag).arguments) {
+			auto htype = hir::translate(argument_stype, hctx, checker.type_names);
+			elements_htypes.push_back(htype);
+		}
+		auto arguments_tuple_htype =
+			hctx.alloc(hir::HType(hir::HTuple {.elements = elements_htypes}));
+		auto union_htype = type_of(node_idx);
+		auto v0 = make_register(arguments_tuple_htype);
+		auto v1 = make_register(union_htype);
+		code.make_tuple(v0, args);
+		code.make_variant(v1, hir::Immediate(tag), v0);
+		return {code, v1};
 	}
 
 	if (!builtin_function_found) {
@@ -1312,6 +1364,32 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			code.make_array(v, elements);
 			return {code, v};
 		}
+		case NodeType::MATCH: {
+			hir::Code code {};
+			auto r0 = compile(node[0], ctx);
+			code = code + r0.code;
+
+			const auto& cases_node = ast.at(node[1]);
+			auto cases = std::span(cases_node.begin(), cases_node.size());
+
+			std::stack<std::pair<Pattern, NodeIndex>> cases_;
+			hir::Register initial = r0.result_register;
+
+			for (auto case_ : std::ranges::views::reverse(cases)) {
+				const auto& case_node = ast.at(case_);
+				assert(case_node.type == NodeType::CASE);
+				cases_.push(std::make_pair(case_node[0], case_node[1]));
+			}
+
+			auto tree = generate_cases(cases_, initial);
+			if (auto vin = tree->input_register()) {
+				code.alias(*vin, r0.result_register);
+			}
+			logger.log(LogLevel::INFO, "Compiled decision tree: {}", *tree);
+			auto y = compile_decision(*tree, ctx);
+			code = code + y.code;
+			return {code, y.result_register};
+		}
 		default: {
 			throw std::runtime_error(
 				std::format("unhandled node type {}", node_type_repr(node.type))
@@ -1437,6 +1515,232 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 auto Compiler::type_of(NodeIndex node_idx) -> hir::HTPtr {
 	return hir::translate(
 		checker.node_to_type.at(node_idx)->datatype, hctx, checker.type_names
+	);
+}
+
+auto Compiler::generate_cases(
+	std::stack<std::pair<Compiler::Pattern, NodeIndex>> cases,
+	hir::Register initial
+) -> Compiler::Decision* {
+	if (cases.size() == 0) {
+		return new Compiler::Decision(Compiler::Decision::Panic {});
+	} else {
+		auto [pat, then] = cases.top();
+		cases.pop();
+		auto hany = type_of(pat);
+		std::stack<std::pair<Pattern, hir::Register>> matches {};
+		matches.push(std::make_pair(pat, make_register(hany)));
+		return generate_patterns(matches, then, cases, initial);
+	}
+}
+
+auto Compiler::generate_patterns(
+	std::stack<std::pair<Compiler::Pattern, hir::Register>> matches,
+	NodeIndex then, std::stack<std::pair<Compiler::Pattern, NodeIndex>> cases,
+	hir::Register initial
+) -> Compiler::Decision* {
+	if (matches.size() == 0) {
+		return new Compiler::Decision(
+			Compiler::Decision::Leaf {.then_branch = then}
+		);
+	} else {
+		auto [pattern, value] = matches.top();
+		auto more = matches;
+		more.pop();
+		const auto& pattern_node = ast.at(pattern);
+		if (pattern_node.type == NodeType::GUID) {
+			auto name = pattern_node.guid;
+			auto name_str = std::string_view(pool.find(symtab.name_of(name).value()));
+			if (name_str == "_") {
+				return generate_patterns(more, then, cases, initial);
+			} else {
+				return new Compiler::Decision(
+					Compiler::Decision::UnconditionalBind {
+						.name = name,
+						.value = value,
+						.then = generate_patterns(more, then, cases, initial),
+					}
+				);
+			}
+		} else if (pattern_node.type == NodeType::CTOR_PATTERN) {
+			auto ctor = pattern_node[0];
+			const auto& ctor_node = ast.at(ctor);
+			assert(ctor_node.type == NodeType::GUID);
+			const auto& patterns_node = ast.at(pattern_node[1]);
+			assert(patterns_node.type == NodeType::METALIST);
+			auto ctor_name =
+				std::string(pool.find(symtab.name_of(ctor_node.guid).value()));
+			auto x = hctx.at(value.htype).data;
+			auto variant_name = [](const auto& v) -> std::string_view {
+				constexpr std::string_view names[] = {
+					"HInteger",
+					"HNil",
+					"HVoid",
+					"HContinuation",
+					"HClosure",
+					"HArray",
+					"HTuple",
+					"HUnion",
+					"HAny",
+					"HGeneric"
+				};
+				return names[v.index()];
+			};
+			std::cerr << "index: " << x.index() << ", " << variant_name(x) << '\n';
+			auto union_htype = std::get<hir::HUnion>(x);
+			auto found = std::ranges::find(
+				union_htype.constructors, ctor_name, [](const auto& x) {
+					return x.name;
+				}
+			);
+			auto tag = std::distance(union_htype.constructors.begin(), found);
+			std::vector<hir::Register> constructor_arguments {};
+			for (auto t : found->arguments)
+				constructor_arguments.push_back(make_register(t));
+			auto more_ = more;
+			for (auto i = 0ul; i < patterns_node.size(); i++) {
+				more_.push(
+					std::make_pair(patterns_node[i], constructor_arguments.at(i))
+				);
+			}
+			return new Compiler::Decision(
+				Compiler::Decision::ConstructorMatch {
+					.value = value,
+					.constructor = static_cast<unsigned long>(tag),
+					.constructor_arguments = constructor_arguments,
+					.yes = generate_patterns(more_, then, cases, initial),
+					.no = generate_cases(cases, initial),
+				}
+			);
+		} else {
+			assert(false);
+		}
+	}
+}
+
+auto Compiler::compile_decision(const Compiler::Decision& decision, Context ctx)
+	-> Result {
+	auto hany = hctx.alloc(hir::HType {hir::HAny {}});
+	auto hbool = hctx.alloc(
+		hir::HType {hir::HInteger {
+			.bit_count = 1,
+			.sign = hir::HInteger::Sign::UNSIGNED,
+		}}
+	);
+	auto hint = hctx.alloc(
+		hir::HType {hir::HInteger {
+			.bit_count = 64,
+			.sign = hir::HInteger::Sign::SIGNED,
+		}}
+	);
+	return std::visit(
+		overloaded {
+			[&](const Compiler::Decision::Always& x) -> Result {
+				return compile_decision(*x.then, ctx);
+			},
+			[&](const Compiler::Decision::ConstructorMatch& x) -> Result {
+				hir::Code code {};
+				auto v0 = make_register(hint);
+				auto v1 = make_register(hbool);
+				auto v2 = make_register(hany);
+				auto v3 = make_register(hany);
+				code.get_constructor(v0, x.value);
+				code.equals(v1, v0, hir::Immediate(x.constructor));
+
+				auto yes = compile_decision(*x.yes, ctx);
+				auto no = compile_decision(*x.no, ctx);
+
+				hir::Code code1 {};
+				code1.get_variant(v2, hir::Immediate(x.constructor), x.value);
+				for (const auto& [i, arg] :
+		         x.constructor_arguments | std::ranges::views::enumerate) {
+					code1.get_element(arg, v2, hir::Immediate(i));
+				}
+				code1 = code1 + yes.code;
+				code1.yield(yes.result_register);
+
+				no.code.yield(no.result_register);
+
+				hir::Block yes_blk {
+					.body_code = std::make_shared<hir::Code>(code1),
+					.child_blocks = {hir::Label {.name = "0"}},
+				};
+
+				hir::Block no_blk {
+					.body_code = std::make_shared<hir::Code>(no.code),
+					.child_blocks = {hir::Label {.name = "0"}},
+				};
+
+				hir::Region true_branch {
+					.blocks = {{"0", yes_blk}},
+					.entry_block = "0",
+					.parameter_registers = {},
+				};
+
+				hir::Region false_branch {
+					.blocks = {{"0", no_blk}},
+					.entry_block = "0",
+					.parameter_registers = {},
+				};
+
+				code.if_(v3, v1, true_branch, false_branch);
+				return {code, v3};
+			},
+			[&](const Compiler::Decision::UnconditionalBind& x) -> Result {
+				hir::Code code {};
+				auto y = std::get<LocalVariable>(variables.at(x.name)).register_;
+				code.alias(y, x.value);
+				return {code, y};
+			},
+			[&](const Compiler::Decision::Equation& x) -> Result {
+				auto y = compile(x.equal_to, ctx);
+				auto v0 = make_register(hbool);
+				auto v1 = make_register(hany);
+				hir::Code code {};
+				code = code + y.code;
+				code.equals(v0, x.value, y.result_register);
+
+				auto yes = compile_decision(*x.yes, ctx);
+				auto no = compile_decision(*x.no, ctx);
+
+				yes.code.yield(yes.result_register);
+				no.code.yield(no.result_register);
+
+				hir::Block yes_blk {
+					.body_code = std::make_shared<hir::Code>(yes.code),
+					.child_blocks = {hir::Label {.name = "0"}},
+				};
+
+				hir::Block no_blk {
+					.body_code = std::make_shared<hir::Code>(no.code),
+					.child_blocks = {hir::Label {.name = "0"}},
+				};
+
+				hir::Region true_branch {
+					.blocks = {{"0", yes_blk}},
+					.entry_block = "0",
+					.parameter_registers = {},
+				};
+
+				hir::Region false_branch {
+					.blocks = {{"0", no_blk}},
+					.entry_block = "0",
+					.parameter_registers = {},
+				};
+
+				code.if_(v1, v0, true_branch, false_branch);
+				return {code, v1};
+			},
+			[&](const Compiler::Decision::Leaf& x) -> Result {
+				return compile(x.then_branch, ctx);
+			},
+			[&](const Compiler::Decision::Panic&) -> Result {
+				hir::Code code {};
+				code.panic();
+				return {code, {}};
+			},
+		},
+		decision.data
 	);
 }
 
