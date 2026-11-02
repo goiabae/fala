@@ -1647,6 +1647,8 @@ void Typechecker::typecheck_pattern(NodeIndex node_idx, D data) {
 	switch (node.type) {
 		case NodeType::GUID: {
 			variables[node.guid] = make_polytype(VAL_, make_scheme({}, data));
+			auto t = make_type(VAL_, data);
+			ASSOC_TYPE(node_idx, t);
 			return;
 		}
 		case NodeType::CTOR_PATTERN: {
@@ -1675,6 +1677,8 @@ void Typechecker::typecheck_pattern(NodeIndex node_idx, D data) {
 				for (auto i = 0ul; i < (*found).arguments.size(); i++) {
 					typecheck_pattern(arguments_node[i], (*found).arguments.at(i));
 				}
+				auto t = make_type(VAL_, data);
+				ASSOC_TYPE(node_idx, t);
 				return;
 			} else {
 				throw std::runtime_error("impossible?");
