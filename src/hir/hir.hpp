@@ -49,11 +49,8 @@ struct Region {
 	std::vector<Register> parameter_registers;
 };
 
-class Function {
- public:
+struct Function {
 	Region region;
-	bool is_builtin;
-	StrID builtin_name;
 };
 
 class Boolean {

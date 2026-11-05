@@ -493,11 +493,7 @@ static void myprint(
 	HTContext& ctx
 ) {
 	fprintf(fd, "function ");
-	if (fn.is_builtin) {
-		fprintf(fd, "\"%s\"", pool.find(fn.builtin_name));
-	} else {
-		print_operand(fd, fn.region, pool, spaces, ctx);
-	}
+	print_operand(fd, fn.region, pool, spaces, ctx);
 }
 
 static void myprint(

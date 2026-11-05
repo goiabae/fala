@@ -250,8 +250,6 @@ hir::Module Compiler::start_module() {
 
 	auto l6 = make_label();
 	hir::Function start {
-		.is_builtin = false,
-		.builtin_name = {},
 		.region = hir::Region {
 			.blocks = {{l6.name, blk}},
 			.entry_block = l6.name,
@@ -653,15 +651,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				};
 				auto entry = make_label();
 				hir::Function function {
-					.region =
-						hir::Region {
-							.blocks = {{entry.name, block}},
-							.entry_block = entry.name,
-							.parameter_registers = parameter_registers,
+					.region = hir::Region {
+						.blocks = {{entry.name, block}},
+						.entry_block = entry.name,
+						.parameter_registers = parameter_registers,
 
-						},
-					.is_builtin = false,
-					.builtin_name = {0},
+					},
 				};
 
 				auto l2 = ctx.current_module.register_constant(
@@ -723,14 +718,11 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				}
 				auto entry = make_label();
 				hir::Function function {
-					.region =
-						hir::Region {
-							.blocks = {{entry.name, block}},
-							.entry_block = entry.name,
-							.parameter_registers = new_parameter_registers,
-						},
-					.is_builtin = false,
-					.builtin_name = {0},
+					.region = hir::Region {
+						.blocks = {{entry.name, block}},
+						.entry_block = entry.name,
+						.parameter_registers = new_parameter_registers,
+					},
 				};
 
 				auto l = make_label();
