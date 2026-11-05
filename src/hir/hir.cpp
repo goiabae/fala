@@ -324,6 +324,8 @@ void print_instruction(
 					if (i != (inst.operands.size() - 1)) fprintf(fd, " ");             \
 				}                                                                    \
 			}                                                                      \
+		} else {                                                                 \
+			fprintf(fd, "%s", N);                                                  \
 		}                                                                        \
 		fprintf(fd, "\n");                                                       \
 		return;                                                                  \
