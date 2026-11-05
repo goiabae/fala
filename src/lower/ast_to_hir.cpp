@@ -8,6 +8,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <tuple>
+#include <variant>
 
 #include "ast.hpp"
 #include "hir/hir.hpp"
@@ -1366,6 +1367,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		case NodeType::RECORD_LITERAL: {
 			const auto field_count = node.size();
 			hir::Code code {};
+			const auto record_datatype = std::dynamic_pointer_cast<Record>(
+				checker.node_to_type.at(node_idx)->datatype
+			);
 			auto t1 = make_register(type_of(node_idx));
 			const auto l1 = ctx.current_module.register_static_initialization(
 				make_label(),
@@ -1379,10 +1383,21 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 				const auto& field_node = ast.at(node[i]);
 				assert(field_node.type == NodeType::FIELD);
 				const auto ti = make_variable(type_of(field_node[1]));
+				const auto& field_name_node = ast.at(field_node[0]);
+				assert(field_name_node.type == NodeType::ID);
+				const auto field_name = std::string(pool.find(field_name_node.str_id));
+				const auto found = std::ranges::find(
+					record_datatype->fields, field_name, [](const auto& x) {
+						return x.first;
+					}
+				);
+				assert(found != record_datatype->fields.end());
+				const auto offset =
+					std::distance(record_datatype->fields.begin(), found);
 				const auto li = ctx.current_module.register_constant(
 					make_label(),
 					hir::Visibility::HIDDEN,
-					hir::Integer(static_cast<int>(i))
+					hir::Integer(static_cast<int>(offset))
 				);
 				auto hint = hctx.alloc(
 					hir::HType {hir::HInteger {
