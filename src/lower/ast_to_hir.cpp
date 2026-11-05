@@ -43,7 +43,7 @@ std::optional<Variable> Compiler::classify_variable(Guid sym) {
 	} else if (auto closure = std::dynamic_pointer_cast<Closure>(mono)) {
 		if (closure->captures.size() > 0) {
 			return LocalVariable {
-				.register_ = make_register(htype),
+				.register_ = make_variable(htype),
 			};
 		} else {
 			return StaticFunction {
@@ -612,6 +612,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 
 			std::vector<hir::Register> parameter_registers {};
 
+			auto empty_capture =
+				hctx.alloc(hir::HType {hir::HTuple {.elements = {}}});
+
+			auto env = make_register(hcapture_set);
+			parameter_registers.push_back(env);
+
 			for (auto param_id : params_node) {
 				const auto& param_node = ast.at(param_id);
 				assert(param_node.type == NodeType::PARAM);
@@ -667,12 +673,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 
 				return std::make_tuple(code, variable_register, std::nullopt);
 			} else if (auto local_variable = std::get_if<LocalVariable>(&variable)) {
-				auto t3 = make_variable(hcapture_set, "env");
-				auto t5 = local_variable->register_;
+				auto t5 = make_register(local_variable->register_.htype);
+				auto t6 = local_variable->register_;
 
 				ClosureInfo clinfo {
 					.function_name = id_node.guid,
-					.object = t3,
+					.object = env,
 					.offsets = {},
 				};
 
@@ -682,7 +688,14 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 					for (const auto& [a, b] : cty->captures) {
 						const auto ti =
 							make_register(hir::translate(b, hctx, checker.type_names));
-						code.clone(ti, std::get<LocalVariable>(variables.at(a)).register_);
+						auto lv = std::get<LocalVariable>(variables.at(a)).register_;
+						if (lv.is_mutable) {
+							auto v0 = make_register(lv.htype);
+							code.load(v0, lv);
+							code.clone(ti, v0);
+						} else {
+							code.clone(ti, lv);
+						}
 						closure_values.push_back(ti);
 						clinfo.offsets[a] = i;
 						i++;
@@ -712,16 +725,12 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 					.body_code = std::make_shared<hir::Code>(body_result.code),
 					.child_blocks = {},
 				};
-				std::vector<hir::Register> new_parameter_registers {t3};
-				for (auto p : parameter_registers) {
-					new_parameter_registers.push_back(p);
-				}
 				auto entry = make_label();
 				hir::Function function {
 					.region = hir::Region {
 						.blocks = {{entry.name, block}},
 						.entry_block = entry.name,
-						.parameter_registers = new_parameter_registers,
+						.parameter_registers = parameter_registers,
 					},
 				};
 
@@ -733,8 +742,9 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 				auto t4 = make_register(hcapture_set);
 				code.make_tuple(t4, closure_values);
 				code.enclose(t5, l2, t4);
+				code.alloc(t6, t5);
 
-				return std::make_tuple(code, t5, std::nullopt);
+				return std::make_tuple(code, t6, std::nullopt);
 			} else {
 				assert(false);
 			}
@@ -1551,7 +1561,9 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 					if (auto closure = ctx.current_closure) {
 						auto offset = closure->offsets.at(node.guid);
 						auto r0 = make_variable(type_of(node_idx), std::nullopt);
-						code.get_element(r0, closure->object, hir::Immediate(offset));
+						auto r1 = make_register(type_of(node_idx));
+						code.get_element(r1, closure->object, hir::Immediate(offset));
+						code.alloc(r0, r1);
 						return {code, r0};
 					} else {
 						assert(false);
