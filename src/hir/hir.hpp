@@ -151,6 +151,7 @@ enum class Opcode {
 	GET_CONSTRUCTOR,
 	GET_VARIANT,
 	MAKE_VARIANT, // <result> = make_variant <tag> <tuple>
+	LENGTH,
 
 	// Given a reference, copy the value contained in the register pointed to by
 	// the refence into another register
@@ -215,6 +216,7 @@ class Code {
 	void binop(hir::Opcode, hir::Register, hir::Operand, hir::Operand);
 	void unop(hir::Opcode, hir::Register, hir::Operand);
 	void repeat(hir::Register, hir::Operand, hir::Operand);
+	void length(hir::Register, hir::Operand);
 
  public:
 	std::size_t size() const { return instructions.size(); }

@@ -382,6 +382,7 @@ void print_instruction(
 		case Opcode::GET_VARIANT: E("get_variant", 3);
 		case Opcode::PANIC: S("panic", 0);
 		case Opcode::MAKE_VARIANT: E("make_variant", 3);
+		case Opcode::LENGTH: E("length", 2);
 	}
 
 #undef BINARY_INST
@@ -712,6 +713,15 @@ void Code::make_variant(
 	instructions.push_back(
 		Instruction {
 			.opcode = Opcode::MAKE_VARIANT, .operands = {result, tag, tuple}
+		}
+	);
+}
+
+void Code::length(hir::Register result, hir::Operand array) {
+	instructions.push_back(
+		Instruction {
+			.opcode = Opcode::LENGTH,
+			.operands = {result, array},
 		}
 	);
 }

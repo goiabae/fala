@@ -1442,7 +1442,7 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			auto r0 = compile(node[0], ctx);
 			auto v = make_register(type_of(node_idx));
 			code = code + r0.code;
-			code.get_element(v, r0.result_register, hir::Immediate(1ul));
+			code.length(v, r0.result_register);
 			return {code, v};
 		}
 		case NodeType::ARRAY_LITERAL: {
