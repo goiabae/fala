@@ -10,6 +10,7 @@
 #include "lir/vm.hpp"
 #include "logger.hpp"
 #include "lower/ast_to_lir.hpp"
+#include "lower/hir_to_lir.hpp"
 #include "options.hpp"
 #include "parser.hpp"
 #include "scope_analyser.hpp"
@@ -121,6 +122,36 @@ int interpret(Options opts) {
 				std::cout << "ERROR: " << exn.what() << '\n';
 				return 1;
 			}
+#ifdef EXPERIMENTAL_HIR_COMPILER
+		} else if (opts.backend == Backend::HIR) {
+			lower::ast_to_hir::Compiler hir_comp {ast, pool, checker, symtab};
+			print_phase(opts, "compiling(ast->hir)");
+			auto code = hir_comp.compile();
+
+			if (opts.verbosity >= 2) {
+				hir::print_module(stdout, code, pool, 0, hir_comp.hctx);
+				printf("\n");
+			}
+
+			lower::hir_to_lir::Compiler lir_comp {pool, hir_comp.hctx};
+			print_phase(opts, "compiling(hir->lir)");
+			auto chunk = lir_comp.compile(code);
+
+			if (opts.verbosity >= 2) {
+				lir::print_chunk(stdout, chunk);
+				printf("\n");
+			}
+
+			print_phase(opts, "interpreting(lir)");
+			lir::VM vm {std::cin, std::cout, opts};
+			vm.should_print_result = opts.from_stdin or opts.verbosity >= 2;
+			try {
+				vm.run(chunk);
+			} catch (std::exception& exn) {
+				std::cout << "ERROR: " << exn.what() << '\n';
+				return 1;
+			}
+#endif
 		} else {
 			std::cerr << "Backend can't be used for interpreting" << '\n';
 			return 1;

@@ -32,10 +32,21 @@ struct Register {
 	HTPtr htype;
 };
 
-class Label {
- public:
+inline bool operator<(const Register& x, const Register& y) {
+	return x.id < y.id;
+}
+
+inline bool operator==(const Register& x, const Register& y) {
+	return x.id == y.id;
+}
+
+struct Label {
 	std::string name;
 };
+
+inline bool operator<(const Label& x, const Label& y) {
+	return x.name < y.name;
+}
 
 class Block {
  public:
@@ -178,6 +189,10 @@ class Code {
 	std::vector<Instruction> instructions;
 
  public:
+	using const_iterator = std::vector<Instruction>::const_iterator;
+	using iterator = std::vector<Instruction>::iterator;
+
+ public:
 	void copy(hir::Register, hir::Operand);
 	void call(hir::Register, hir::Operand, std::vector<hir::Operand>);
 	void perform(hir::Register, hir::Label, std::vector<hir::Operand>);
@@ -222,6 +237,8 @@ class Code {
 	std::size_t size() const { return instructions.size(); }
 	Instruction& at(std::size_t i) { return instructions.at(i); }
 	Instruction const& at(std::size_t i) const { return instructions.at(i); }
+	iterator begin() { return instructions.begin(); }
+	iterator end() { return instructions.end(); }
 	friend Code operator+(Code, Code);
 };
 
@@ -278,6 +295,19 @@ void print_module(
 	FILE* fd, const Module& mod, const StringPool& pool, int spaces, HTContext&
 );
 
+std::string opcode_to_string(Opcode opcode);
+
 } // namespace hir
+
+namespace std {
+
+template<>
+struct hash<hir::Register> {
+	size_t operator()(const hir::Register& p) const {
+		return hash<std::size_t> {}(p.id);
+	}
+};
+
+} // namespace std
 
 #endif

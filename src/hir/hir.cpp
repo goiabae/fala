@@ -717,6 +717,59 @@ void Code::make_variant(
 	);
 }
 
+std::string opcode_to_string(Opcode opcode) {
+	switch (opcode) {
+		case Opcode::COPY: return "COPY";
+		case Opcode::PRINTV: return "PRINTV";
+		case Opcode::PRINTC: return "PRINTC";
+		case Opcode::PRINTF: return "PRINTF";
+		case Opcode::ADD: return "ADD";
+		case Opcode::SUB: return "SUB";
+		case Opcode::MUL: return "MUL";
+		case Opcode::DIV: return "DIV";
+		case Opcode::MOD: return "MOD";
+		case Opcode::NOT: return "NOT";
+		case Opcode::OR: return "OR";
+		case Opcode::AND: return "AND";
+		case Opcode::EQ: return "EQ";
+		case Opcode::NEQ: return "NEQ";
+		case Opcode::LESS: return "LESS";
+		case Opcode::LESS_EQ: return "LESS_EQ";
+		case Opcode::GREATER: return "GREATER";
+		case Opcode::GREATER_EQ: return "GREATER_EQ";
+		case Opcode::GET_GLOBAL: return "GET_GLOBAL";
+		case Opcode::MAKE_TUPLE: return "MAKE_TUPLE";
+		case Opcode::MAKE_ARRAY: return "MAKE_ARRAY";
+		case Opcode::ENCLOSE: return "ENCLOSE";
+		case Opcode::PANIC: return "PANIC";
+		case Opcode::LOOP: return "LOOP";
+		case Opcode::IF: return "IF";
+		case Opcode::IF_TRUE: return "IF_TRUE";
+		case Opcode::IF_FALSE: return "IF_FALSE";
+		case Opcode::BREAK: return "BREAK";
+		case Opcode::CONTINUE: return "CONTINUE";
+		case Opcode::YIELD: return "YIELD";
+		case Opcode::CALL: return "CALL";
+		case Opcode::RET: return "RET";
+		case Opcode::CATCH: return "CATCH";
+		case Opcode::PERFORM: return "PERFORM";
+		case Opcode::RESUME: return "RESUME";
+		case Opcode::SET_ELEMENT: return "SET_ELEMENT";
+		case Opcode::GET_ELEMENT: return "GET_ELEMENT";
+		case Opcode::GET_CONSTRUCTOR: return "GET_CONSTRUCTOR";
+		case Opcode::GET_VARIANT: return "GET_VARIANT";
+		case Opcode::MAKE_VARIANT: return "MAKE_VARIANT";
+		case Opcode::LOAD: return "LOAD";
+		case Opcode::STORE: return "STORE";
+		case Opcode::ALLOC: return "ALLOC";
+		case Opcode::CLONE: return "CLONE";
+		case Opcode::ALIAS: return "ALIAS";
+		case Opcode::REPEAT: return "REPEAT";
+		case Opcode::LENGTH: return "LENGTH";
+	}
+	assert(false);
+}
+
 void Code::length(hir::Register result, hir::Operand array) {
 	instructions.push_back(
 		Instruction {

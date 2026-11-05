@@ -387,6 +387,10 @@ Chunk& Chunk::emit_mov(Operand result, Operand value) {
 	return emit(Opcode::MOV, result, value);
 }
 
+Chunk& Chunk::emit_resume(Operand continuation) {
+	return emit(Opcode::RESUME, continuation);
+}
+
 Chunk& Chunk::emit_jmp(Operand destination) {
 	return emit(Opcode::JMP, destination);
 }
@@ -404,6 +408,8 @@ Chunk& Chunk::emit_storea(Operand value, Operand offset, Operand base) {
 }
 
 Chunk& Chunk::emit_loada(Operand result, Operand offset, Operand base) {
+	assert(base.kind == Operand::Kind::REGISTER);
+	assert(result.kind == Operand::Kind::REGISTER);
 	if (not is_value_operand(offset))
 		throw std::runtime_error("offset must be a value operand");
 	return emit(Opcode::LOADA, result, offset, base);

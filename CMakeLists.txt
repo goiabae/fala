@@ -85,7 +85,13 @@ endif()
 
 if(HIR_COMPILER)
 	target_compile_options(falalib PUBLIC -D EXPERIMENTAL_HIR_COMPILER)
-	set_property(TARGET falalib APPEND PROPERTY SOURCES src/lower/ast_to_hir.cpp src/hir/hir.cpp src/hir/hir_type.cpp)
+	set_property(
+		TARGET falalib
+		APPEND PROPERTY SOURCES
+		src/lower/ast_to_hir.cpp
+		src/hir/hir.cpp
+		src/hir/hir_type.cpp
+		src/lower/hir_to_lir.cpp)
 endif()
 
 if(is_ipo_supported)

@@ -73,6 +73,7 @@ struct HType {
 
 struct HTContext {
 	HType& at(const HTPtr&);
+	HType const& at(const HTPtr& ptr) const;
 	HTPtr alloc(const HType&);
 };
 

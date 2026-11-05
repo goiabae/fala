@@ -191,6 +191,10 @@ struct Block {
 	static lir::Block defer_last_jump(lir::Label entry, std::size_t to_patch);
 };
 
+inline bool operator<(const lir::Label& x, const lir::Label& y) {
+	return x.id < y.id;
+}
+
 // return amount of operands of each opcode
 size_t opcode_opnd_count(Opcode op);
 const char* opcode_repr(Opcode op);

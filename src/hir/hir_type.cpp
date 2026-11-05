@@ -185,6 +185,10 @@ auto translate(
 
 HType& HTContext::at(const HTPtr& ptr) { return *ptr.key; }
 
+HType const& HTContext::at(const HTPtr& ptr) const {
+	return const_cast<HTContext*>(this)->at(ptr);
+}
+
 HTPtr HTContext::alloc(const HType& htyp) {
 	auto x = std::make_shared<HType>(htyp);
 	HTPtr p;
