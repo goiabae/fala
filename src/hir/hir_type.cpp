@@ -76,7 +76,12 @@ auto translate(
 			},
 			[&](Nil&&) { return hctx.alloc(HType {HNil {}}); },
 			[&](Void&&) { return hctx.alloc(HType {HVoid {}}); },
-			[&](Named&& n) { return translate(sctx.at(n.name), hctx, sctx); },
+			[&](Named&& n) {
+				// return translate(sctx.at(n.name), hctx, sctx);
+		    //  FIXME: how to handle recursive types?
+				(void)n;
+				return hctx.alloc(HType {HAny {}});
+			},
 			[&](Function&& f) {
 				std::vector<std::pair<HClosure::Mode, HTPtr>> inputs;
 				HTPtr output;
