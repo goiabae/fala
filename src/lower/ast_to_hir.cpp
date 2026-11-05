@@ -138,8 +138,11 @@ hir::Module Compiler::start_module() {
 	};
 	assert(b0.body_code != nullptr);
 
+	auto l0 = make_label();
 	hir::Region write_int_handler {
-		.blocks = {{"0", b0}}, .entry_block = "0", .parameter_registers = {v1, v2}
+		.blocks = {{l0.name, b0}},
+		.entry_block = l0.name,
+		.parameter_registers = {v1, v2}
 	};
 
 	hir::Code c4 {};
@@ -153,8 +156,11 @@ hir::Module Compiler::start_module() {
 	};
 	assert(b1.body_code != nullptr);
 
+	auto l1 = make_label();
 	hir::Region write_char_handler {
-		.blocks = {{"0", b1}}, .entry_block = "0", .parameter_registers = {v1, v2}
+		.blocks = {{l1.name, b1}},
+		.entry_block = l1.name,
+		.parameter_registers = {v1, v2}
 	};
 
 	hir::Code c6 {};
@@ -170,8 +176,11 @@ hir::Module Compiler::start_module() {
 	};
 	assert(b4.body_code != nullptr);
 
+	auto l2 = make_label();
 	hir::Region write_str_handler {
-		.blocks = {{"0", b4}}, .entry_block = "0", .parameter_registers = {v1, v2}
+		.blocks = {{l2.name, b4}},
+		.entry_block = l2.name,
+		.parameter_registers = {v1, v2}
 	};
 
 	hir::Code c7 {};
@@ -187,9 +196,10 @@ hir::Module Compiler::start_module() {
 		.child_blocks = {},
 	};
 	assert(write_str_expression2.body_code != nullptr);
+	auto l3 = make_label();
 	hir::Region write_str_expression {
-		.blocks = {{"0", write_str_expression2}},
-		.entry_block = "0",
+		.blocks = {{l3.name, write_str_expression2}},
+		.entry_block = l3.name,
 		.parameter_registers = {}
 	};
 
@@ -203,9 +213,10 @@ hir::Module Compiler::start_module() {
 		.child_blocks = {},
 	};
 	assert(write_char_expression2.body_code != nullptr);
+	auto l4 = make_label();
 	hir::Region write_char_expression {
-		.blocks = {{"0", write_char_expression2}},
-		.entry_block = "0",
+		.blocks = {{l4.name, write_char_expression2}},
+		.entry_block = l4.name,
 		.parameter_registers = {}
 	};
 
@@ -219,9 +230,10 @@ hir::Module Compiler::start_module() {
 		.child_blocks = {},
 	};
 	assert(write_int_expression2.body_code != nullptr);
+	auto l5 = make_label();
 	hir::Region write_int_expression {
-		.blocks = {{"0", write_int_expression2}},
-		.entry_block = "0",
+		.blocks = {{l5.name, write_int_expression2}},
+		.entry_block = l5.name,
 		.parameter_registers = {}
 	};
 
@@ -236,15 +248,15 @@ hir::Module Compiler::start_module() {
 	};
 	assert(blk.body_code != nullptr);
 
+	auto l6 = make_label();
 	hir::Function start {
-		.region =
-			hir::Region {
-				.blocks = {{"0", blk}},
-				.entry_block = "0",
-				.parameter_registers = {},
-			},
 		.is_builtin = false,
 		.builtin_name = {},
+		.region = hir::Region {
+			.blocks = {{l6.name, blk}},
+			.entry_block = l6.name,
+			.parameter_registers = {},
+		},
 	};
 
 	current_module.register_constant(
@@ -449,25 +461,27 @@ Result Compiler::compile_if(NodeIndex node_idx, Context ctx) {
 	auto if_true_code = std::make_shared<hir::Code>(then_res.code);
 	auto if_false_code = std::make_shared<hir::Code>(else_res.code);
 
+	auto l0 = make_label();
 	hir::Region true_branch {
 		.blocks =
-			{{"0",
+			{{l0.name,
 	      hir::Block {
 					.body_code = if_true_code,
 					.child_blocks = {},
 				}}},
-		.entry_block = "0",
+		.entry_block = l0.name,
 		.parameter_registers = {},
 	};
 
+	auto l1 = make_label();
 	hir::Region false_branch {
 		.blocks =
-			{{"0",
+			{{l1.name,
 	      hir::Block {
 					.body_code = if_false_code,
 					.child_blocks = {},
 				}}},
-		.entry_block = "0",
+		.entry_block = l1.name,
 		.parameter_registers = {},
 	};
 
