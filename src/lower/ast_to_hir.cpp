@@ -1357,9 +1357,6 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			}
 
 			auto tree = generate_cases(cases_, initial);
-			if (auto vin = tree->input_register()) {
-				code.alias(*vin, r0.result_register);
-			}
 			logger.log(LogLevel::INFO, "Compiled decision tree: {}", *tree);
 			auto y = compile_decision(*tree, ctx);
 			code = code + y.code;
@@ -1502,9 +1499,8 @@ auto Compiler::generate_cases(
 	} else {
 		auto [pat, then] = cases.top();
 		cases.pop();
-		auto hany = type_of(pat);
 		std::stack<std::pair<Pattern, hir::Register>> matches {};
-		matches.push(std::make_pair(pat, make_register(hany)));
+		matches.push(std::make_pair(pat, initial));
 		return generate_patterns(matches, then, cases, initial);
 	}
 }
@@ -1593,6 +1589,19 @@ auto Compiler::generate_patterns(
 	}
 }
 
+static bool is_panic(const Compiler::Decision& decision) {
+	if (std::holds_alternative<Compiler::Decision::Panic>(decision.data))
+		return true;
+	else if (auto always =
+	           std::get_if<Compiler::Decision::Always>(&decision.data))
+		return is_panic(*always->then);
+	else if (auto bind =
+	           std::get_if<Compiler::Decision::UnconditionalBind>(&decision.data))
+		return is_panic(*bind->then);
+	else
+		return false;
+}
+
 auto Compiler::compile_decision(const Compiler::Decision& decision, Context ctx)
 	-> Result {
 	auto hany = hctx.alloc(hir::HType {hir::HAny {}});
@@ -1634,7 +1643,9 @@ auto Compiler::compile_decision(const Compiler::Decision& decision, Context ctx)
 				code1 = code1 + yes.code;
 				code1.yield(yes.result_register);
 
-				no.code.yield(no.result_register);
+				if (not is_panic(*x.no)) {
+					no.code.yield(no.result_register);
+				}
 
 				hir::Block yes_blk {
 					.body_code = std::make_shared<hir::Code>(code1),
@@ -1665,7 +1676,9 @@ auto Compiler::compile_decision(const Compiler::Decision& decision, Context ctx)
 				hir::Code code {};
 				auto y = std::get<LocalVariable>(variables.at(x.name)).register_;
 				code.alias(y, x.value);
-				return {code, y};
+				auto z = compile_decision(*x.then, ctx);
+				code = code + z.code;
+				return {code, z.result_register};
 			},
 			[&](const Compiler::Decision::Equation& x) -> Result {
 				auto y = compile(x.equal_to, ctx);
@@ -1679,7 +1692,10 @@ auto Compiler::compile_decision(const Compiler::Decision& decision, Context ctx)
 				auto no = compile_decision(*x.no, ctx);
 
 				yes.code.yield(yes.result_register);
-				no.code.yield(no.result_register);
+
+				if (not is_panic(*x.no)) {
+					no.code.yield(no.result_register);
+				}
 
 				hir::Block yes_blk {
 					.body_code = std::make_shared<hir::Code>(yes.code),
