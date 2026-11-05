@@ -1082,8 +1082,110 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		return {code, result_register};                          \
 	}
 
-		case NodeType::OR: BINARY_ARITH(OR);
-		case NodeType::AND: BINARY_ARITH(AND);
+		case NodeType::OR: {
+			hir::Code code {};
+			auto left_idx = node[0];
+			auto right_idx = node[1];
+
+			auto left_result = compile(left_idx, ctx);
+			auto right_result = compile(right_idx, ctx);
+			code = code + left_result.code;
+			auto result_register = make_register(type_of(node_idx));
+			auto literal_true = hir::Boolean {true};
+			auto l1 = make_label();
+			auto l2 = ctx.current_module.register_constant(
+				l1, hir::Visibility::HIDDEN, literal_true
+			);
+			auto hbool = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 1,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			right_result.code.yield(right_result.result_register);
+			auto l = make_label();
+			hir::Code true_code {};
+			auto v0 = make_register(hbool);
+			true_code.get_global(v0, l2);
+			true_code.yield(v0);
+			hir::Region true_branch {
+				.blocks =
+					{{l.name,
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(true_code),
+							.child_blocks = {},
+						}}},
+				.entry_block = l.name,
+				.parameter_registers = {},
+			};
+			auto l3 = make_label();
+			hir::Region false_branch {
+				.blocks =
+					{{l3.name,
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(right_result.code),
+							.child_blocks = {},
+						}}},
+				.entry_block = l3.name,
+				.parameter_registers = {},
+			};
+			code.if_(
+				result_register, left_result.result_register, true_branch, false_branch
+			);
+			return {code, result_register};
+		}
+		case NodeType::AND: {
+			hir::Code code {};
+			auto left_idx = node[0];
+			auto right_idx = node[1];
+
+			auto left_result = compile(left_idx, ctx);
+			auto right_result = compile(right_idx, ctx);
+			code = code + left_result.code;
+			auto result_register = make_register(type_of(node_idx));
+			auto literal_false = hir::Boolean {false};
+			auto l1 = make_label();
+			auto l2 = ctx.current_module.register_constant(
+				l1, hir::Visibility::HIDDEN, literal_false
+			);
+			auto hbool = hctx.alloc(
+				hir::HType {hir::HInteger {
+					.bit_count = 1,
+					.sign = hir::HInteger::Sign::UNSIGNED,
+				}}
+			);
+			right_result.code.yield(right_result.result_register);
+			auto l = make_label();
+			hir::Code false_code {};
+			auto v0 = make_register(hbool);
+			false_code.get_global(v0, l2);
+			false_code.yield(v0);
+			hir::Region true_branch {
+				.blocks =
+					{{l.name,
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(right_result.code),
+							.child_blocks = {},
+						}}},
+				.entry_block = l.name,
+				.parameter_registers = {},
+			};
+			auto l3 = make_label();
+			hir::Region false_branch {
+				.blocks =
+					{{l3.name,
+			      hir::Block {
+							.body_code = std::make_shared<hir::Code>(false_code),
+							.child_blocks = {},
+						}}},
+				.entry_block = l3.name,
+				.parameter_registers = {},
+			};
+			code.if_(
+				result_register, left_result.result_register, true_branch, false_branch
+			);
+			return {code, result_register};
+		}
 		case NodeType::GTN: BINARY_ARITH(GREATER);
 		case NodeType::LTN: BINARY_ARITH(LESS);
 		case NodeType::GTE: BINARY_ARITH(GREATER_EQ);
