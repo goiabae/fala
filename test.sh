@@ -45,7 +45,13 @@ interpret() {
 		touch $tmp/$testname.in
 	fi
 	test "INTERPRETED(lir) ${testname}"
-	timeout "${MAX_TIME}" $inter -i $file < $tmp/$testname.in > $tmp/$testname.actual
+	timeout "${MAX_TIME}" $inter -b lir -i $file < $tmp/$testname.in > $tmp/$testname.actual
+	if [ $? -ne 0 ]; then
+		fail $testname out
+	fi
+	compare $testname
+	test "INTERPRETED(hir) ${testname}"
+	timeout "${MAX_TIME}" $inter -b hir -i $file < $tmp/$testname.in > $tmp/$testname.actual
 	if [ $? -ne 0 ]; then
 		fail $testname out
 	fi
