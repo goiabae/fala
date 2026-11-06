@@ -1,5 +1,6 @@
 #include "hir_type.hpp"
 
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -7,6 +8,12 @@
 #include "utils.hpp"
 
 namespace hir {
+
+static auto translate_recursive(
+	const std::shared_ptr<Datatype>& styp, HTContext& hctx,
+	const std::map<Guid, std::shared_ptr<Datatype>>& sctx,
+	std::optional<Guid> fixpoint
+) -> HTPtr;
 
 template<class T, class F>
 	requires std::derived_from<typename std::remove_cvref<T>::type, Datatype>
@@ -64,6 +71,14 @@ auto translate(
 	const std::shared_ptr<Datatype>& styp, HTContext& hctx,
 	const std::map<Guid, std::shared_ptr<Datatype>>& sctx
 ) -> HTPtr {
+	return translate_recursive(styp, hctx, sctx, std::nullopt);
+}
+
+auto translate_recursive(
+	const std::shared_ptr<Datatype>& styp, HTContext& hctx,
+	const std::map<Guid, std::shared_ptr<Datatype>>& sctx,
+	std::optional<Guid> fixpoint
+) -> HTPtr {
 	return visit(
 		*styp,
 		overloaded {
@@ -77,16 +92,20 @@ auto translate(
 			[&](Nil&&) { return hctx.alloc(HType {HNil {}}); },
 			[&](Void&&) { return hctx.alloc(HType {HVoid {}}); },
 			[&](Named&& n) {
-				// return translate(sctx.at(n.name), hctx, sctx);
-		    //  FIXME: how to handle recursive types?
-				(void)n;
-				return hctx.alloc(HType {HAny {}});
+				// FIXME: the current might be referenced from inside this new, named
+		    // type
+		    // FIXME: give this a proper type, rather than any
+				if (n.name == fixpoint)
+					return hctx.alloc(HType {HAny {}});
+				else
+					return translate_recursive(sctx.at(n.name), hctx, sctx, n.name);
 			},
 			[&](Function&& f) {
 				std::vector<std::pair<HClosure::Mode, HTPtr>> inputs;
 				HTPtr output;
 				for (const auto& input : f.inputs) {
-					auto data = translate(input->datatype, hctx, sctx);
+					auto data =
+						translate_recursive(input->datatype, hctx, sctx, fixpoint);
 					auto mode = concrete_or_val(input->mode);
 					if (mode == Mode::Concrete::VAL) {
 						inputs.push_back(std::make_pair(HClosure::Mode::IMMUTABLE, data));
@@ -98,7 +117,7 @@ auto translate(
 						);
 					}
 				}
-				output = translate(f.output, hctx, sctx);
+				output = translate_recursive(f.output, hctx, sctx, fixpoint);
 				HClosure c {
 					.inputs = inputs,
 					.output = output,
@@ -111,7 +130,8 @@ auto translate(
 				HTPtr output;
 				std::vector<HTPtr> captures;
 				for (const auto& input : f.inputs) {
-					auto data = translate(input->datatype, hctx, sctx);
+					auto data =
+						translate_recursive(input->datatype, hctx, sctx, fixpoint);
 					auto mode = concrete_or_val(input->mode);
 					if (mode == Mode::Concrete::VAL) {
 						inputs.push_back(std::make_pair(HClosure::Mode::IMMUTABLE, data));
@@ -123,9 +143,9 @@ auto translate(
 						);
 					}
 				}
-				output = translate(f.output, hctx, sctx);
+				output = translate_recursive(f.output, hctx, sctx, fixpoint);
 				for (const auto& [name, capture] : f.captures) {
-					captures.push_back(translate(capture, hctx, sctx));
+					captures.push_back(translate_recursive(capture, hctx, sctx, name));
 				}
 				HClosure c {
 					.inputs = inputs,
@@ -137,7 +157,9 @@ auto translate(
 			[&](Record&& r) {
 				std::vector<HTPtr> elements;
 				for (const auto& field : r.fields) {
-					elements.push_back(translate(field.second, hctx, sctx));
+					elements.push_back(
+						translate_recursive(field.second, hctx, sctx, fixpoint)
+					);
 				}
 				HTuple t {
 					.elements = elements,
@@ -149,10 +171,12 @@ auto translate(
 				if (not rs.bound_record->has_value()) {
 					throw std::runtime_error("");
 				}
-				return translate(rs.bound_record->value(), hctx, sctx);
+				return translate_recursive(
+					rs.bound_record->value(), hctx, sctx, fixpoint
+				);
 			},
 			[&](Array&& a) {
-				auto element = translate(a.item_type, hctx, sctx);
+				auto element = translate_recursive(a.item_type, hctx, sctx, fixpoint);
 				HArray ha {
 					.element = element,
 				};
@@ -163,7 +187,9 @@ auto translate(
 				for (const auto& ctor : u.constructors) {
 					std::vector<HTPtr> arguments;
 					for (const auto& argument : ctor.arguments) {
-						arguments.push_back(translate(argument, hctx, sctx));
+						arguments.push_back(
+							translate_recursive(argument, hctx, sctx, fixpoint)
+						);
 					}
 					HUnion::Constructor hctor {.name = ctor.name, .arguments = arguments};
 					constructors.push_back(hctor);
@@ -177,7 +203,7 @@ auto translate(
 				}
 				if (not tv.is_bound)
 					throw std::runtime_error("inference variable not bound");
-				return translate(tv.bound_type, hctx, sctx);
+				return translate_recursive(tv.bound_type, hctx, sctx, fixpoint);
 			},
 		}
 	);
