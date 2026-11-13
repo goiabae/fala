@@ -360,10 +360,14 @@ T as_monotype(std::shared_ptr<PolyType> p) {
 
 size_t Named::size_of() { assert(false); }
 
-std::ostream& Named::print(std::ostream& st) const { return st << name.index; }
+std::ostream& Named::print(std::ostream& st) const {
+	return st << pretty_name << " (#" << name.index << ")";
+}
 
-D make_named(Guid name) {
+D make_named(Guid name, std::string pretty_name, D bound_type) {
 	auto n = std::make_shared<Named>();
 	n->name = name;
+	n->pretty_name = pretty_name;
+	n->bound_type = bound_type;
 	return n;
 }

@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "ast.hpp"
@@ -108,6 +109,8 @@ struct Union final : DERIVE (
 );
 
 struct Named final : DERIVE (
+	std::string pretty_name;
+	D bound_type;
 	Guid name;
 );
 
@@ -196,7 +199,7 @@ std::shared_ptr<DataScheme> make_scheme(
 	std::vector<std::shared_ptr<TypeVariable>>, D
 );
 E make_effsetvar(std::size_t index);
-D make_named(Guid name);
+D make_named(Guid name, std::string pretty_name, D bound_type);
 T as_monotype(std::shared_ptr<PolyType>);
 D get_datatype(D);
 

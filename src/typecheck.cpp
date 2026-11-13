@@ -1760,7 +1760,8 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 		case NodeType::GUID: {
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(node.guid).value()));
-			return make_named(node.guid);
+			assert(type_names.contains(node.guid));
+			return make_named(node.guid, std::string(name), type_names.at(node.guid));
 		}
 		case NodeType::UNION_TYPE_LITERAL: {
 			auto union_dty = std::make_shared<Union>();
