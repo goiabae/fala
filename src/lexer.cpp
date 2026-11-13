@@ -333,6 +333,10 @@ int Lexer::lex() {
 						str += '\t';
 					else if (match('r'))
 						str += '\r';
+					else if (match('\"'))
+						str += '\"';
+					else if (match('\''))
+						str += '\'';
 					else
 						assert(false && "LEXER: Unknown escape sequence");
 				} else {
