@@ -75,6 +75,8 @@ std::shared_ptr<Datatype> get_datatype(std::shared_ptr<Datatype> t) {
 		return t2;
 	} else if (auto t2 = std::dynamic_pointer_cast<Union>(t)) {
 		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Named>(t)) {
+		return t2;
 	} else {
 		assert(false && "no more variants of type!!!");
 	}
