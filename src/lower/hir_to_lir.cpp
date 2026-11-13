@@ -486,7 +486,7 @@ void Compiler::append_init(lir::Chunk& chunk, lir::Operand main_closure) {
 	chunk.emit(lir::Opcode::POP, k1);
 	chunk.emit(lir::Opcode::POP, r8);
 	chunk.emit(lir::Opcode::LOADA, r9, lir::Immediate(0), r8);
-	chunk.emit(lir::Opcode::PRINTF, r8);
+	chunk.emit(lir::Opcode::PRINTF, r9);
 	chunk.emit(lir::Opcode::PUSH, lir::Immediate(0));
 	chunk.emit(lir::Opcode::RESUME, k1);
 	chunk.emit(lir::Opcode::RET);

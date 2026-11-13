@@ -1,6 +1,7 @@
 #ifndef LIR_HPP
 #define LIR_HPP
 
+#include <cassert>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -222,6 +223,15 @@ Chunk operator+(Chunk x, Chunk y);
 Chunk& operator+=(Chunk& x, Chunk y);
 
 const char* operand_type_repr(Operand::Kind type);
+
+inline void assert_string(value::Value v) {
+	assert(v.is_pointer());
+	assert(v.as_pointer().size() == 2);
+	auto base = *(v.as_pointer()[0]);
+	assert(base.is_pointer());
+	auto size = *(v.as_pointer()[1]);
+	assert(size.is_integer());
+}
 
 } // namespace lir
 

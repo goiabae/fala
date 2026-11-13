@@ -450,7 +450,7 @@ TEST(VMTest, io_operations) {
 	chunk.emit_storea(lir::Immediate(3), lir::Immediate(1), r4);
 	chunk.emit_alloca(r5, lir::Immediate(1));
 	chunk.emit_storea(r4, lir::Immediate(0), r5);
-	chunk.emit(lir::Opcode::PRINTF, r5);
+	chunk.emit(lir::Opcode::PRINTF, r4);
 	chunk.emit(lir::Opcode::READV, r2);
 	chunk.emit(lir::Opcode::PRINTV, r2);
 	chunk.emit(lir::Opcode::READC, r3);

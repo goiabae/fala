@@ -198,7 +198,7 @@ lir::Chunk Compiler::compile() {
 		write_str_handler.emit(lir::Opcode::POP, k1);
 		write_str_handler.emit(lir::Opcode::POP, r8);
 		write_str_handler.emit(lir::Opcode::LOADA, r9, lir::Immediate(0), r8);
-		write_str_handler.emit(lir::Opcode::PRINTF, r8);
+		write_str_handler.emit(lir::Opcode::PRINTF, r9);
 		write_str_handler.emit(lir::Opcode::PUSH, lir::Immediate(0));
 		write_str_handler.emit(lir::Opcode::RESUME, k1);
 		write_str_handler.emit(lir::Opcode::RET);
