@@ -500,6 +500,14 @@ static void myprint(
 }
 
 static void myprint(
+	FILE* fd, const hir::ConstantExpression& cexpr, const StringPool& pool,
+	int spaces, HTContext& ctx
+) {
+	fprintf(fd, "constant_expression ");
+	print_operand(fd, cexpr.region, pool, spaces, ctx);
+}
+
+static void myprint(
 	FILE* fd, const hir::Nil&, const StringPool&, int, HTContext&
 ) {
 	fprintf(fd, "nil");

@@ -285,6 +285,15 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 				[&](const hir::MemberImport&) {
 					assert(false && "not yet implemented");
 				},
+				[&](const hir::ConstantExpression& cexpr) {
+					auto l = m_labels.next();
+					auto l2 = m_labels.next();
+					reserve_registers(cexpr.region);
+					compile_region(chunk, cexpr.region, std::nullopt, l2, l);
+					m_global_to_register[name] =
+						translate_operand(cexpr.result).as_register();
+					chunk.add_label(l2);
+				},
 			},
 			initialization
 		);

@@ -37,7 +37,7 @@ struct EnclosedVariable {
 	std::size_t offset;
 };
 
-using Variable = std::variant<LocalVariable, StaticFunction>;
+using Variable = std::variant<LocalVariable, StaticFunction, GlobalVariable>;
 
 struct Handler {
 	hir::Label label;

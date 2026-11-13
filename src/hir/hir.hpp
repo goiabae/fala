@@ -263,8 +263,14 @@ struct MemberImport {
 	std::string name;
 };
 
+struct ConstantExpression {
+	Register result;
+	Region region;
+};
+
 using StaticInitialization = std::variant<
-	Constant, StaticAllocation, BuiltinLoad, ModuleImport, MemberImport>;
+	Constant, StaticAllocation, BuiltinLoad, ModuleImport, MemberImport,
+	ConstantExpression>;
 
 enum class Visibility {
 	EXPORTED,

@@ -52,9 +52,15 @@ std::optional<Variable> Compiler::classify_variable(Guid sym) {
 			};
 		}
 	} else {
-		return LocalVariable {
-			.register_ = make_variable(htype, name),
-		};
+		if (scope == symtab.root_scope) {
+			return GlobalVariable {
+				.label = make_label(name),
+			};
+		} else {
+			return LocalVariable {
+				.register_ = make_variable(htype, name),
+			};
+		}
 	}
 }
 
@@ -575,14 +581,21 @@ auto Compiler::compile_declaration(NodeIndex node_idx, Context ctx)
 			code = code + initial_result.code;
 			auto initial = initial_result.result_register;
 
-			auto r = std::get<LocalVariable>(variables.at(id_node.guid)).register_;
-			if (initial.is_mutable) {
-				code.clone(r, initial);
+			auto v = variables.at(id_node.guid);
+			if (auto r_ = std::get_if<LocalVariable>(&v)) {
+				auto r = r_->register_;
+				if (initial.is_mutable) {
+					code.clone(r, initial);
+				} else {
+					code.alloc(r, initial);
+				}
+				return std::make_tuple(code, r, std::nullopt);
+			} else if (auto r_ = std::get_if<GlobalVariable>(&v)) {
+				(void)r_;
+				return std::make_tuple(code, initial, std::nullopt);
 			} else {
-				code.alloc(r, initial);
+				assert(false);
 			}
-
-			return std::make_tuple(code, r, std::nullopt);
 		}
 		case NodeType::FUN_DECL: {
 			hir::Code code {};
@@ -1417,17 +1430,38 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 		}
 		case NodeType::MODULE_BODY: {
 			hir::Code code_ {};
-			hir::Code* code = &code_;
 			const auto& decl_list = ast.at(node[0]);
 			assert(decl_list.type == NodeType::METALIST);
 			for (auto decl : decl_list) {
 				if (auto r = compile_declaration(decl, ctx)) {
 					auto [c, v, b] = *r;
-					if (b.has_value()) {
-						*code = *code + c;
-						code = *b;
-					} else {
-						*code = *code + c;
+					assert(not b.has_value()); // can't declare handler in module
+					const auto& decl_node = ast.at(decl);
+					if (decl_node.type == NodeType::VAR_DECL) {
+						const auto id_idx = decl_node[1];
+						const auto& id_node = ast.at(id_idx);
+						assert(id_node.type == NodeType::GUID);
+						const auto name =
+							std::string(pool.find(symtab.name_of(id_node.guid).value()));
+						const auto l = make_label();
+						hir::Block blk {
+							.body_code = std::make_shared<hir::Code>(c),
+							.child_blocks = {},
+						};
+						hir::Region region {
+							.blocks = {{l.name, blk}},
+							.entry_block = l.name,
+							.parameter_registers = {},
+						};
+						assert(v.kind == hir::Operand::Kind::REGISTER);
+						hir::ConstantExpression expr {
+							.result = v.registuhr,
+							.region = region,
+						};
+						const auto l2 = make_label(name);
+						ctx.current_module.register_static_initialization(
+							l2, hir::Visibility::HIDDEN, expr
+						);
 					}
 				}
 			}
@@ -1623,6 +1657,13 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 				} else {
 					return {code, local_variable->register_};
 				}
+			} else if (auto global_variable = std::get_if<GlobalVariable>(&var)) {
+				auto t = type_of(node_idx);
+				auto r0 = make_variable(t);
+				auto r1 = make_register(t);
+				code.get_global(r1, global_variable->label);
+				code.alloc(r0, r1);
+				return {code, r0};
 			}
 			assert(false);
 		}
