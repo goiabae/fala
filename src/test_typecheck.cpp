@@ -101,7 +101,7 @@ TEST(TypecheckerTest, unifying_row_set_with_concrete_record) {
 	AST ast {};
 	SymbolTable symtab {};
 	Typechecker checker {ast, pool, symtab};
-	auto a = make_row_set(
+	auto a = (std::shared_ptr<Datatype>)make_row_set(
 		{{"x", make_array({make_integer(8, Integer::Sign::UNSIGNED)})}}
 	);
 	auto b = make_record(

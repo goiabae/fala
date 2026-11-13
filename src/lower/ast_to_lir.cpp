@@ -1570,8 +1570,10 @@ Result Compiler::compile_array_literal(NodeIndex node_idx, Context ctx) {
 Result Compiler::compile_record_literal(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	const auto field_count = node.size();
-	const auto record_datatype =
-		std::dynamic_pointer_cast<Record>(tpc.node_to_type.at(node_idx)->datatype);
+	const auto record_datatype = std::dynamic_pointer_cast<Record>(
+		get_datatype(get_datatype(tpc.node_to_type.at(node_idx)))
+	);
+	assert(record_datatype != nullptr);
 	const auto t1 = make_register(lir::Type::POINTER, ctx);
 	auto c0 = make_chunk();
 	std::vector<lir::Block> blocks {};

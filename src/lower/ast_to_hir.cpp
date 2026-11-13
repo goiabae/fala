@@ -1368,8 +1368,9 @@ Result Compiler::compile(NodeIndex node_idx, Context ctx) {
 			const auto field_count = node.size();
 			hir::Code code {};
 			const auto record_datatype = std::dynamic_pointer_cast<Record>(
-				checker.node_to_type.at(node_idx)->datatype
+				get_datatype(get_datatype(checker.node_to_type.at(node_idx)))
 			);
+			assert(record_datatype);
 			auto t1 = make_register(type_of(node_idx));
 			const auto l1 = ctx.current_module.register_static_initialization(
 				make_label(),
@@ -1532,6 +1533,42 @@ hir::Register Compiler::make_variable(
 	};
 }
 
+static std::shared_ptr<Datatype> get_datatype2(
+	std::shared_ptr<Datatype> t,
+	const std::map<Guid, std::shared_ptr<Datatype>>& type_names
+) {
+	if (auto t2 = std::dynamic_pointer_cast<Integer>(t)) {
+		return t;
+	} else if (auto t2 = std::dynamic_pointer_cast<Nil>(t)) {
+		return t;
+	} else if (auto t2 = std::dynamic_pointer_cast<Void>(t)) {
+		return t;
+	} else if (auto t2 = std::dynamic_pointer_cast<Array>(t)) {
+		return t;
+	} else if (auto t2 = std::dynamic_pointer_cast<Function>(t)) {
+		return t;
+	} else if (auto t2 = std::dynamic_pointer_cast<TypeVariable>(t)) {
+		if (not t2->is_bound)
+			throw std::runtime_error("type variable was not bound");
+		return t2->bound_type;
+	} else if (auto t2 = std::dynamic_pointer_cast<RowSet>(t)) {
+		if (t2->bound_record->has_value())
+			return get_datatype2(t2->bound_record->value(), type_names);
+		throw std::runtime_error("row set is not a concrete record");
+	} else if (auto t2 = std::dynamic_pointer_cast<Record>(t)) {
+		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Closure>(t)) {
+		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Union>(t)) {
+		return t2;
+	} else if (auto t2 = std::dynamic_pointer_cast<Named>(t)) {
+		assert(type_names.contains(t2->name));
+		return get_datatype2(type_names.at(t2->name), type_names);
+	} else {
+		assert(false && "no more variants of type!!!");
+	}
+}
+
 Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 	const auto& node = ast.at(node_idx);
 	switch (node.type) {
@@ -1592,9 +1629,9 @@ Result Compiler::compile_lvalue(NodeIndex node_idx, Context ctx) {
 		case NodeType::FIELD_ACCESS: {
 			hir::Code code {};
 			auto r = compile_lvalue(node[0], ctx);
-			const auto t0 = std::dynamic_pointer_cast<Record>(
-				get_datatype(get_datatype(checker.node_to_type.at(node[0])))
-			);
+			const auto t0 = std::dynamic_pointer_cast<Record>(get_datatype2(
+				get_datatype(checker.node_to_type.at(node[0])), checker.type_names
+			));
 			assert(t0 != nullptr);
 			const auto& field_node = ast.at(node[1]);
 			assert(field_node.type == NodeType::ID);

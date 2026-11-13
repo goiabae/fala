@@ -362,6 +362,24 @@ bool Typechecker::typecheck() {
 		std::cerr << "TYPECHECK " << name << " = " << *d << '\n';
 	}
 
+	// Row sets must be collapsed into concrete records!
+	for (const auto& rs : m_row_sets) {
+		assert(rs->bound_record != nullptr);
+		if (auto x = *rs->bound_record) {
+		} else {
+			std::vector<std::pair<std::string, std::shared_ptr<Datatype>>> field_tys;
+			for (const auto& [n, d] : rs->rows) {
+				field_tys.push_back(std::make_pair(n, d));
+			}
+			std::sort(
+				field_tys.begin(), field_tys.end(), [](const auto& x, const auto& y) {
+					return x.first < y.first;
+				}
+			);
+			*rs->bound_record = make_record(field_tys);
+		}
+	}
+
 	return true;
 }
 
@@ -1395,7 +1413,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 		}
 		case NodeType::RECORD_LITERAL: {
 			auto joined = EMPTY_EFFSET;
-			std::vector<std::pair<std::string, D>> field_tys {};
+			std::map<std::string, D> field_tys {};
 			for (auto field_idx : node) {
 				const auto& field_node = ast.at(field_idx);
 				assert(field_node.type == NodeType::FIELD);
@@ -1406,14 +1424,11 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				const auto& name_node = ast.at(field_node[0]);
 				assert(name_node.type == NodeType::ID);
 				const auto name = std::string(pool.find(name_node.str_id));
-				field_tys.push_back(std::make_pair(name, t1.first->datatype));
+				field_tys[name] = t1.first->datatype;
 			}
-			std::sort(
-				field_tys.begin(), field_tys.end(), [](const auto& x, const auto& y) {
-					return x.first < y.first;
-				}
-			);
-			const auto d2 = make_record(field_tys);
+			// FIXME: should not be able to add fields through unification
+			const auto d2 = make_row_set(field_tys);
+			m_row_sets.push_back(d2);
 			const auto t2 = make_type(VAL_, d2);
 			ASSOC_TYPE(node_idx, t2);
 			return std::make_pair(t2, joined);

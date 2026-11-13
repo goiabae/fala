@@ -185,7 +185,7 @@ D make_closure(
 );
 D make_bool();
 D make_record(std::vector<std::pair<std::string, D>> field_tys);
-D make_row_set(
+std::shared_ptr<RowSet> make_row_set(
 	std::map<std::string, std::shared_ptr<Datatype>>,
 	std::shared_ptr<std::optional<std::shared_ptr<Datatype>>> =
 		std::make_shared<std::optional<std::shared_ptr<Datatype>>>(std::nullopt)

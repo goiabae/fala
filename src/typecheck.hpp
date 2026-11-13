@@ -62,6 +62,7 @@ struct Typechecker {
 	size_t next_effsetvar_id {0};
 	std::map<Guid, E> effset_names {};
 	Logger logger;
+	std::vector<std::shared_ptr<RowSet>> m_row_sets;
 
  public:
 	T instantiate(P);

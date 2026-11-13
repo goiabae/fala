@@ -245,7 +245,7 @@ void TypeVariable::bind_to(std::shared_ptr<Datatype> t) {
 	is_bound = true;
 }
 
-D make_row_set(
+std::shared_ptr<RowSet> make_row_set(
 	std::map<std::string, std::shared_ptr<Datatype>> x,
 	std::shared_ptr<std::optional<std::shared_ptr<Datatype>>> v
 ) {
