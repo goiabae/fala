@@ -20,6 +20,9 @@ void ScopeAnalyser::define_builtin_effset(const char* name) {
 SymbolTable ScopeAnalyser::analyse() {
 	define_builtin("read_int");
 	define_builtin("read_char");
+	define_builtin("open_file");
+	define_builtin("read_file");
+	define_builtin("concat_string");
 	define_builtin_type("Int");
 	define_builtin_type("Uint");
 	define_builtin_type("Nil");

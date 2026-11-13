@@ -21,6 +21,9 @@ namespace lower::ast_to_hir {
 constexpr auto builtins = {
 	"read_int",
 	"read_char",
+	"open_file",
+	"read_file",
+	"concat_string",
 	"write_int",
 	"write_char",
 	"write_str",

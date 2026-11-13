@@ -14,6 +14,7 @@
 #include "hir/hir.hpp"
 #include "hir/hir_type.hpp"
 #include "lir/lir.hpp"
+#include "lir/value.hpp"
 #include "utils.hpp"
 
 namespace lower::hir_to_lir {
@@ -25,6 +26,85 @@ static Set live_out(const hir::Block&, std::size_t);
 static Set kill(const hir::Block&, std::size_t);
 static Set gen(const hir::Block&, std::size_t);
 static Set live_across(const hir::Block&, std::size_t);
+
+static void readc(lir::value::State&);
+static void readv(lir::value::State&);
+static void open_file(lir::value::State&);
+static void read_file(lir::value::State& state);
+static void concat_string(lir::value::State&);
+
+void readc(lir::value::State& state) {
+	state.data_stack.pop(); // pop nil
+	char c;
+	state.input_stream >> c;
+	auto v = lir::value::Integer((c == EOF) ? -1 : c);
+	state.data_stack.push(v);
+}
+
+void readv(lir::value::State& state) {
+	state.data_stack.pop(); // pop nil
+	std::string line {};
+	std::getline(state.input_stream, line);
+	int num = std::stoi(line);
+	auto v = lir::value::Integer(num);
+	state.data_stack.push(v);
+}
+
+// fun open_file(filename: string): s64 !io
+void open_file(lir::value::State& state) {
+	auto s = state.data_stack.pop();
+	auto z = *(s.as_pointer()[0]);
+	auto d = *(z.as_pointer()[0]);
+	auto q = d.as_pointer();
+	std::string filename {};
+	for (auto i = 0ul; i < q.size(); i++)
+		filename.push_back((char)(*q[i]).as_integer());
+	auto x = fopen(filename.c_str(), "r");
+	static_assert(sizeof(int64_t) == sizeof(void*));
+	auto y = (int64_t)(void*)x;
+	state.data_stack.push(lir::value::Integer(y));
+}
+
+// fun read_file(descriptor: s64): string !io
+void read_file(lir::value::State& state) {
+	auto y = state.data_stack.pop();
+	auto d = *(y.as_pointer()[0]);
+	FILE* f = (FILE*)(void*)(int64_t)d.as_integer();
+	std::string s {};
+	int x;
+	while ((x = fgetc(f)) != EOF) s.push_back((char)x);
+	auto p = lir::value::Value(new lir::value::Value[s.size()], s.size());
+	for (auto i = 0ul; i < s.size(); i++)
+		*(p.as_pointer()[i]) = lir::value::Integer(s.at(i));
+	auto q = lir::value::Value(new lir::value::Value[2], 2);
+	*(q.as_pointer()[0]) = p;
+	*(q.as_pointer()[1]) = lir::value::Integer((int64_t)s.size());
+	lir::assert_string(q);
+	state.data_stack.push(q);
+}
+
+void concat_string(lir::value::State& state) {
+	auto y = state.data_stack.pop();
+	auto d = *(y.as_pointer()[0]);
+	auto x = state.data_stack.pop();
+	auto e = *(x.as_pointer()[0]);
+	lir::assert_string(d);
+	lir::assert_string(e);
+	auto z = (*(d.as_pointer()[1])).as_integer();
+	auto w = (*(e.as_pointer()[1])).as_integer();
+	auto size = z + w;
+	auto f = new lir::value::Value[(size_t)size];
+	auto g = *(d.as_pointer()[0]);
+	auto h = *(e.as_pointer()[0]);
+	for (auto i = 0; i < z; i++)
+		f[i] = (*(g.as_pointer()[(size_t)i])).as_integer();
+	for (auto i = 0; i < w; i++)
+		f[z + i] = (*(h.as_pointer()[(size_t)i])).as_integer();
+	auto q = lir::value::Value(new lir::value::Value[2], 2);
+	*(q.as_pointer()[0]) = lir::value::Value(f, (size_t)size);
+	*(q.as_pointer()[1]) = lir::value::Integer(size);
+	state.data_stack.push(q);
+}
 
 Set live_across(const hir::Block& blk, std::size_t index) {
 	auto li = live_in(blk, index);
@@ -285,6 +365,33 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 							v,
 							lir::HostFunction {
 								.function_pointer = readc,
+							}
+						);
+						m_global_to_register[name] = v;
+					} else if (bl.name == "open_file") {
+						auto v = m_registers.next(lir::Type::CLOSURE);
+						chunk.emit_mov(
+							v,
+							lir::HostFunction {
+								.function_pointer = open_file,
+							}
+						);
+						m_global_to_register[name] = v;
+					} else if (bl.name == "read_file") {
+						auto v = m_registers.next(lir::Type::CLOSURE);
+						chunk.emit_mov(
+							v,
+							lir::HostFunction {
+								.function_pointer = read_file,
+							}
+						);
+						m_global_to_register[name] = v;
+					} else if (bl.name == "concat_string") {
+						auto v = m_registers.next(lir::Type::CLOSURE);
+						chunk.emit_mov(
+							v,
+							lir::HostFunction {
+								.function_pointer = concat_string,
 							}
 						);
 						m_global_to_register[name] = v;

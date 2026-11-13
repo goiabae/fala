@@ -294,6 +294,15 @@ bool Typechecker::typecheck() {
 		make_function({make_type(VAL_, uint8_arr_typ)}, nil_typ, io_effset);
 	auto int64_to_int64_arr_typ =
 		make_function({make_type(VAL_, int64_typ)}, int64_arr_typ, io_effset);
+	auto str_to_int64_typ = make_function({str}, int64_typ, io_effset);
+	auto int64_to_str_typ = make_function(
+		{make_type(VAL_, int64_typ)}, make_array(uint8_typ), io_effset
+	);
+	auto x = make_function(
+		{make_type(VAL_, uint8_arr_typ), make_type(VAL_, uint8_arr_typ)},
+		make_array(uint8_typ),
+		EMPTY_EFFSET
+	);
 
 	const auto guids = symtab.symbols_declared_in(symtab.builtin_scope);
 	for (const auto guid : guids) {
@@ -306,6 +315,14 @@ bool Typechecker::typecheck() {
 			} else if (name == "read_int") {
 				variables[guid] =
 					make_polytype(VAL_, make_scheme({}, nil_to_int64_typ));
+			} else if (name == "open_file") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, str_to_int64_typ));
+			} else if (name == "read_file") {
+				variables[guid] =
+					make_polytype(VAL_, make_scheme({}, int64_to_str_typ));
+			} else if (name == "concat_string") {
+				variables[guid] = make_polytype(VAL_, make_scheme({}, x));
 			} else if (name == "write_char") {
 				variables[guid] =
 					make_polytype(VAL_, make_scheme({}, uint8_to_nil_typ));
