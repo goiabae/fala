@@ -213,15 +213,15 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 					std::visit(
 						overloaded {
 							[&](const hir::Integer& i) {
-								auto v = m_registers.next(lir::Type::UNKNOWN);
+								auto v = m_registers.next(lir::Type::INTEGER);
 								chunk.emit_mov(v, lir::Immediate(i.integer));
 								m_global_to_register[name] = v;
 							},
 							[&](const hir::String& s) {
 								lir::ByteString bs {.bytes = pool.find(s.str_id)};
 								auto length = (int64_t)bs.bytes.size();
-								auto v = m_registers.next(lir::Type::UNKNOWN);
-								auto r1 = m_registers.next(lir::Type::UNKNOWN);
+								auto v = m_registers.next(lir::Type::POINTER);
+								auto r1 = m_registers.next(lir::Type::POINTER);
 								chunk.emit_alloca(v, lir::Immediate(2));
 								chunk.emit_alloca(r1, lir::Immediate(length));
 								chunk.emit(lir::Opcode::INITA, r1, bs);
@@ -230,17 +230,17 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 								m_global_to_register[name] = v;
 							},
 							[&](const hir::Character& c) {
-								auto v = m_registers.next(lir::Type::UNKNOWN);
+								auto v = m_registers.next(lir::Type::INTEGER);
 								chunk.emit_mov(v, lir::Immediate(c.character));
 								m_global_to_register[name] = v;
 							},
 							[&](const hir::Nil&) {
-								auto v = m_registers.next(lir::Type::UNKNOWN);
+								auto v = m_registers.next(lir::Type::INTEGER);
 								chunk.emit_mov(v, lir::Immediate(0));
 								m_global_to_register[name] = v;
 							},
 							[&](const hir::Boolean& b) {
-								auto v = m_registers.next(lir::Type::UNKNOWN);
+								auto v = m_registers.next(lir::Type::INTEGER);
 								chunk.emit_mov(v, lir::Immediate(b.boolean ? 1 : 0));
 								m_global_to_register[name] = v;
 							},
@@ -250,9 +250,9 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 								m_global_function_to_label[name] = l;
 								reserve_registers(f);
 								if (name == "main") {
-									main_closure = m_registers.next(lir::Type::UNKNOWN);
-									auto r0 = m_registers.next(lir::Type::UNKNOWN);
-									auto r1 = m_registers.next(lir::Type::UNKNOWN);
+									main_closure = m_registers.next(lir::Type::POINTER);
+									auto r0 = m_registers.next(lir::Type::POINTER);
+									auto r1 = m_registers.next(lir::Type::CLOSURE);
 									chunk.emit_alloca(r0, lir::Immediate(0));
 									chunk.emit_enclose(r1, l, r0);
 									chunk.emit_alloca(main_closure, lir::Immediate(1));
@@ -264,7 +264,7 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 					);
 				},
 				[&](const hir::StaticAllocation& sa) {
-					auto v = m_registers.next(lir::Type::UNKNOWN);
+					auto v = m_registers.next(lir::Type::POINTER);
 					chunk.emit_alloca(v, lir::Immediate((std::int64_t)sa.size));
 					m_global_to_register[name] = v;
 				},
@@ -391,12 +391,37 @@ void Compiler::append_init(lir::Chunk& chunk, lir::Operand main_closure) {
 	chunk.emit(lir::Opcode::RET);
 }
 
+static lir::Type try_lower_type(
+	const hir::HTContext& hctx, hir::HTPtr hptr, bool is_mutable
+) {
+	if (is_mutable) return lir::Type::POINTER;
+	auto x = hctx.at(hptr);
+	return std::visit(
+		overloaded {
+			[&](const hir::HInteger&) -> lir::Type { return lir::Type::INTEGER; },
+			[&](const hir::HNil&) -> lir::Type { return lir::Type::INTEGER; },
+			[&](const hir::HVoid&) -> lir::Type { return lir::Type::UNKNOWN; },
+			[&](const hir::HContinuation&) -> lir::Type {
+				return lir::Type::CONTINUATION;
+			},
+			[&](const hir::HClosure&) -> lir::Type { return lir::Type::CLOSURE; },
+			[&](const hir::HArray&) -> lir::Type { return lir::Type::POINTER; },
+			[&](const hir::HTuple&) -> lir::Type { return lir::Type::POINTER; },
+			[&](const hir::HUnion&) -> lir::Type { return lir::Type::POINTER; },
+			[&](const hir::HAny&) -> lir::Type { return lir::Type::UNKNOWN; },
+			[&](const hir::HGeneric&) -> lir::Type { return lir::Type::UNKNOWN; }
+		},
+		x.data
+	);
+}
+
 void Compiler::compile_function(
 	lir::Chunk& chunk, lir::Label l, const hir::Function& f
 ) {
 	chunk.add_label(l);
 	for (const auto& param : f.region.parameter_registers) {
-		auto r = m_registers.next(lir::Type::UNKNOWN);
+		auto r =
+			m_registers.next(try_lower_type(hctx, param.htype, param.is_mutable));
 		m_register_mapping[param] = r;
 		chunk.emit(lir::Opcode::POP, r);
 	}
@@ -454,7 +479,7 @@ void Compiler::compile_instruction(
 		case hir::Opcode::MAKE_ARRAY: {
 			auto result = translate_operand(instruction.operands.at(0));
 			auto size = (int64_t)instruction.operands.size() - 1;
-			auto r0 = m_registers.next(lir::Type::UNKNOWN);
+			auto r0 = m_registers.next(lir::Type::POINTER);
 			chunk.emit_alloca(result, lir::Immediate(2));
 			chunk.emit_alloca(r0, lir::Immediate(size));
 			for (auto i = 0l; i < size; i++) {
@@ -524,7 +549,7 @@ void Compiler::compile_instruction(
 						overloaded {
 							[&](const hir::HArray&) {
 								auto r1 = m_registers.next(lir::Type::UNKNOWN);
-								auto r2 = m_registers.next(lir::Type::UNKNOWN);
+								auto r2 = m_registers.next(lir::Type::POINTER);
 								chunk.emit_loada(r1, lir::Immediate(0), base);
 								chunk.emit_loada(r2, lir::Immediate(0), r1);
 								chunk.emit(lir::Opcode::SHIFTA, result, index, r2);
@@ -824,7 +849,7 @@ void Compiler::compile_instruction(
 			auto element = translate_operand(instruction.operands.at(1));
 			auto amount = translate_operand(instruction.operands.at(2));
 			auto result = translate_operand(instruction.operands.at(0));
-			auto t1 = m_registers.next(lir::Type::UNKNOWN);
+			auto t1 = m_registers.next(lir::Type::POINTER);
 			chunk.emit(lir::Opcode::REPEAT, t1, element, amount);
 			chunk.emit(lir::Opcode::ALLOCA, result, lir::Immediate(2));
 			chunk.emit(lir::Opcode::STOREA, t1, lir::Immediate(0), result);
@@ -856,7 +881,7 @@ lir::Register Compiler::ensure_mutable(lir::Chunk& chunk, hir::Operand opnd) {
 		if (reg.is_mutable) {
 			return m_register_mapping.at(reg);
 		} else {
-			auto r0 = m_registers.next(lir::Type::UNKNOWN);
+			auto r0 = m_registers.next(lir::Type::POINTER);
 			auto r1 = m_register_mapping.at(reg);
 			chunk.emit_alloca(r0, lir::Immediate(1));
 			chunk.emit_storea(r1, lir::Immediate(0), r0);
@@ -919,7 +944,7 @@ void Compiler::compile_region(
 }
 
 void Compiler::reserve_register(const hir::Register& r) {
-	auto result = m_registers.next(lir::Type::UNKNOWN);
+	auto result = m_registers.next(try_lower_type(hctx, r.htype, r.is_mutable));
 	m_register_mapping[r] = result;
 }
 
