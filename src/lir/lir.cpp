@@ -59,6 +59,7 @@ std::ostream& operator<<(std::ostream& st, const Operand& opnd) {
 		case Operand::Kind::IMMEDIATE:
 			return st << std::format("{}", opnd.as_immediate().number);
 		case Operand::Kind::BYTE_STRING: return st << opnd.as_byte_string();
+		case Operand::Kind::HOST_FUNCTION_POINTER: return st << "hfn";
 	}
 	return st;
 }
@@ -192,6 +193,7 @@ int print_operand(FILE* fd, Operand opnd) {
 			printed += fprintf(fd, "\"");
 			return printed;
 		}
+		case Operand::Kind::HOST_FUNCTION_POINTER: return fprintf(fd, "hfn");
 	}
 	return 0;
 }
@@ -360,6 +362,8 @@ const char* operand_type_repr(Operand::Kind type) {
 		case Operand::Kind::LABEL: return "Operand::Type::LAB";
 		case Operand::Kind::IMMEDIATE: return "Operand::Type::NUM";
 		case Operand::Kind::BYTE_STRING: return "Operand::Type::BYTE_STRING";
+		case Operand::Kind::HOST_FUNCTION_POINTER:
+			return "Operand::Type::HOST_FUNCTION_POINTER";
 	}
 	assert(false);
 }

@@ -69,6 +69,10 @@ bool operator==(const lir::Operand& a, const lir::Operand& b) {
 		case lir::Operand::Kind::BYTE_STRING: {
 			return a.as_byte_string().bytes == b.as_byte_string().bytes;
 		}
+		case lir::Operand::Kind::HOST_FUNCTION_POINTER: {
+			return a.as_host_function().function_pointer
+			    == b.as_host_function().function_pointer;
+		}
 	}
 	return false;
 }

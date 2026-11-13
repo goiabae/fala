@@ -1,9 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <sstream>
 #include <string>
 
+#include "counter.hpp"
 #include "lir/lir.hpp"
+#include "lir/value.hpp"
 #include "options.hpp"
 #include "vm.hpp"
 
@@ -100,7 +103,7 @@ TEST(VMTest, push_immediate) {
 	vm.should_print_result = false;
 	vm.run(chunk);
 
-	EXPECT_EQ(vm.data_stack.back().as_integer(), 69);
+	EXPECT_EQ(vm.state.data_stack.back().as_integer(), 69);
 }
 
 TEST(VMTest, heap_allocation) {
@@ -658,4 +661,36 @@ TEST(VMTest, interleaving_prompts) {
 	const auto expected = std::string("1069");
 
 	EXPECT_STREQ(output.str().c_str(), expected.c_str());
+}
+
+static void isqrt(lir::value::State& state) {
+	auto v = state.data_stack.pop();
+	state.data_stack.push((int64_t)std::sqrt((int64_t)v.as_integer()));
+}
+
+TEST(VMTest, host_function_call) {
+	lir::Chunk chunk {};
+
+	Counter<lir::Register> registers {};
+
+	auto r0 = registers.next(lir::Type::UNKNOWN);
+	auto r1 = registers.next(lir::Type::UNKNOWN);
+
+	chunk.emit_mov(r0, lir::HostFunction {.function_pointer = isqrt});
+	chunk.emit(lir::Opcode::PUSH, lir::Immediate(9));
+	chunk.emit(lir::Opcode::CALL, r0);
+	chunk.emit(lir::Opcode::POP, r1);
+	chunk.emit(lir::Opcode::HALT);
+
+	std::istringstream input {""};
+	std::ostringstream output {};
+
+	Options opts {};
+	opts.verbosity = 0;
+	lir::VM vm {input, output, opts};
+	vm.should_print_result = false;
+	vm.run(chunk);
+
+	auto v = (int64_t)vm.cells.at(1).as_integer();
+	EXPECT_EQ(v, 3);
 }

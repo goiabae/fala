@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
@@ -270,9 +271,23 @@ lir::Chunk Compiler::compile(const hir::Module& mod) {
 				},
 				[&](const hir::BuiltinLoad& bl) {
 					if (bl.name == "read_int") {
-						m_global_to_builtin[name] = lir::Opcode::READV;
+						auto v = m_registers.next(lir::Type::CLOSURE);
+						chunk.emit_mov(
+							v,
+							lir::HostFunction {
+								.function_pointer = readv,
+							}
+						);
+						m_global_to_register[name] = v;
 					} else if (bl.name == "read_char") {
-						m_global_to_builtin[name] = lir::Opcode::READC;
+						auto v = m_registers.next(lir::Type::CLOSURE);
+						chunk.emit_mov(
+							v,
+							lir::HostFunction {
+								.function_pointer = readc,
+							}
+						);
+						m_global_to_register[name] = v;
 					} else {
 						throw std::runtime_error(
 							std::format("unknown builtin name: {}", bl.name)
@@ -672,17 +687,6 @@ void Compiler::compile_instruction(
 			auto result = translate_operand(instruction.operands.at(0));
 			auto function = translate_operand(hfunction);
 			assert(hfunction.kind == hir::Operand::Kind::REGISTER);
-			if (m_register_to_builtin.contains(hfunction.registuhr)) {
-				auto opcode = m_register_to_builtin.at(hfunction.registuhr);
-				if (opcode == lir::Opcode::READC) {
-					chunk.emit(lir::Opcode::READC, result);
-				} else if (opcode == lir::Opcode::READV) {
-					chunk.emit(lir::Opcode::READV, result);
-				} else {
-					throw std::runtime_error("unknown builtin function");
-				}
-				return;
-			}
 			auto alive = live_across(parent_block, index);
 			std::cerr << "CALL ALIVE ACCROSS\n";
 			std::vector<hir::Register> xs {};
@@ -819,11 +823,6 @@ void Compiler::compile_instruction(
 		}
 		case hir::Opcode::GET_GLOBAL: {
 			auto name = instruction.operands.at(1).label.name;
-			if (m_global_to_builtin.contains(name)) {
-				m_register_to_builtin[instruction.operands.at(0).registuhr] =
-					m_global_to_builtin.at(name);
-				return;
-			}
 			if (not m_global_to_register.contains(name)) return;
 			auto value = m_global_to_register.at(name);
 			auto result = translate_operand(instruction.operands.at(0));

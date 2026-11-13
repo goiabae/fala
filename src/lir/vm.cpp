@@ -48,6 +48,8 @@ struct std::formatter<Operand::Kind> {
 				return std::format_to(ctx.out(), "IMMEDIATE");
 			case lir::Operand::Kind::BYTE_STRING:
 				return std::format_to(ctx.out(), "BYTE_STRING");
+			case lir::Operand::Kind::HOST_FUNCTION_POINTER:
+				return std::format_to(ctx.out(), "HOST_FUNCTION_POINTER");
 		}
 		assert(false);
 	}
@@ -96,6 +98,10 @@ auto VM::fetch(Operand opnd) -> value::Value {
 		return opnd.as_immediate().number;
 	} else if (opnd.kind == Operand::Kind::NOTHING) {
 		return 0;
+	} else if (opnd.kind == Operand::Kind::HOST_FUNCTION_POINTER) {
+		return value::HostFunction {
+			.function_pointer = opnd.as_host_function().function_pointer,
+		};
 	} else {
 		fprintf(stderr, "%s\n", operand_type_repr(opnd.kind));
 		exit(1);
@@ -124,25 +130,26 @@ void VM::run(const lir::Chunk& code) {
 				for (size_t i = 0; i < size; i++) {
 					auto c = (*base[i]).as_integer();
 					if (c == 0) break;
-					output << (char)c;
+					state.output_stream << (char)c;
 				}
 				break;
 			}
 			case Opcode::PRINTV: {
 				auto t1 = fetch(inst.operands[0]);
 				assert(t1.is_integer());
-				output << t1.as_integer();
+				state.output_stream << t1.as_integer();
 				break;
 			}
 			case Opcode::PRINTC: {
 				auto t1 = fetch(inst.operands[0]);
 				assert(t1.is_integer());
-				output << (char)t1.as_integer();
+				state.output_stream << (char)t1.as_integer();
 				break;
 			}
 			case Opcode::READV: {
 				std::string line {};
-				if (not std::getline(input, line)) err("Couldn't read input");
+				if (not std::getline(state.input_stream, line))
+					err("Couldn't read input");
 				int num = std::stoi(line);
 				if (inst.operands[0].kind != Operand::Kind::REGISTER)
 					err("First argument must be a register");
@@ -151,7 +158,7 @@ void VM::run(const lir::Chunk& code) {
 			}
 			case Opcode::READC: {
 				char c;
-				input >> c;
+				state.input_stream >> c;
 				deref(inst.operands[0]) = (c == EOF) ? -1 : c;
 				break;
 			}
@@ -213,15 +220,17 @@ void VM::run(const lir::Chunk& code) {
 					program_counter++;
 				goto dont_inc;
 			case Opcode::PUSH: {
-				if (data_stack.size() == data_stack.capacity()) {
+				if (state.data_stack.size() == state.data_stack.capacity()) {
 					throw std::runtime_error("stack is full. can't push value");
 				}
 				if (inst.operands[0].kind == Operand::Kind::IMMEDIATE) {
-					data_stack.push(value::Value(inst.operands[0].as_immediate().number));
+					state.data_stack.push(
+						value::Value(inst.operands[0].as_immediate().number)
+					);
 				} else if (inst.operands[0].kind == Operand::Kind::REGISTER) {
-					data_stack.push(cells[inst.operands[0].as_register().index]);
+					state.data_stack.push(cells[inst.operands[0].as_register().index]);
 				} else if (inst.operands[0].kind == Operand::Kind::NOTHING) {
-					data_stack.push(value::Value(0));
+					state.data_stack.push(value::Value(0));
 				} else {
 					throw std::runtime_error("can't push value");
 				}
@@ -229,30 +238,39 @@ void VM::run(const lir::Chunk& code) {
 			}
 			case Opcode::POP: {
 				auto result = inst.operands[0].as_register();
-				if (data_stack.size() == 0)
+				if (state.data_stack.size() == 0)
 					throw std::runtime_error(
 						std::format(
 							"at line {}: can't pop value. stack was empty",
 							line_for(code, program_counter)
 						)
 					);
-				write(result, data_stack.back());
-				data_stack.pop();
+				write(result, state.data_stack.back());
+				state.data_stack.pop();
 				break;
 			}
 			case Opcode::CALL: {
-				//
-				// r0 : *---> [cls *, fn $]
-				//                 |
-				//                 +---> ...
-				auto closure_pointer = fetch(inst.operands[0]).as_pointer();
-				auto env_pointer = *(&closure_pointer[0]);
-				data_stack.push(env_pointer);
-				control_stack.push_back(program_counter);
-				auto function_address =
-					static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
-				program_counter = function_address;
-				goto dont_inc;
+				auto callable = fetch(inst.operands[0]);
+				if (callable.is_host_function()) {
+					auto host_function = callable.as_host_function();
+					host_function.function_pointer(state);
+					break;
+				} else if (callable.is_pointer()) {
+					//
+					// r0 : *---> [cls *, fn $]
+					//                 |
+					//                 +---> ...
+					auto closure_pointer = callable.as_pointer();
+					auto env_pointer = *(&closure_pointer[0]);
+					state.data_stack.push(env_pointer);
+					control_stack.push_back(program_counter);
+					auto function_address =
+						static_cast<std::size_t>((*(&closure_pointer[1])).as_integer());
+					program_counter = function_address;
+					goto dont_inc;
+				} else {
+					throw std::runtime_error("not a function");
+				}
 			}
 			case Opcode::RET:
 				program_counter = control_stack.back();
@@ -431,7 +449,7 @@ void VM::run(const lir::Chunk& code) {
 				value::Prompt p {
 					.program_counter = handler_address,
 					.control_stack_height = control_stack.size(),
-					.data_stack_height = data_stack.size(),
+					.data_stack_height = state.data_stack.size(),
 					.prompt_stack_height = prompt_stack.size(),
 				};
 				prompt_stack.push_back(std::make_pair(tag, p));
@@ -439,8 +457,8 @@ void VM::run(const lir::Chunk& code) {
 				goto dont_inc;
 			}
 			case Opcode::RESUME: {
-				const auto top = data_stack.back();
-				data_stack.pop();
+				const auto top = state.data_stack.back();
+				state.data_stack.pop();
 				auto v = fetch(inst.operands[0]);
 				if (not v.is_continuation()) {
 					throw std::runtime_error(
@@ -451,7 +469,7 @@ void VM::run(const lir::Chunk& code) {
 				if (opts.verbosity >= 3) print_continuation(code, *k);
 				control_stack.push_back(program_counter);
 				restore_continuation(*k);
-				data_stack.push(top);
+				state.data_stack.push(top);
 				break;
 			}
 			case Opcode::THROW: {
@@ -465,17 +483,17 @@ void VM::run(const lir::Chunk& code) {
 				} else {
 					std::vector<value::Value> args {};
 					for (auto i = 0ul; i < arg_count; i++) {
-						args.push_back(data_stack.back());
-						data_stack.pop();
+						args.push_back(state.data_stack.back());
+						state.data_stack.pop();
 					}
 					const auto handler = maybe_handler.value();
 					const auto current_cont = save_continuation(handler);
 					if (opts.verbosity >= 3) print_continuation(code, *current_cont);
 					unwind_prompt(handler);
 					for (const auto& a : std::ranges::views::reverse(args)) {
-						data_stack.push(a);
+						state.data_stack.push(a);
 					}
-					data_stack.push(current_cont);
+					state.data_stack.push(current_cont);
 				}
 				goto dont_inc;
 			}
@@ -483,7 +501,7 @@ void VM::run(const lir::Chunk& code) {
 				const auto n = fetch(inst.operands[0]).as_integer();
 				assert(n >= 0);
 				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
-					data_stack.push(value::Value());
+					state.data_stack.push(value::Value());
 				}
 				break;
 			}
@@ -491,7 +509,7 @@ void VM::run(const lir::Chunk& code) {
 				const auto n = fetch(inst.operands[0]).as_integer();
 				assert(n >= 0);
 				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
-					data_stack.pop();
+					state.data_stack.pop();
 				}
 				break;
 			}
@@ -499,9 +517,9 @@ void VM::run(const lir::Chunk& code) {
 				auto r = inst.operands[0].as_register();
 				const auto n = fetch(inst.operands[1]).as_integer();
 				assert(n >= 0);
-				auto v =
-					&data_stack.at(data_stack.size() - 1 - static_cast<std::size_t>(n));
-				auto p = Value(v, 1);
+				auto v = &state.data_stack.at(
+					state.data_stack.size() - 1 - static_cast<std::size_t>(n)
+				);
 				auto p = value::Value(v, 1);
 				write(r, p);
 				break;
@@ -568,15 +586,15 @@ std::shared_ptr<value::DelimitedContinuation> VM::save_continuation(
 		k->prompt_stack_suffix.push_back(prompt_stack.at(i));
 	for (auto i = p.control_stack_height; i < control_stack.size(); i++)
 		k->control_stack_suffix.push_back(control_stack.at(i));
-	for (auto i = p.data_stack_height; i < data_stack.size(); i++)
-		k->data_stack_suffix.push_back(data_stack.at(i));
+	for (auto i = p.data_stack_height; i < state.data_stack.size(); i++)
+		k->data_stack_suffix.push_back(state.data_stack.at(i));
 	k->program_counter = program_counter;
 	return k;
 }
 
 void VM::restore_continuation(const value::DelimitedContinuation& k) {
 	for (const auto& x : k.control_stack_suffix) control_stack.push_back(x);
-	for (const auto& x : k.data_stack_suffix) data_stack.push(x);
+	for (const auto& x : k.data_stack_suffix) state.data_stack.push(x);
 	for (const auto& x : k.prompt_stack_suffix) prompt_stack.push_back(x);
 	program_counter = k.program_counter;
 }
@@ -611,9 +629,9 @@ std::string VM::serialize(value::Value value) {
 
 void VM::print_debug_stack() {
 	std::cerr << '[';
-	for (auto i = 0ul; i < data_stack.size(); i++) {
-		std::cerr << serialize(data_stack.at(i));
-		if (i != (data_stack.size() - 1)) {
+	for (auto i = 0ul; i < state.data_stack.size(); i++) {
+		std::cerr << serialize(state.data_stack.at(i));
+		if (i != (state.data_stack.size() - 1)) {
 			std::cerr << " ; ";
 		}
 	}
@@ -674,7 +692,7 @@ void VM::install_watch_point(lir::Register r) {
 
 void VM::unwind_prompt(const value::Prompt& p) {
 	while (prompt_stack.size() > p.prompt_stack_height) prompt_stack.pop_back();
-	while (data_stack.size() > p.data_stack_height) data_stack.pop();
+	while (state.data_stack.size() > p.data_stack_height) state.data_stack.pop();
 	while (control_stack.size() > p.control_stack_height)
 		control_stack.pop_back();
 	program_counter = p.program_counter;

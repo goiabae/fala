@@ -22,13 +22,12 @@ static constexpr const auto stack_size = 4 * 1024;
 
 struct VM {
 	VM(std::istream& input, std::ostream& output, const Options& opts)
-	: input {input}, output {output}, opts {opts}, data_stack(stack_size) {}
+	: state {.data_stack = FixedVector<value::Value>(stack_size), .input_stream = input, .output_stream = output,},
+		opts {opts} {}
 
  public:
-	std::istream& input;
-	std::ostream& output;
+	value::State state;
 	const Options& opts;
-	FixedVector<value::Value> data_stack;
 
  public:
 	bool should_print_result {true};

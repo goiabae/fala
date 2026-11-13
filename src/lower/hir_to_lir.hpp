@@ -52,8 +52,6 @@ class Compiler {
 	dst::map<std::string, lir::Register> m_global_to_register {};
 	dst::map<std::string, lir::Label> m_global_function_to_label {};
 	dst::map<lir::Label, lir::Chunk> m_compile_functions {};
-	dst::map<std::string, lir::Opcode> m_global_to_builtin {};
-	dst::map<hir::Register, lir::Opcode> m_register_to_builtin {};
 	dst::map<hir::Register, lir::Operand> m_value_to_value {};
 	dst::map<hir::Label, lir::Label> m_block_mapping {};
 	dst::map<hir::Register, lir::Register> m_register_mapping {};

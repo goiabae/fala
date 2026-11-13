@@ -13,6 +13,18 @@
 
 namespace lir::value {
 
+template<typename Value>
+struct StateImpl {
+	FixedVector<Value> data_stack;
+	std::istream& input_stream;
+	std::ostream& output_stream;
+};
+
+template<typename Value>
+struct HostFunctionImpl {
+	void (*function_pointer)(StateImpl<Value>&);
+};
+
 class Integer {
  public:
 	Integer(int64_t integer) : m_data(integer) {}
@@ -86,6 +98,7 @@ struct DelimitedContinuationImpl {
 class Value {
 	using Pointer = PointerImpl<Value>;
 	using DelimitedContinuation = DelimitedContinuationImpl<Value>;
+	using HostFunction = HostFunctionImpl<Value>;
 
  public:
 	Value(int64_t integer) : data(Integer(integer)) {}
@@ -94,6 +107,7 @@ class Value {
 	Value(const Integer& integer) : data(integer) {}
 	Value(const std::shared_ptr<DelimitedContinuation>& continuation)
 	: data(continuation) {}
+	Value(const HostFunction& host_function) : data(host_function) {}
 	Value() : data(std::monostate {}) {}
 
  public:
@@ -104,6 +118,9 @@ class Value {
 	}
 	bool is_continuation() const {
 		return std::holds_alternative<std::shared_ptr<DelimitedContinuation>>(data);
+	}
+	bool is_host_function() const {
+		return std::holds_alternative<HostFunction>(data);
 	}
 
 	Integer const& as_integer() const {
@@ -130,13 +147,22 @@ class Value {
 		return const_cast<Pointer&>(std::as_const(*this).as_pointer());
 	}
 
+	HostFunction const& as_host_function() const {
+		return std::get<HostFunction>(data);
+	}
+
+	HostFunction& as_host_function() {
+		return const_cast<HostFunction&>(std::as_const(*this).as_host_function());
+	}
+
 	std::shared_ptr<DelimitedContinuation> as_continuation() const {
 		return std::get<std::shared_ptr<DelimitedContinuation>>(data);
 	}
 
  private:
 	std::variant<
-		Integer, Pointer, std::shared_ptr<DelimitedContinuation>, std::monostate>
+		Integer, Pointer, std::shared_ptr<DelimitedContinuation>, HostFunction,
+		std::monostate>
 		data;
 };
 
@@ -162,6 +188,8 @@ inline Value clone(Value val) {
 
 using Pointer = PointerImpl<Value>;
 using DelimitedContinuation = DelimitedContinuationImpl<Value>;
+using HostFunction = HostFunctionImpl<Value>;
+using State = StateImpl<Value>;
 
 } // namespace lir::value
 

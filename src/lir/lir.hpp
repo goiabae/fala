@@ -96,6 +96,10 @@ struct ByteString {
 	std::string bytes;
 };
 
+struct HostFunction {
+	void (*function_pointer)(value::State&);
+};
+
 struct Operand {
 	enum class Kind {
 		NOTHING,   // no operand
@@ -103,27 +107,33 @@ struct Operand {
 		LABEL,     // label
 		IMMEDIATE, // immediate number
 		BYTE_STRING,
+		HOST_FUNCTION_POINTER,
 	};
 
 	Kind kind;
-	std::variant<Register, Label, Immediate, ByteString> data;
+	std::variant<Register, Label, Immediate, ByteString, HostFunction> data;
 
 	Operand() : kind {Kind::NOTHING}, data {Immediate {0}} {}
 	Operand(Register reg) : kind(Kind::REGISTER), data {reg} {}
 	Operand(Label lab) : kind(Kind::LABEL), data {lab} {}
 	Operand(Immediate imm) : kind(Kind::IMMEDIATE), data(imm) {}
 	Operand(ByteString bs) : kind(Kind::BYTE_STRING), data(bs) {}
+	Operand(HostFunction hf) : kind(Kind::HOST_FUNCTION_POINTER), data(hf) {}
 
 	Label& as_label() { return std::get<Label>(data); }
 	Register& as_register() { return std::get<Register>(data); }
 	Immediate& as_immediate() { return std::get<Immediate>(data); }
 	ByteString& as_byte_string() { return std::get<ByteString>(data); }
+	HostFunction& as_host_function() { return std::get<HostFunction>(data); }
 
 	const Label& as_label() const { return std::get<Label>(data); }
 	const Register& as_register() const { return std::get<Register>(data); }
 	const Immediate& as_immediate() const { return std::get<Immediate>(data); }
 	const ByteString& as_byte_string() const {
 		return std::get<ByteString>(data);
+	}
+	const HostFunction& as_host_function() const {
+		return std::get<HostFunction>(data);
 	}
 
 	std::optional<lir::Type> type() const;
