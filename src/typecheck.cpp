@@ -387,7 +387,6 @@ bool Typechecker::submode(M sub, M sup) {
 	} else if (sub_is_concrete and sup_is_concrete) {
 		auto subc = std::get<Mode::Concrete>(sub->data);
 		auto supc = std::get<Mode::Concrete>(sup->data);
-		logger.log(LogLevel::INFO, {}, "submode: {} <: {}", subc, supc);
 		if (subc == Mode::Concrete::VAL
 		    and (supc == Mode::Concrete::OUT or supc == Mode::Concrete::VAR))
 			return false;
@@ -542,8 +541,6 @@ void Typechecker::declare(NodeIndex node_idx) {
 
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(id_node.guid).value()));
-
-			logger.log(LogLevel::INFO, "Declaring \"{}\"", name);
 
 			if (mode_node.mode == ModeLiteral::OUT) {
 				logger.err(node.loc, "Cannot defined variable as out");
@@ -1265,9 +1262,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			auto f = make_closure(param_types, output, make_effsetvar(), captures);
 			auto e = instantiate(variables.at(id_node.guid))->datatype;
 
-			logger.log(LogLevel::INFO, "f: {}", *f);
-			logger.log(LogLevel::INFO, "e: {}", *e);
-
 			if (not cast(e, f)) {
 				mismatch_error(
 					node.loc,
@@ -1277,9 +1271,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 					make_type(VAL_, e)
 				);
 			}
-
-			logger.log(LogLevel::INFO, "f: {}", *f);
-			logger.log(LogLevel::INFO, "e: {}", *e);
 
 			auto typ = make_type(VAL_, f);
 			const auto s = symtab.declaration_scope_of(ast.at(node[0]).guid).value();
@@ -1391,7 +1382,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 		case NodeType::GUID: {
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(node.guid).value()));
-			logger.log(LogLevel::INFO, "Retrieving type for \"{}\"", name);
 			assert(symtab.namespace_of(node.guid) == symtab.value_namespace);
 			assert(variables.contains(node.guid));
 			auto found_typ = variables.at(node.guid);
@@ -1541,9 +1531,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 			const auto& effect_node = ast.at(effect_idx);
 			assert(effect_node.type == NodeType::GUID);
 			auto arguments_idx = node[1];
-			logger.log(
-				LogLevel::INFO, node.loc, "Performing effect {}", effect_node.guid.index
-			);
 			auto effset = eval_effset(effect_idx);
 			assert(effset->concrete.size() == 1);
 			auto effect = effset->concrete.at(0);
@@ -1563,9 +1550,6 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 		case NodeType::HANDLER_DECL: {
 			const auto& id_node = ast.at(node[0]);
 			assert(id_node.type == NodeType::GUID);
-			logger.log(
-				LogLevel::INFO, node.loc, "Handling effect {}", id_node.guid.index
-			);
 			auto effset = eval_effset(node[0]);
 			auto effect = singleton_effset(effset);
 			const auto& param_list_node = ast.at(node[1]);
@@ -1624,7 +1608,7 @@ TE Typechecker::typecheck(NodeIndex node_idx) {
 				auto t = typecheck(case_node[1]);
 				if (not unify(d, t.first->datatype)) {
 					logger.log(
-						LogLevel::ERROR, "case of match expression has wrong typel"
+						LogLevel::ERROR, "case of match expression has wrong type"
 					);
 				}
 				joined = union_of(joined, t.second);
@@ -1761,7 +1745,6 @@ std::shared_ptr<Datatype> Typechecker::eval(NodeIndex node_idx) {
 		case NodeType::GUID: {
 			const auto name =
 				std::string_view(pool.find(symtab.name_of(node.guid).value()));
-			logger.log(LogLevel::INFO, "Retrieving definition for type {}", name);
 			return make_named(node.guid);
 		}
 		case NodeType::UNION_TYPE_LITERAL: {
@@ -2005,9 +1988,6 @@ std::unordered_set<V> Typechecker::free_type_variables(ScopeIndex s) {
 	auto symbols = symtab.symbols_reachable_from(s, symtab.value_namespace);
 	std::unordered_set<V> free_variables {};
 	for (auto symbol : symbols) {
-		const auto name =
-			std::string_view(pool.find(symtab.name_of(symbol).value()));
-		logger.log(LogLevel::INFO, "Extracting free variables of \"{}\"", name);
 		auto ty = variables.at(symbol);
 		auto free = free_type_variables(ty->scheme->body);
 		free_variables.merge(free);
