@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "lir/lir.hpp"
+#include "lir/value.hpp"
 
 using lir::Operand;
 
@@ -53,7 +54,7 @@ struct std::formatter<Operand::Kind> {
 };
 
 namespace lir {
-static Value clone(Value);
+
 static void err(const char* msg);
 
 void err(const char* msg) {
@@ -79,7 +80,7 @@ std::size_t VM::address_of_label(const Chunk& code, lir::Label label) {
 	return code.label_indexes.at(label.id);
 }
 
-auto VM::deref(Operand opnd) -> Value& {
+auto VM::deref(Operand opnd) -> value::Value& {
 	if (opnd.kind == Operand::Kind::REGISTER) {
 		return cells[opnd.as_register().index];
 	} else {
@@ -88,7 +89,7 @@ auto VM::deref(Operand opnd) -> Value& {
 	}
 };
 
-auto VM::fetch(Operand opnd) -> Value {
+auto VM::fetch(Operand opnd) -> value::Value {
 	if (opnd.kind == Operand::Kind::REGISTER) {
 		return cells[opnd.as_register().index];
 	} else if (opnd.kind == Operand::Kind::IMMEDIATE) {
@@ -145,7 +146,7 @@ void VM::run(const lir::Chunk& code) {
 				int num = std::stoi(line);
 				if (inst.operands[0].kind != Operand::Kind::REGISTER)
 					err("First argument must be a register");
-				deref(inst.operands[0]) = Value::Integer(num);
+				deref(inst.operands[0]) = value::Integer(num);
 				break;
 			}
 			case Opcode::READC: {
@@ -216,11 +217,11 @@ void VM::run(const lir::Chunk& code) {
 					throw std::runtime_error("stack is full. can't push value");
 				}
 				if (inst.operands[0].kind == Operand::Kind::IMMEDIATE) {
-					data_stack.push(Value(inst.operands[0].as_immediate().number));
+					data_stack.push(value::Value(inst.operands[0].as_immediate().number));
 				} else if (inst.operands[0].kind == Operand::Kind::REGISTER) {
 					data_stack.push(cells[inst.operands[0].as_register().index]);
 				} else if (inst.operands[0].kind == Operand::Kind::NOTHING) {
-					data_stack.push(Value(0));
+					data_stack.push(value::Value(0));
 				} else {
 					throw std::runtime_error("can't push value");
 				}
@@ -274,9 +275,11 @@ void VM::run(const lir::Chunk& code) {
 				auto register_index = result_register.as_register().index;
 				auto& cell = cells[register_index];
 				if (size_integer == 0) {
-					cell = Value(nullptr, 0);
+					cell = value::Value(nullptr, 0);
 				} else {
-					cell = Value(new Value[(size_t)size_integer], (size_t)size_integer);
+					cell = value::Value(
+						new value::Value[(size_t)size_integer], (size_t)size_integer
+					);
 				}
 				if (not cell.is_pointer())
 					throw std::runtime_error("allocated value was not a pointer");
@@ -307,7 +310,7 @@ void VM::run(const lir::Chunk& code) {
 				auto t1 = cells[base_register.index];
 				auto pointer = t1.as_pointer();
 				auto cell = pointer[(size_t)offset];
-				*cell = Value(value);
+				*cell = value::Value(value);
 				break;
 			}
 			case Opcode::LOADA: {
@@ -381,8 +384,8 @@ void VM::run(const lir::Chunk& code) {
 				);
 				auto t1 = fetch(element_register);
 				auto amount = fetch(amount_register).as_integer();
-				auto ptr = Value(
-					new Value[static_cast<std::size_t>(amount)],
+				auto ptr = value::Value(
+					new value::Value[static_cast<std::size_t>(amount)],
 					static_cast<std::size_t>(amount)
 				);
 				for (auto i = 0ul; i < static_cast<std::size_t>(amount); i++) {
@@ -407,13 +410,13 @@ void VM::run(const lir::Chunk& code) {
 			}
 			case Opcode::ENCLOSE: {
 				auto result = inst.operands[0].as_register();
-				auto label = Value(
+				auto label = value::Value(
 					static_cast<int64_t>(
 						address_of_label(code, inst.operands[1].as_label())
 					)
 				);
 				auto closure = fetch(inst.operands[2]);
-				auto object = Value(new Value[2] {closure, label}, 2);
+				auto object = value::Value(new value::Value[2] {closure, label}, 2);
 				write(result, object);
 				break;
 			}
@@ -425,7 +428,7 @@ void VM::run(const lir::Chunk& code) {
 				const auto body_address =
 					address_of_label(code, inst.operands[2].as_label());
 				control_stack.push_back(program_counter);
-				Prompt p {
+				value::Prompt p {
 					.program_counter = handler_address,
 					.control_stack_height = control_stack.size(),
 					.data_stack_height = data_stack.size(),
@@ -460,7 +463,7 @@ void VM::run(const lir::Chunk& code) {
 				if (not maybe_handler.has_value()) {
 					throw std::runtime_error("Thrown value without an enclosing handler");
 				} else {
-					std::vector<Value> args {};
+					std::vector<value::Value> args {};
 					for (auto i = 0ul; i < arg_count; i++) {
 						args.push_back(data_stack.back());
 						data_stack.pop();
@@ -480,7 +483,7 @@ void VM::run(const lir::Chunk& code) {
 				const auto n = fetch(inst.operands[0]).as_integer();
 				assert(n >= 0);
 				for (auto i = 0ul; i < static_cast<std::size_t>(n); i++) {
-					data_stack.push(Value());
+					data_stack.push(value::Value());
 				}
 				break;
 			}
@@ -499,6 +502,7 @@ void VM::run(const lir::Chunk& code) {
 				auto v =
 					&data_stack.at(data_stack.size() - 1 - static_cast<std::size_t>(n));
 				auto p = Value(v, 1);
+				auto p = value::Value(v, 1);
 				write(r, p);
 				break;
 			}
@@ -556,27 +560,10 @@ void VM::run(const lir::Chunk& code) {
 	throw std::runtime_error("out of bounds code access");
 }
 
-static Value clone(Value val) {
-	if (val.is_undefined()) {
-		return Value();
-	} else if (val.is_integer()) {
-		return Value::Integer(val.as_integer());
-	} else if (val.is_pointer()) {
-		return clone_pointer(val.as_pointer());
-	} else {
-		assert(false);
-	}
-}
-
-Value::Pointer clone_pointer(Value::Pointer ptr) {
-	auto a = new Value[ptr.m_size];
-	for (auto i = 0ul; i < ptr.m_size; i++) a[i] = clone(ptr.m_pointer[i]);
-	Value::Pointer ptr2(a, ptr.m_size);
-	return ptr2;
-}
-
-std::shared_ptr<DelimitedContinuation> VM::save_continuation(const Prompt& p) {
-	auto k = std::make_shared<DelimitedContinuation>();
+std::shared_ptr<value::DelimitedContinuation> VM::save_continuation(
+	const value::Prompt& p
+) {
+	auto k = std::make_shared<value::DelimitedContinuation>();
 	for (auto i = p.prompt_stack_height; i < prompt_stack.size(); i++)
 		k->prompt_stack_suffix.push_back(prompt_stack.at(i));
 	for (auto i = p.control_stack_height; i < control_stack.size(); i++)
@@ -587,20 +574,20 @@ std::shared_ptr<DelimitedContinuation> VM::save_continuation(const Prompt& p) {
 	return k;
 }
 
-void VM::restore_continuation(const DelimitedContinuation& k) {
+void VM::restore_continuation(const value::DelimitedContinuation& k) {
 	for (const auto& x : k.control_stack_suffix) control_stack.push_back(x);
 	for (const auto& x : k.data_stack_suffix) data_stack.push(x);
 	for (const auto& x : k.prompt_stack_suffix) prompt_stack.push_back(x);
 	program_counter = k.program_counter;
 }
 
-std::optional<Prompt> VM::find_handler(std::size_t tag) {
+std::optional<value::Prompt> VM::find_handler(std::size_t tag) {
 	for (const auto& [tag2, handler] : std::ranges::views::reverse(prompt_stack))
 		if (tag2 == tag) return handler;
 	return std::nullopt;
 }
 
-std::string VM::serialize(Value value) {
+std::string VM::serialize(value::Value value) {
 	// FIXME: does not handle cycles in pointers, which might lead to infinite
 	// recursion
 	if (value.is_integer()) {
@@ -647,7 +634,7 @@ void VM::print_debug_callstack(const Chunk& chunk) {
 }
 
 void VM::print_continuation(
-	const Chunk& chunk, const DelimitedContinuation& k
+	const Chunk& chunk, const value::DelimitedContinuation& k
 ) {
 	std::cerr << "{\n";
 	std::cerr << '[';
@@ -670,7 +657,7 @@ void VM::print_continuation(
 	std::cerr << "}\n";
 }
 
-void VM::write(lir::Register reg, Value value) {
+void VM::write(lir::Register reg, value::Value value) {
 	if (watching_registers.contains(reg.index)) {
 		auto old = serialize(fetch(reg));
 		auto new_ = serialize(value);
@@ -685,7 +672,7 @@ void VM::install_watch_point(lir::Register r) {
 	watching_registers.insert(r.index);
 }
 
-void VM::unwind_prompt(const Prompt& p) {
+void VM::unwind_prompt(const value::Prompt& p) {
 	while (prompt_stack.size() > p.prompt_stack_height) prompt_stack.pop_back();
 	while (data_stack.size() > p.data_stack_height) data_stack.pop();
 	while (control_stack.size() > p.control_stack_height)

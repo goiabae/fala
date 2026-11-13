@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "ast.hpp"
+#include "lir/value.hpp"
 
 namespace lir {
 
